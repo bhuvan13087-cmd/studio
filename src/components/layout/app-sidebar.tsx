@@ -49,20 +49,25 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">Main Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-xs font-bold uppercase tracking-wider mb-4 opacity-60">
+            Main Navigation
+          </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-2">
               {filteredNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.url}
                     tooltip={item.title}
-                    className="transition-all duration-200"
+                    size="lg"
+                    className="transition-all duration-200 hover:bg-sidebar-accent/50"
                   >
-                    <Link href={item.url}>
-                      <item.icon className="size-5" />
-                      <span className="font-medium group-data-[collapsible=icon]:hidden">{item.title}</span>
+                    <Link href={item.url} className="flex items-center gap-4">
+                      <item.icon className="size-6 shrink-0" />
+                      <span className="font-bold text-lg group-data-[collapsible=icon]:hidden">
+                        {item.title}
+                      </span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -77,10 +82,13 @@ export function AppSidebar() {
             <SidebarMenuButton 
               onClick={handleLogout}
               tooltip="Logout" 
-              className="text-destructive-foreground hover:bg-destructive/10"
+              size="lg"
+              className="text-destructive-foreground hover:bg-destructive/10 h-14"
             >
-              <LogOut className="size-5 text-destructive" />
-              <span className="font-medium group-data-[collapsible=icon]:hidden text-destructive">Logout</span>
+              <LogOut className="size-6 text-destructive" />
+              <span className="font-bold text-lg group-data-[collapsible=icon]:hidden text-destructive">
+                Logout
+              </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
