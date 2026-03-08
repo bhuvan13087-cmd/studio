@@ -64,9 +64,6 @@ export default function RoundsPage() {
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
   const chitSchemes = roundsData || [];
 
-  const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
-  const { data: membersData, isLoading: isMembersLoading } = useCollection(membersQuery);
-
   const [newChit, setNewChit] = useState({
     name: "",
     monthlyAmount: 5000,
@@ -82,7 +79,6 @@ export default function RoundsPage() {
 
     addDocumentNonBlocking(collection(db, 'chitRounds'), {
       ...newChit,
-      type: 'scheme',
       createdAt: serverTimestamp()
     })
 
@@ -131,9 +127,7 @@ export default function RoundsPage() {
 
   const confirmDelete = () => {
     if (!db || !chitToDelete) return;
-    
     deleteDocumentNonBlocking(doc(db, 'chitRounds', chitToDelete.id));
-    
     toast({
       title: "Chit Round Deleted Successfully",
       description: `${chitToDelete.name} has been removed.`,
@@ -147,7 +141,7 @@ export default function RoundsPage() {
     setIsEditChitDialogOpen(true)
   }
 
-  if (isRoleLoading || isRoundsLoading || isMembersLoading) {
+  if (isRoleLoading || isRoundsLoading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
         <Loader2 className="size-8 animate-spin text-primary" />
@@ -155,9 +149,7 @@ export default function RoundsPage() {
     )
   }
 
-  const activeSchemes = chitSchemes.filter(r => r.type === 'scheme' || (r.name && r.monthlyAmount));
-
-  if (activeSchemes.length === 0 && !selectedChitId) {
+  if (chitSchemes.length === 0 && !selectedChitId) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-in fade-in duration-700">
         <Database className="size-20 text-muted-foreground/20" />
@@ -368,7 +360,7 @@ export default function RoundsPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {activeSchemes.map((group) => (
+          {chitSchemes.map((group) => (
             <Card key={group.id} className="hover:shadow-lg transition-all duration-300 border-border/50 overflow-hidden group">
               <CardHeader className="bg-muted/30 pb-4">
                 <div className="flex justify-between items-start">
@@ -470,7 +462,7 @@ export default function RoundsPage() {
                         id="edit-amount" 
                         type="number"
                         value={editingChit.monthlyAmount}
-                        onChange={setEditingChit ? e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)}) : undefined}
+                        onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})}
                         required 
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
@@ -481,7 +473,7 @@ export default function RoundsPage() {
                         id="edit-members" 
                         type="number"
                         value={editingChit.totalMembers}
-                        onChange={setEditingChit ? e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)}) : undefined}
+                        onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})}
                         required 
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
@@ -494,7 +486,7 @@ export default function RoundsPage() {
                         id="edit-duration" 
                         type="number"
                         value={editingChit.duration}
-                        onChange={setEditingChit ? e => setEditingChit({...editingChit, duration: Number(e.target.value)}) : undefined}
+                        onChange={e => setEditingChit({...editingChit, duration: Number(e.target.value)})}
                         required 
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
@@ -505,7 +497,7 @@ export default function RoundsPage() {
                         id="edit-startDate" 
                         type="date"
                         value={editingChit.startDate}
-                        onChange={setEditingChit ? e => setEditingChit({...editingChit, startDate: e.target.value}) : undefined}
+                        onChange={e => setEditingChit({...editingChit, startDate: e.target.value})}
                         required 
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
@@ -516,7 +508,7 @@ export default function RoundsPage() {
                     <textarea 
                       id="edit-description" 
                       value={editingChit.description}
-                      onChange={setEditingChit ? e => setEditingChit({...editingChit, description: e.target.value}) : undefined}
+                      onChange={e => setEditingChit({...editingChit, description: e.target.value})}
                       className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>

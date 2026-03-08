@@ -48,19 +48,11 @@ export default function PaymentsPage() {
   const db = useFirestore()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  const paymentsQuery = useMemoFirebase(() => {
-    if (!db || !isAdmin) return null;
-    return query(collection(db, 'payments'));
-  }, [db, isAdmin]);
-
+  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments')), [db]);
   const { data: paymentsData, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const payments = paymentsData || [];
 
-  const membersQuery = useMemoFirebase(() => {
-    if (!db || !isAdmin) return null;
-    return collection(db, 'members');
-  }, [db, isAdmin]);
-
+  const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
   const { data: membersData } = useCollection(membersQuery);
   const members = membersData || [];
 
@@ -80,7 +72,7 @@ export default function PaymentsPage() {
     
     const amount = Number(recordData.amount);
 
-    // Add payment record with "paid" status as required
+    // Add payment record with "paid" status for synchronization
     addDocumentNonBlocking(collection(db, 'payments'), {
       memberId: member.id,
       memberName: member.name,
@@ -92,7 +84,7 @@ export default function PaymentsPage() {
       createdAt: serverTimestamp()
     });
 
-    // Sync member status - This ensures Dashboard and Profile reflect "Paid" instantly
+    // Sync member status - Updates status and totals in real-time for Dashboard/Profile
     updateDocumentNonBlocking(doc(db, 'members', member.id), {
       paymentStatus: "paid",
       totalPaid: (member.totalPaid || 0) + amount,
@@ -117,7 +109,7 @@ export default function PaymentsPage() {
       method: "Cash"
     });
 
-    // Update member document to reflect real-time status everywhere
+    // Synchronize member status to reflect "Paid" instantly everywhere
     if (payment.memberId) {
       const member = members.find(m => m.id === payment.memberId);
       if (member) {

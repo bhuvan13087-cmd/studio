@@ -45,7 +45,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
-import { collection, doc, serverTimestamp } from "firebase/firestore"
+import { collection, doc, serverTimestamp, query, orderBy } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 
 export default function MembersPage() {
@@ -62,25 +62,13 @@ export default function MembersPage() {
   const db = useFirestore()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  const membersQuery = useMemoFirebase(() => {
-    if (!db || !isAdmin) return null;
-    return collection(db, 'members');
-  }, [db, isAdmin]);
-
+  const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
   const { data: members, isLoading: isMembersLoading } = useCollection(membersQuery);
 
-  const paymentsQuery = useMemoFirebase(() => {
-    if (!db || !isAdmin) return null;
-    return collection(db, 'payments');
-  }, [db, isAdmin]);
-
+  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: payments } = useCollection(paymentsQuery);
 
-  const chitRoundsQuery = useMemoFirebase(() => {
-    if (!db || !isAdmin) return null;
-    return collection(db, 'chitRounds');
-  }, [db, isAdmin]);
-
+  const chitRoundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: chitRounds } = useCollection(chitRoundsQuery);
 
   const [newMember, setNewMember] = useState({
