@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/firebase"
+import { signInWithEmailAndPassword } from "firebase/auth"
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
@@ -15,27 +17,29 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const router = useRouter()
   const { toast } = useToast()
+  const auth = useAuth()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     
-    // Simulate login for demo purposes
-    setTimeout(() => {
-      if (email === "admin@chitfund.pro" && password === "password") {
-        router.push("/dashboard")
-      } else if (email && password) {
-        // Allow any input for preview
-        router.push("/dashboard")
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Login Failed",
-          description: "Please enter valid credentials.",
-        })
-      }
+    try {
+      await signInWithEmailAndPassword(auth, email, password)
+      toast({
+        title: "Welcome back!",
+        description: "Successfully signed in to ChitFund Pro.",
+      })
+      router.push("/dashboard")
+    } catch (error: any) {
+      console.error("Login error:", error)
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: error.message || "Invalid credentials. Please try again.",
+      })
+    } finally {
       setLoading(false)
-    }, 1500)
+    }
   }
 
   return (
