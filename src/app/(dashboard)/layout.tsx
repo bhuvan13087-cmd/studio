@@ -44,7 +44,7 @@ export default function DashboardLayout({
           <header className="flex h-16 shrink-0 items-center justify-between border-b px-6 sticky top-0 bg-background/80 backdrop-blur-md z-30">
             <div className="flex items-center gap-4">
               <h1 className="font-headline font-semibold text-lg hidden sm:block text-primary">
-                Admin <span className="text-accent italic">Panel</span>
+                Admin Panel
               </h1>
             </div>
             <div className="flex items-center gap-4">
