@@ -162,7 +162,7 @@ export default function RoundsPage() {
         <Database className="size-20 text-muted-foreground/20" />
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-bold">No chit rounds available.</h2>
-          <p className="text-muted-foreground max-w-sm">Click 'Add Chit Round' to create one and start managing your auctions.</p>
+          <p className="text-muted-foreground max-sm">Click 'Add Chit Round' to create one and start managing your auctions.</p>
         </div>
         <Dialog open={isAddChitDialogOpen} onOpenChange={(open) => {
           setIsAddChitDialogOpen(open)
