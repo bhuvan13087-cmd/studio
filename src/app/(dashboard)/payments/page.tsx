@@ -157,7 +157,12 @@ export default function PaymentsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Dialog open={isQuickRecordOpen} onOpenChange={setIsQuickRecordOpen}>
+          <Dialog open={isQuickRecordOpen} onOpenChange={(open) => {
+            setIsQuickRecordOpen(open)
+            if (!open) {
+              document.body.style.pointerEvents = 'auto';
+            }
+          }}>
             <DialogTrigger asChild>
               <Button className="h-11">
                 <Plus className="mr-2 size-5" />
@@ -384,7 +389,10 @@ export default function PaymentsPage() {
 
       {/* Payment History Dialog */}
       <Dialog open={!!historyMember} onOpenChange={(open) => {
-        if (!open) setHistoryMember(null)
+        if (!open) {
+          setHistoryMember(null)
+          document.body.style.pointerEvents = 'auto';
+        }
       }}>
         <DialogContent className="sm:max-w-[550px]">
           <DialogHeader>
