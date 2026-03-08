@@ -111,11 +111,6 @@ export default function MembersPage() {
     })
   }
 
-  const handleDeleteMember = (member: any) => {
-    setMemberToDelete(member)
-    setIsDeleteMemberDialogOpen(true)
-  }
-
   const confirmDeleteMember = () => {
     if (!db || !memberToDelete) return
     deleteDocumentNonBlocking(doc(db, 'members', memberToDelete.id))
@@ -127,59 +122,6 @@ export default function MembersPage() {
     setMemberToDelete(null)
   }
 
-  const exportMembersToCSV = () => {
-    if (!members) return;
-    const headers = ["Name", "Phone", "Join Date", "Monthly Amount", "Status", "Total Paid", "Pending Amount", "Chit Group"]
-    const csvContent = [
-      headers.join(","),
-      ...members.map(m => [
-        m.name,
-        m.phone,
-        m.joinDate,
-        m.monthlyAmount,
-        m.status,
-        m.totalPaid,
-        m.pendingAmount,
-        m.chitGroup
-      ].join(","))
-    ].join("\n")
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement("a")
-    const url = URL.createObjectURL(blob)
-    link.setAttribute("href", url)
-    link.setAttribute("download", "members_list.csv")
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    
-    toast({
-      title: "Export Successful",
-      description: "Member list has been downloaded as CSV.",
-    })
-  }
-
-  const handleMemberClick = (member: any) => {
-    setSelectedMember(member)
-    setIsProfileDialogOpen(true)
-  }
-
-  const handleHistoryClick = (member: any) => {
-    setHistoryMember(member)
-    setIsHistoryDialogOpen(true)
-  }
-
-  const toggleStatus = (member: any) => {
-    if (!db) return;
-    const newStatus = member.status === 'active' ? 'inactive' : 'active'
-    updateDocumentNonBlocking(doc(db, 'members', member.id), { status: newStatus })
-    toast({
-      title: "Status Updated",
-      description: `${member.name} is now ${newStatus}.`
-    })
-  }
-
   const filteredMembers = (members || []).filter(member => 
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.phone.includes(searchTerm)
@@ -187,6 +129,7 @@ export default function MembersPage() {
 
   const getLastPayment = (memberId: string) => {
     if (!payments) return null;
+    // Strictly fetch only successful payments (paidStatus == "Success" / status == "paid")
     const memberPaidPayments = payments
       .filter(p => p.memberId === memberId && p.status === 'paid')
       .sort((a, b) => {
@@ -205,18 +148,6 @@ export default function MembersPage() {
     )
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center">
-        <AlertCircle className="size-12 text-amber-500" />
-        <h2 className="text-xl font-bold">Administrative Access Required</h2>
-        <p className="text-muted-foreground max-w-md">
-          This page is restricted to administrators.
-        </p>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -225,10 +156,6 @@ export default function MembersPage() {
           <p className="text-muted-foreground">Manage your chit fund community members.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button variant="outline" onClick={exportMembersToCSV} className="h-11">
-            <Download className="mr-2 size-4" />
-            Export CSV
-          </Button>
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
             setIsAddDialogOpen(open)
             if (!open) document.body.style.pointerEvents = 'auto'
@@ -278,14 +205,11 @@ export default function MembersPage() {
                         <SelectValue placeholder="Select a chit group" />
                       </SelectTrigger>
                       <SelectContent>
-                        {chitRounds?.filter((r: any) => r.name).map((round: any) => (
+                        {chitRounds?.map((round: any) => (
                           <SelectItem key={round.id} value={round.name}>
                             {round.name}
                           </SelectItem>
                         ))}
-                        {(!chitRounds || chitRounds.length === 0) && (
-                          <SelectItem value="none" disabled>No chit groups found</SelectItem>
-                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -336,7 +260,7 @@ export default function MembersPage() {
             <TableRow>
               <TableHead className="font-semibold">Member</TableHead>
               <TableHead className="font-semibold">Phone</TableHead>
-              <TableHead className="font-semibold">Last Payment</TableHead>
+              <TableHead className="font-semibold">Last Paid Date</TableHead>
               <TableHead className="font-semibold">Monthly Amount</TableHead>
               <TableHead className="font-semibold">Balance Summary</TableHead>
               <TableHead className="font-semibold">Status</TableHead>
@@ -358,7 +282,10 @@ export default function MembersPage() {
                     <TableCell>
                       <div 
                         className="flex items-center gap-3 cursor-pointer group"
-                        onClick={() => handleMemberClick(member)}
+                        onClick={() => {
+                          setSelectedMember(member)
+                          setIsProfileDialogOpen(true)
+                        }}
                       >
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary font-bold group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                           {member.name.split(' ').map((n: string) => n[0]).join('')}
@@ -388,7 +315,7 @@ export default function MembersPage() {
                         </div>
                       ) : (
                         <span className="text-xs text-muted-foreground italic flex items-center gap-1.5">
-                          <Clock className="size-3.5" /> No payments
+                          <Clock className="size-3.5" /> No successful payments
                         </span>
                       )}
                     </TableCell>
@@ -419,35 +346,24 @@ export default function MembersPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onSelect={(e) => {
                             e.preventDefault()
-                            handleHistoryClick(member)
+                            setHistoryMember(member)
+                            setIsHistoryDialogOpen(true)
                           }}>
                              <History className="mr-2 size-4" /> Payment History
                           </DropdownMenuItem>
                           <DropdownMenuItem onSelect={(e) => {
                             e.preventDefault()
-                            toast({ title: "Edit Member", description: "Member editing feature is coming soon." })
+                            toast({ title: "Edit Member", description: "Editing enabled in next update." })
                           }}>
                              <Pencil className="mr-2 size-4" /> Edit Details
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem 
-                            className={member.status === 'active' ? "text-amber-600" : "text-emerald-600"} 
-                            onSelect={(e) => {
-                              e.preventDefault()
-                              toggleStatus(member)
-                            }}
-                          >
-                            {member.status === 'active' ? (
-                              <><UserMinus className="mr-2 size-4" /> Deactivate</>
-                            ) : (
-                              <><UserCheck className="mr-2 size-4" /> Activate</>
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
                             className="text-destructive" 
                             onSelect={(e) => {
                               e.preventDefault()
-                              handleDeleteMember(member)
+                              setMemberToDelete(member)
+                              setIsDeleteMemberDialogOpen(true)
                             }}
                           >
                             <Trash2 className="mr-2 size-4" /> Delete Member
@@ -461,7 +377,7 @@ export default function MembersPage() {
             ) : (
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                  No members found matching your search.
+                  No members found.
                 </TableCell>
               </TableRow>
             )}
@@ -485,77 +401,55 @@ export default function MembersPage() {
               </div>
               Member Profile
             </DialogTitle>
-            <DialogDescription>Detailed overview for {selectedMember?.name}</DialogDescription>
           </DialogHeader>
-          
           <div className="grid gap-6 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <Card className="bg-muted/30 border-none shadow-none">
-                <CardContent className="p-4 flex flex-col items-center justify-center gap-1 text-center">
+              <Card className="bg-muted/30 border-none">
+                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
                   <Phone className="size-4 text-primary mb-1" />
-                  <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Phone</span>
-                  <span className="font-semibold">{selectedMember?.phone}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold">Phone</span>
+                  <span className="font-semibold text-sm">{selectedMember?.phone}</span>
                 </CardContent>
               </Card>
-              <Card className="bg-muted/30 border-none shadow-none">
-                <CardContent className="p-4 flex flex-col items-center justify-center gap-1 text-center">
+              <Card className="bg-muted/30 border-none">
+                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
                   <Calendar className="size-4 text-primary mb-1" />
-                  <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Joined</span>
-                  <span className="font-semibold">{selectedMember?.joinDate}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold">Joined</span>
+                  <span className="font-semibold text-sm">{selectedMember?.joinDate}</span>
                 </CardContent>
               </Card>
             </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b pb-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Info className="size-4" /> Associated Group
-                </div>
+            <div className="space-y-3">
+              <div className="flex justify-between border-b pb-2 text-sm">
+                <span className="text-muted-foreground">Chit Group</span>
                 <span className="font-bold">{selectedMember?.chitGroup}</span>
               </div>
-              
-              <div className="flex items-center justify-between border-b pb-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <FileText className="size-4" /> Monthly Contribution
-                </div>
-                <span className="font-bold">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span>
-              </div>
-              
-              <div className="flex items-center justify-between border-b pb-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CheckCircle2 className="size-4 text-emerald-500" /> Total Paid to Date
-                </div>
+              <div className="flex justify-between border-b pb-2 text-sm">
+                <span className="text-muted-foreground">Total Paid</span>
                 <span className="font-bold text-emerald-600">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span>
               </div>
-
-              <div className="flex items-center justify-between border-b pb-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <AlertCircle className="size-4 text-amber-500" /> Pending Balance
-                </div>
-                <span className="font-bold text-amber-600">₹{(selectedMember?.pendingAmount || 0).toLocaleString()}</span>
-              </div>
-
-              <div className="flex items-center justify-between border-b pb-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Info className="size-4" /> Last Payment Received
-                </div>
+              <div className="flex justify-between border-b pb-2 text-sm">
+                <span className="text-muted-foreground">Last Payment</span>
                 <span className="font-bold text-emerald-600">
                   {selectedMember && getLastPayment(selectedMember.id) 
-                    ? `₹${getLastPayment(selectedMember.id)?.amountPaid?.toLocaleString()} on ${format(parseISO(getLastPayment(selectedMember.id).paymentDate), 'MMM dd')}` 
+                    ? format(parseISO(getLastPayment(selectedMember.id).paymentDate), 'MMM dd, yyyy') 
                     : 'No record'}
                 </span>
               </div>
             </div>
           </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => handleHistoryClick(selectedMember)}>View History</Button>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsProfileDialogOpen(false)
+              setHistoryMember(selectedMember)
+              setIsHistoryDialogOpen(true)
+            }}>View History</Button>
             <Button onClick={() => setIsProfileDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Member Payment History Dialog */}
+      {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => {
         setIsHistoryDialogOpen(open)
         if (!open) {
@@ -565,69 +459,43 @@ export default function MembersPage() {
       }}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <History className="size-5 text-primary" />
-              Payment History: {historyMember?.name}
-            </DialogTitle>
-            <DialogDescription>Viewing all contribution records for this member.</DialogDescription>
+            <DialogTitle>Payment History: {historyMember?.name}</DialogTitle>
           </DialogHeader>
-
           <div className="py-4">
-            <div className="rounded-md border overflow-hidden">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead>Month</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Payment Date</TableHead>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && p.status === 'paid').map((payment, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-medium">{payment.month}</TableCell>
+                    <TableCell>₹{payment.amountPaid?.toLocaleString()}</TableCell>
+                    <TableCell><Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Paid</Badge></TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd') : '-'}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {historyMember && (payments || []).filter(p => p.memberId === historyMember.id).length > 0 ? (
-                    (payments || []).filter(p => p.memberId === historyMember.id).map((payment, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{payment.month}</TableCell>
-                        <TableCell>₹{payment.amountPaid?.toLocaleString()}</TableCell>
-                        <TableCell>
-                          {payment.status === 'paid' ? (
-                            <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50">
-                              Paid
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">
-                              Pending
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground text-sm">
-                           {!payment.paymentDate ? (
-                             <span className="flex items-center justify-end gap-1 text-amber-600">
-                               <Clock className="size-3" /> Awaiting
-                             </span>
-                           ) : format(parseISO(payment.paymentDate), 'MMM dd, yyyy')}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic">
-                        No payment records found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+                {(!historyMember || (payments || []).filter(p => p.memberId === historyMember.id && p.status === 'paid').length === 0) && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground italic py-8">
+                      No successful payments recorded.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Dialog */}
       <AlertDialog open={isDeleteMemberDialogOpen} onOpenChange={(open) => {
         setIsDeleteMemberDialogOpen(open)
         if (!open) {
@@ -637,17 +505,12 @@ export default function MembersPage() {
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this member?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. All historical data for this member will be permanently removed.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Delete Member?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently remove {memberToDelete?.name} and all associated data.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setIsDeleteMemberDialogOpen(false)
-              setMemberToDelete(null)
-            }}>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDeleteMember}>Delete</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setIsDeleteMemberDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive" onClick={confirmDeleteMember}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

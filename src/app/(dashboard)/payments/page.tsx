@@ -35,20 +35,19 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase"
-import { collection, query, doc, serverTimestamp } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 
 export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [monthFilter, setMonthFilter] = useState("all")
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [isQuickRecordOpen, setIsQuickRecordOpen] = useState(false)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const { toast } = useToast()
   const db = useFirestore()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments')), [db]);
+  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: paymentsData, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const payments = paymentsData || [];
 
@@ -72,19 +71,17 @@ export default function PaymentsPage() {
     
     const amount = Number(recordData.amount);
 
-    // Add payment record with "paid" status for synchronization
     addDocumentNonBlocking(collection(db, 'payments'), {
       memberId: member.id,
       memberName: member.name,
       month: recordData.month,
       amountPaid: amount,
       paymentDate: new Date().toISOString(),
-      status: "paid",
+      status: "paid", // Production requirement: all records here are successful
       method: recordData.method,
       createdAt: serverTimestamp()
     });
 
-    // Sync member status - Updates status and totals in real-time for Dashboard/Profile
     updateDocumentNonBlocking(doc(db, 'members', member.id), {
       paymentStatus: "paid",
       totalPaid: (member.totalPaid || 0) + amount,
@@ -94,54 +91,14 @@ export default function PaymentsPage() {
     setIsQuickRecordOpen(false);
     toast({
       title: "Payment Recorded",
-      description: `Payment for ${member.name} has been saved as Paid.`,
+      description: `Payment of ₹${amount} for ${member.name} saved successfully.`,
     });
   }
 
-  const markAsPaid = (payment: any) => {
-    if (!db) return;
-    const docRef = doc(db, 'payments', payment.id);
-    const amount = payment.amountPaid || 0;
-
-    updateDocumentNonBlocking(docRef, {
-      status: "paid",
-      paymentDate: new Date().toISOString(),
-      method: "Cash"
-    });
-
-    // Synchronize member status to reflect "Paid" instantly everywhere
-    if (payment.memberId) {
-      const member = members.find(m => m.id === payment.memberId);
-      if (member) {
-        updateDocumentNonBlocking(doc(db, 'members', payment.memberId), {
-          paymentStatus: "paid",
-          totalPaid: (member.totalPaid || 0) + amount,
-          pendingAmount: Math.max(0, (member.pendingAmount || 0) - amount)
-        });
-      }
-    }
-
-    toast({
-      title: "Payment Success",
-      description: "Member's contribution has been recorded as paid.",
-    })
-  }
-
-  const filteredPayments = payments.filter(payment => {
-    const matchesSearch = payment.memberName?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || payment.status === statusFilter
-    const matchesMonth = monthFilter === "all" || payment.month?.includes(monthFilter)
-    return matchesSearch && matchesStatus && matchesMonth
-  })
-
-  const getMethodIcon = (method: string) => {
-    switch (method) {
-      case 'Cash': return <Banknote className="size-3.5" />;
-      case 'UPI': return <Smartphone className="size-3.5" />;
-      case 'Bank Transfer': return <Building2 className="size-3.5" />;
-      default: return null;
-    }
-  }
+  // Filter to strictly show only successful payments
+  const successfulPayments = payments.filter(p => p.status === 'paid' && 
+    (p.memberName?.toLowerCase().includes(searchTerm.toLowerCase()))
+  )
 
   if (isRoleLoading) {
     return (
@@ -151,147 +108,78 @@ export default function PaymentsPage() {
     )
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center">
-        <AlertCircle className="size-12 text-amber-500" />
-        <h2 className="text-xl font-bold">Administrative Access Required</h2>
-        <p className="text-muted-foreground max-w-md">
-          This page is restricted to administrators.
-        </p>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-headline font-bold tracking-tight">Payments</h2>
-          <p className="text-muted-foreground">
-            Track and record monthly member contributions.
-          </p>
+          <p className="text-muted-foreground">Viewing only successful contribution records.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Dialog open={isQuickRecordOpen} onOpenChange={(open) => {
-            setIsQuickRecordOpen(open)
-            if (!open) document.body.style.pointerEvents = 'auto'
-          }}>
-            <DialogTrigger asChild>
-              <Button className="h-11">
-                <Plus className="mr-2 size-5" />
-                Quick Record
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <form onSubmit={handleQuickRecord}>
-                <DialogHeader>
-                  <DialogTitle>Quick Record Payment</DialogTitle>
-                  <DialogDescription>Manually record a payment received from a member.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-6">
-                  <div className="grid gap-2">
-                    <Label htmlFor="member">Member</Label>
-                    <Select value={recordData.memberId} onValueChange={(v) => setRecordData({...recordData, memberId: v})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select member" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {members.map(m => (
-                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="amount">Amount (₹)</Label>
-                    <Input id="amount" type="number" value={recordData.amount} onChange={e => setRecordData({...recordData, amount: Number(e.target.value)})} required />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="method">Method</Label>
-                    <Select value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select method" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Cash">Cash</SelectItem>
-                        <SelectItem value="UPI">UPI</SelectItem>
-                        <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+        <Dialog open={isQuickRecordOpen} onOpenChange={(open) => {
+          setIsQuickRecordOpen(open)
+          if (!open) document.body.style.pointerEvents = 'auto'
+        }}>
+          <DialogTrigger asChild>
+            <Button className="h-11 shadow-md">
+              <Plus className="mr-2 size-5" />
+              Quick Record
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <form onSubmit={handleQuickRecord}>
+              <DialogHeader>
+                <DialogTitle>Record Payment</DialogTitle>
+                <DialogDescription>Manually record a successful payment received from a member.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-6">
+                <div className="grid gap-2">
+                  <Label htmlFor="member">Member</Label>
+                  <Select value={recordData.memberId} onValueChange={(v) => setRecordData({...recordData, memberId: v})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select member" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {members.map(m => (
+                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)}>Cancel</Button>
-                  <Button type="submit">Record Payment</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="amount">Amount (₹)</Label>
+                  <Input id="amount" type="number" value={recordData.amount} onChange={e => setRecordData({...recordData, amount: Number(e.target.value)})} required />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="method">Method</Label>
+                  <Select value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash">Cash</SelectItem>
+                      <SelectItem value="UPI">UPI</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)}>Cancel</Button>
+                <Button type="submit">Save Payment</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card className="bg-emerald-50 border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/50">
-          <CardHeader className="pb-2">
-            <CardDescription className="text-emerald-700 dark:text-emerald-400">Total Collected</CardDescription>
-            <CardTitle className="text-2xl font-bold text-emerald-900 dark:text-emerald-300">
-              ₹{payments.filter(p => p.status === 'paid').reduce((acc, p) => acc + (p.amountPaid || 0), 0).toLocaleString()}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="bg-amber-50 border-amber-100 dark:bg-amber-950/20 dark:border-amber-900/50">
-          <CardHeader className="pb-2">
-            <CardDescription className="text-amber-700 dark:text-amber-400">Pending Payments</CardDescription>
-            <CardTitle className="text-2xl font-bold text-amber-900 dark:text-amber-300">
-              {payments.filter(p => p.status === 'pending').length}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="bg-primary/5 border-primary/10">
-          <CardHeader className="pb-2">
-            <CardDescription className="text-primary/70">Participation Rate</CardDescription>
-            <CardTitle className="text-2xl font-bold text-primary">
-              {payments.length ? Math.round((payments.filter(p => p.status === 'paid').length / payments.length) * 100) : 0}%
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-4 bg-card p-4 rounded-xl shadow-sm border border-border/50">
-        <div className="flex-1 flex items-center space-x-2">
-          <Search className="size-5 text-muted-foreground" />
-          <Input
-            placeholder="Search by member name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="border-none focus-visible:ring-0 shadow-none bg-transparent"
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Select value={monthFilter} onValueChange={setMonthFilter}>
-            <SelectTrigger className="w-[160px] bg-background">
-              <SelectValue placeholder="Month" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Months</SelectItem>
-              <SelectItem value="September">September</SelectItem>
-              <SelectItem value="August">August</SelectItem>
-              <SelectItem value="July">July</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[160px] bg-background">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="late">Late</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="flex items-center space-x-2 bg-card p-4 rounded-xl shadow-sm border border-border/50">
+        <Search className="size-5 text-muted-foreground" />
+        <Input
+          placeholder="Search by member name..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="border-none focus-visible:ring-0 shadow-none bg-transparent"
+        />
       </div>
 
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -300,9 +188,9 @@ export default function PaymentsPage() {
             <TableRow>
               <TableHead className="font-semibold">Member</TableHead>
               <TableHead className="font-semibold">Period</TableHead>
-              <TableHead className="font-semibold">Amount</TableHead>
+              <TableHead className="font-semibold">Amount Paid</TableHead>
               <TableHead className="font-semibold">Method</TableHead>
-              <TableHead className="font-semibold">Payment Date</TableHead>
+              <TableHead className="font-semibold">Last Paid Date</TableHead>
               <TableHead className="font-semibold">Status</TableHead>
               <TableHead className="w-[100px]"></TableHead>
             </TableRow>
@@ -311,50 +199,23 @@ export default function PaymentsPage() {
             {isPaymentsLoading ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center text-muted-foreground animate-pulse">
-                  Loading payments...
+                  Loading records...
                 </TableCell>
               </TableRow>
-            ) : filteredPayments.length > 0 ? (
-              filteredPayments.map((payment) => (
+            ) : successfulPayments.length > 0 ? (
+              successfulPayments.map((payment) => (
                 <TableRow key={payment.id} className="hover:bg-muted/10 transition-colors">
-                  <TableCell>
-                    <button 
-                      onClick={() => setHistoryMember(payment)}
-                      className="font-medium hover:text-primary transition-colors flex items-center gap-2"
-                    >
-                      <User className="size-3.5 text-muted-foreground" />
-                      {payment.memberName}
-                    </button>
-                  </TableCell>
+                  <TableCell className="font-medium">{payment.memberName}</TableCell>
                   <TableCell>{payment.month}</TableCell>
-                  <TableCell className="font-semibold">₹{payment.amountPaid?.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                      {getMethodIcon(payment.method)}
-                      {payment.method || "-"}
-                    </div>
-                  </TableCell>
+                  <TableCell className="font-bold text-emerald-600">₹{payment.amountPaid?.toLocaleString()}</TableCell>
+                  <TableCell className="text-muted-foreground text-xs">{payment.method || "Cash"}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">
-                    {payment.status === 'pending' ? (
-                      <span className="flex items-center gap-1.5 text-amber-600">
-                        <Clock className="size-3.5" /> Awaiting
-                      </span>
-                    ) : payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString() : "-"}
+                    {payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString() : "-"}
                   </TableCell>
                   <TableCell>
-                    {payment.status === 'paid' ? (
-                      <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50 gap-1.5">
-                        <CheckCircle2 className="size-3.5" /> Paid
-                      </Badge>
-                    ) : payment.status === 'late' ? (
-                      <Badge variant="outline" className="border-rose-500 text-rose-600 bg-rose-50 gap-1.5">
-                        <AlertCircle className="size-3.5" /> Late
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50 gap-1.5">
-                        <AlertCircle className="size-3.5" /> Pending
-                      </Badge>
-                    )}
+                    <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50 gap-1.5">
+                      <CheckCircle2 className="size-3.5" /> Success
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -364,27 +225,16 @@ export default function PaymentsPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {payment.status !== 'paid' && (
-                          <DropdownMenuItem onSelect={(e) => {
-                            e.preventDefault()
-                            markAsPaid(payment)
-                          }}>
-                            <CreditCard className="mr-2 size-4" /> Record Payment
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuItem onSelect={(e) => {
                           e.preventDefault()
                           setHistoryMember(payment)
+                          setIsHistoryOpen(true)
                         }}>
-                          <History className="mr-2 size-4" /> Payment History
+                          <History className="mr-2 size-4" /> History
                         </DropdownMenuItem>
-                        {payment.status === 'paid' && (
-                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                            <Download className="mr-2 size-4" /> Download Receipt
-                          </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          <Download className="mr-2 size-4" /> Receipt
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -393,7 +243,7 @@ export default function PaymentsPage() {
             ) : (
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                  No payment records found.
+                  No successful payments found.
                 </TableCell>
               </TableRow>
             )}
@@ -401,8 +251,9 @@ export default function PaymentsPage() {
         </Table>
       </div>
 
-      {/* Payment History Dialog */}
-      <Dialog open={!!historyMember} onOpenChange={(open) => {
+      {/* History Dialog */}
+      <Dialog open={isHistoryOpen} onOpenChange={(open) => {
+        setIsHistoryOpen(open)
         if (!open) {
           setHistoryMember(null)
           document.body.style.pointerEvents = 'auto'
@@ -410,57 +261,29 @@ export default function PaymentsPage() {
       }}>
         <DialogContent className="sm:max-w-[550px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <History className="size-5 text-primary" />
-              Payment History: {historyMember?.memberName}
-            </DialogTitle>
-            <DialogDescription>
-              A record of all contributions made by {historyMember?.memberName}.
-            </DialogDescription>
+            <DialogTitle>Payment History: {historyMember?.memberName}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <div className="rounded-md border overflow-hidden">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="text-xs">Month</TableHead>
-                    <TableHead className="text-xs">Amount</TableHead>
-                    <TableHead className="text-xs">Method</TableHead>
-                    <TableHead className="text-xs text-right">Date</TableHead>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead className="text-right">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payments.filter(p => p.memberId === historyMember?.memberId && p.status === 'paid').map((entry, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="text-sm font-medium">{entry.month}</TableCell>
+                    <TableCell className="text-sm">₹{entry.amountPaid?.toLocaleString()}</TableCell>
+                    <TableCell className="text-sm text-right text-muted-foreground">
+                      {entry.paymentDate ? new Date(entry.paymentDate).toLocaleDateString() : "-"}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payments.filter(p => p.memberId === historyMember?.memberId).length > 0 ? (
-                    payments
-                      .filter(p => p.memberId === historyMember?.memberId)
-                      .map((entry, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="text-sm font-medium">{entry.month}</TableCell>
-                          <TableCell className="text-sm">₹{entry.amountPaid?.toLocaleString()}</TableCell>
-                          <TableCell className="text-sm">
-                             <div className="flex items-center gap-1.5">
-                               {getMethodIcon(entry.method)}
-                               {entry.method || "Cash"}
-                             </div>
-                          </TableCell>
-                          <TableCell className="text-sm text-right text-muted-foreground">
-                            {entry.paymentDate ? new Date(entry.paymentDate).toLocaleDateString() : "-"}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="h-20 text-center text-muted-foreground italic">
-                        No historical records found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-4">
-             <Button variant="outline" size="sm" onClick={() => setHistoryMember(null)}>Close</Button>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </DialogContent>
       </Dialog>
