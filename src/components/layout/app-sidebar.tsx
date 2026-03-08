@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { LayoutDashboard, Users, CreditCard, History, BarChart3, LogOut, ShieldCheck } from "lucide-react"
+import { LayoutDashboard, Users, CreditCard, History, BarChart3, LogOut } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/firebase"
@@ -33,7 +33,7 @@ export function AppSidebar() {
   const pathname = usePathname()
   const auth = useAuth()
   const router = useRouter()
-  const { role, isLoading } = useRole()
+  const { role } = useRole()
 
   const handleLogout = async () => {
     await auth.signOut()
@@ -44,18 +44,8 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border/50 py-6">
-        <div className="flex items-center gap-3 px-2">
-          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
-            <ShieldCheck className="size-5" />
-          </div>
-          <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
-            <span className="font-headline font-bold text-lg tracking-tight">ChitFund Pro</span>
-            <span className="text-xs text-sidebar-foreground/60">
-              {isLoading ? "Loading..." : role === 'admin' ? "Admin Console" : "Member Portal"}
-            </span>
-          </div>
-        </div>
+      <SidebarHeader className="border-b border-sidebar-border/50 py-4">
+        {/* Application branding removed */}
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
