@@ -20,6 +20,8 @@ export default function DashboardLayout({
 
   useEffect(() => {
     setCurrentTime(new Date())
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000)
+    return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -48,15 +50,14 @@ export default function DashboardLayout({
               </h1>
             </div>
             <div className="flex items-center gap-4">
-               <div className="flex items-center gap-3 bg-muted/50 px-5 py-2 rounded-2xl border shadow-inner transition-all hover:bg-muted/70">
-                  <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none mb-1">
-                       {currentTime ? format(currentTime, 'EEEE') : '...'}
-                    </span>
-                    <span className="text-sm font-bold text-foreground tabular-nums leading-none tracking-tight">
-                       {currentTime ? format(currentTime, 'MMMM dd, yyyy') : '...'}
-                    </span>
-                  </div>
+               <div className="flex items-center gap-2 bg-muted/50 px-4 py-1.5 rounded-full border shadow-sm transition-all hover:bg-muted/70">
+                  <span className="text-xs font-bold text-primary uppercase tracking-wider">
+                    {currentTime ? format(currentTime, 'EEEE') : '...'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">|</span>
+                  <span className="text-xs font-medium text-foreground tabular-nums">
+                    {currentTime ? format(currentTime, 'MMMM dd, yyyy') : '...'}
+                  </span>
                </div>
             </div>
           </header>
