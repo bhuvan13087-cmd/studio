@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -469,7 +470,7 @@ export default function RoundsPage() {
                         id="edit-amount" 
                         type="number"
                         value={editingChit.monthlyAmount}
-                        onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})}
+                        onChange={setEditingChit ? e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)}) : undefined}
                         required 
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
@@ -480,7 +481,7 @@ export default function RoundsPage() {
                         id="edit-members" 
                         type="number"
                         value={editingChit.totalMembers}
-                        onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})}
+                        onChange={setEditingChit ? e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)}) : undefined}
                         required 
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
@@ -493,7 +494,7 @@ export default function RoundsPage() {
                         id="edit-duration" 
                         type="number"
                         value={editingChit.duration}
-                        onChange={e => setEditingChit({...editingChit, duration: Number(e.target.value)})}
+                        onChange={setEditingChit ? e => setEditingChit({...editingChit, duration: Number(e.target.value)}) : undefined}
                         required 
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
@@ -504,7 +505,7 @@ export default function RoundsPage() {
                         id="edit-startDate" 
                         type="date"
                         value={editingChit.startDate}
-                        onChange={e => setEditingChit({...editingChit, startDate: e.target.value})}
+                        onChange={setEditingChit ? e => setEditingChit({...editingChit, startDate: e.target.value}) : undefined}
                         required 
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
@@ -515,7 +516,7 @@ export default function RoundsPage() {
                     <textarea 
                       id="edit-description" 
                       value={editingChit.description}
-                      onChange={e => setEditingChit({...editingChit, description: e.target.value})}
+                      onChange={setEditingChit ? e => setEditingChit({...editingChit, description: e.target.value}) : undefined}
                       className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
