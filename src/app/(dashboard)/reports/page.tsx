@@ -12,7 +12,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Cell, Pie, PieChart } from "recharts"
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell, Pie, PieChart } from "recharts"
 import {
   Table,
   TableBody,
@@ -27,6 +27,13 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 
 const collectionData = [
@@ -69,6 +76,12 @@ const chartConfig = {
   amount: {
     label: "Collected Amount",
     color: "hsl(var(--primary))",
+  },
+} satisfies ChartConfig
+
+const pieChartConfig = {
+  value: {
+    label: "Status Percentage",
   },
 } satisfies ChartConfig
 
@@ -190,7 +203,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent className="flex flex-col items-center">
              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ChartContainer config={pieChartConfig} className="h-full w-full">
                    <PieChart>
                       <Pie
                         data={statusData}
@@ -207,7 +220,7 @@ export default function ReportsPage() {
                       </Pie>
                       <ChartTooltip content={<ChartTooltipContent />} />
                    </PieChart>
-                </ResponsiveContainer>
+                </ChartContainer>
              </div>
              <div className="w-full space-y-3 mt-4">
                 {statusData.map((item, i) => (
@@ -224,7 +237,6 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {/* NEW REPORT SECTIONS START HERE */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h3 className="text-2xl font-bold font-headline">Detailed Insights</h3>
@@ -250,7 +262,6 @@ export default function ReportsPage() {
             </TabsTrigger>
           </TabsList>
 
-          {/* 1. Monthly Collection Report */}
           <TabsContent value="collections" className="mt-6">
             <Card className="border-border/50">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -291,7 +302,6 @@ export default function ReportsPage() {
             </Card>
           </TabsContent>
 
-          {/* 2. Member Payment Report */}
           <TabsContent value="members" className="mt-6">
             <Card className="border-border/50">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -330,7 +340,6 @@ export default function ReportsPage() {
             </Card>
           </TabsContent>
 
-          {/* 3. Pending Payments Report */}
           <TabsContent value="pending" className="mt-6">
             <Card className="border-border/50">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -379,7 +388,6 @@ export default function ReportsPage() {
             </Card>
           </TabsContent>
 
-          {/* 4. Chit Winner Report */}
           <TabsContent value="winners" className="mt-6">
             <Card className="border-border/50">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -420,11 +428,3 @@ export default function ReportsPage() {
     </div>
   )
 }
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
