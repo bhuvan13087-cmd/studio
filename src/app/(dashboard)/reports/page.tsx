@@ -1,8 +1,7 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
-import { Download, Printer, Filter, Calendar, BarChart3, TrendingUp, DollarSign } from "lucide-react"
+import { Download, Printer, Filter, Calendar, BarChart3, TrendingUp, DollarSign, FileText, User, Clock, Trophy, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
@@ -14,6 +13,21 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Cell, Pie, PieChart } from "recharts"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import { useToast } from "@/hooks/use-toast"
 
 const collectionData = [
   { month: "Jan", amount: 45000 },
@@ -30,6 +44,27 @@ const statusData = [
   { name: "Defaulter", value: 5, color: "hsl(var(--destructive))" },
 ]
 
+const memberPayments = [
+  { name: "John Doe", totalPaid: 45000, pending: 0, lastPayment: "2023-09-05" },
+  { name: "Sarah Smith", totalPaid: 40000, pending: 0, lastPayment: "2023-09-07" },
+  { name: "Emma Watson", totalPaid: 25000, pending: 5000, lastPayment: "2023-08-20" },
+  { name: "Michael Chen", totalPaid: 30000, pending: 5000, lastPayment: "2023-08-15" },
+  { name: "Robert Wilson", totalPaid: 20000, pending: 0, lastPayment: "2023-09-15" },
+]
+
+const pendingPayments = [
+  { name: "Emma Watson", month: "September 2023", amount: 5000, daysOverdue: 12 },
+  { name: "Michael Chen", month: "September 2023", amount: 5000, daysOverdue: 15 },
+  { name: "Lisa Wong", month: "September 2023", amount: 5000, daysOverdue: 3 },
+]
+
+const chitWinners = [
+  { round: 12, name: "John Doe", amount: 45000, date: "2023-09-15" },
+  { round: 11, name: "Sarah Smith", amount: 45000, date: "2023-08-15" },
+  { round: 10, name: "Michael Chen", amount: 45000, date: "2023-07-15" },
+  { round: 9, name: "Emma Watson", amount: 45000, date: "2023-06-15" },
+]
+
 const chartConfig = {
   amount: {
     label: "Collected Amount",
@@ -39,26 +74,34 @@ const chartConfig = {
 
 export default function ReportsPage() {
   const [mounted, setMounted] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  const handleExport = (type: 'CSV' | 'PDF', reportName: string) => {
+    toast({
+      title: "Export Started",
+      description: `Your ${reportName} is being exported as ${type}.`,
+    })
+  }
+
   if (!mounted) return null
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-headline font-bold tracking-tight">Financial Reports</h2>
           <p className="text-muted-foreground">Comprehensive overview of collections and dues.</p>
         </div>
         <div className="flex items-center gap-2">
-           <Button variant="outline" size="sm" className="hidden sm:flex">
+           <Button variant="outline" size="sm" className="hidden sm:flex" onClick={() => window.print()}>
              <Printer className="mr-2 size-4" />
              Print
            </Button>
-           <Button size="sm" className="h-10">
+           <Button size="sm" className="h-10" onClick={() => handleExport('PDF', 'Overview Report')}>
              <Download className="mr-2 size-4" />
              Export PDF
            </Button>
@@ -180,11 +223,204 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* NEW REPORT SECTIONS START HERE */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-2xl font-bold font-headline">Detailed Insights</h3>
+        </div>
+
+        <Tabs defaultValue="collections" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 h-auto p-1 bg-muted/50 border">
+            <TabsTrigger value="collections" className="py-2.5">
+              <BarChart3 className="size-4 mr-2" />
+              Collections
+            </TabsTrigger>
+            <TabsTrigger value="members" className="py-2.5">
+              <User className="size-4 mr-2" />
+              Members
+            </TabsTrigger>
+            <TabsTrigger value="pending" className="py-2.5">
+              <Clock className="size-4 mr-2" />
+              Pending
+            </TabsTrigger>
+            <TabsTrigger value="winners" className="py-2.5">
+              <Trophy className="size-4 mr-2" />
+              Winners
+            </TabsTrigger>
+          </TabsList>
+
+          {/* 1. Monthly Collection Report */}
+          <TabsContent value="collections" className="mt-6">
+            <Card className="border-border/50">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Monthly Collection Summary</CardTitle>
+                  <CardDescription>Total funds received grouped by month.</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleExport('CSV', 'Monthly Collection Report')}>
+                    <Download className="size-4 mr-2" /> CSV
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead>
+                      <TableHead>Year</TableHead>
+                      <TableHead className="text-right">Total Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {collectionData.map((row, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{row.month}</TableCell>
+                        <TableCell>2023</TableCell>
+                        <TableCell className="text-right font-bold text-emerald-600">₹{row.amount.toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell colSpan={2}>Total YTD</TableCell>
+                      <TableCell className="text-right text-emerald-700">₹3,28,000</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* 2. Member Payment Report */}
+          <TabsContent value="members" className="mt-6">
+            <Card className="border-border/50">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Individual Member Performance</CardTitle>
+                  <CardDescription>Cumulative contributions and outstanding dues per member.</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => handleExport('CSV', 'Member Payment Report')}>
+                  <Download className="size-4 mr-2" /> CSV
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Member Name</TableHead>
+                      <TableHead>Total Paid</TableHead>
+                      <TableHead>Pending Amount</TableHead>
+                      <TableHead className="text-right">Last Payment</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {memberPayments.map((row, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell className="text-emerald-600 font-semibold">₹{row.totalPaid.toLocaleString()}</TableCell>
+                        <TableCell className={row.pending > 0 ? "text-rose-500 font-semibold" : "text-muted-foreground"}>
+                          ₹{row.pending.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">{row.lastPayment}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* 3. Pending Payments Report */}
+          <TabsContent value="pending" className="mt-6">
+            <Card className="border-border/50">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Overdue Contributions</CardTitle>
+                  <CardDescription>Members who haven't fulfilled their dues for the current cycle.</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => handleExport('PDF', 'Pending Payments Report')}>
+                  <FileText className="size-4 mr-2" /> PDF
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Member Name</TableHead>
+                      <TableHead>Period</TableHead>
+                      <TableHead>Amount Due</TableHead>
+                      <TableHead className="text-right">Days Overdue</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingPayments.length > 0 ? (
+                      pendingPayments.map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{row.name}</TableCell>
+                          <TableCell>{row.month}</TableCell>
+                          <TableCell className="text-rose-600 font-bold">₹{row.amount.toLocaleString()}</TableCell>
+                          <TableCell className="text-right">
+                             <span className="px-2 py-1 rounded bg-rose-50 text-rose-700 text-xs font-bold border border-rose-100">
+                               {row.daysOverdue} days
+                             </span>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                          No pending payments for this period.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* 4. Chit Winner Report */}
+          <TabsContent value="winners" className="mt-6">
+            <Card className="border-border/50">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Chit Auction History</CardTitle>
+                  <CardDescription>Historical list of round winners and distributions.</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => handleExport('CSV', 'Chit Winner Report')}>
+                  <Download className="size-4 mr-2" /> CSV
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Round #</TableHead>
+                      <TableHead>Winner Name</TableHead>
+                      <TableHead>Winning Amount</TableHead>
+                      <TableHead className="text-right">Auction Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {chitWinners.map((row, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-bold text-primary">#{row.round}</TableCell>
+                        <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell className="text-emerald-600 font-bold">₹{row.amount.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{row.date}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }
 
-// Adding Select component used in Reports
 import {
   Select,
   SelectContent,
