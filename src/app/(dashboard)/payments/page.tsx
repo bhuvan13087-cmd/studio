@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Search, Filter, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, Calendar, User, Plus, Loader2 } from "lucide-react"
+import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -34,7 +34,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase"
-import { collection, query, where, doc, serverTimestamp } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 
 export default function PaymentsPage() {
@@ -76,12 +76,9 @@ export default function PaymentsPage() {
 
     const member = members.find(m => m.id === recordData.memberId);
     if (!member) return;
-
-    const paymentId = Math.random().toString(36).substr(2, 9);
     
     // Add payment record
     addDocumentNonBlocking(collection(db, 'payments'), {
-      id: paymentId,
       memberId: member.id,
       memberName: member.name,
       month: recordData.month,
@@ -92,7 +89,7 @@ export default function PaymentsPage() {
       createdAt: serverTimestamp()
     });
 
-    // Sync member status
+    // Sync member status - IMPORTANT: This ensures status updates everywhere
     updateDocumentNonBlocking(doc(db, 'members', member.id), {
       paymentStatus: "paid",
       totalPaid: (member.totalPaid || 0) + Number(recordData.amount)
@@ -179,9 +176,7 @@ export default function PaymentsPage() {
         <div className="flex items-center gap-2">
           <Dialog open={isQuickRecordOpen} onOpenChange={(open) => {
             setIsQuickRecordOpen(open)
-            if (!open) {
-              document.body.style.pointerEvents = 'auto';
-            }
+            if (!open) document.body.style.pointerEvents = 'auto'
           }}>
             <DialogTrigger asChild>
               <Button className="h-11">
@@ -411,7 +406,7 @@ export default function PaymentsPage() {
       <Dialog open={!!historyMember} onOpenChange={(open) => {
         if (!open) {
           setHistoryMember(null)
-          document.body.style.pointerEvents = 'auto';
+          document.body.style.pointerEvents = 'auto'
         }
       }}>
         <DialogContent className="sm:max-w-[550px]">

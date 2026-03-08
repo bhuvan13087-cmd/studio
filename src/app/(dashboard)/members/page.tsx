@@ -44,7 +44,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
-import { collection, query, doc, serverTimestamp } from "firebase/firestore"
+import { collection, doc, serverTimestamp } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 
 export default function MembersPage() {
@@ -98,10 +98,8 @@ export default function MembersPage() {
     e.preventDefault()
     if (!db) return;
 
-    const memberId = Math.random().toString(36).substr(2, 9)
     addDocumentNonBlocking(collection(db, 'members'), {
       ...newMember,
-      id: memberId,
       createdAt: serverTimestamp()
     })
 
@@ -231,9 +229,7 @@ export default function MembersPage() {
           </Button>
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
             setIsAddDialogOpen(open)
-            if (!open) {
-              document.body.style.pointerEvents = 'auto';
-            }
+            if (!open) document.body.style.pointerEvents = 'auto'
           }}>
             <DialogTrigger asChild>
               <Button className="h-11 px-6 shadow-lg hover:shadow-xl transition-all">
@@ -421,7 +417,10 @@ export default function MembersPage() {
                         }}>
                            <History className="mr-2 size-4" /> Payment History
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        <DropdownMenuItem onSelect={(e) => {
+                          e.preventDefault()
+                          toast({ title: "Edit Member", description: "Member editing feature is coming soon." })
+                        }}>
                            <Pencil className="mr-2 size-4" /> Edit Details
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -468,7 +467,7 @@ export default function MembersPage() {
         setIsProfileDialogOpen(open)
         if (!open) {
           setSelectedMember(null)
-          document.body.style.pointerEvents = 'auto';
+          document.body.style.pointerEvents = 'auto'
         }
       }}>
         <DialogContent className="sm:max-w-[500px]">
@@ -540,7 +539,8 @@ export default function MembersPage() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => handleHistoryClick(selectedMember)}>View History</Button>
             <Button onClick={() => setIsProfileDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
@@ -551,7 +551,7 @@ export default function MembersPage() {
         setIsHistoryDialogOpen(open)
         if (!open) {
           setHistoryMember(null)
-          document.body.style.pointerEvents = 'auto';
+          document.body.style.pointerEvents = 'auto'
         }
       }}>
         <DialogContent className="sm:max-w-[600px]">
@@ -623,7 +623,7 @@ export default function MembersPage() {
         setIsDeleteMemberDialogOpen(open)
         if (!open) {
           setMemberToDelete(null)
-          document.body.style.pointerEvents = 'auto';
+          document.body.style.pointerEvents = 'auto'
         }
       }}>
         <AlertDialogContent>

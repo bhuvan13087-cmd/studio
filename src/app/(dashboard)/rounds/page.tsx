@@ -42,7 +42,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
@@ -167,9 +166,7 @@ export default function RoundsPage() {
         </div>
         <Dialog open={isAddChitDialogOpen} onOpenChange={(open) => {
           setIsAddChitDialogOpen(open)
-          if (!open) {
-            document.body.style.pointerEvents = 'auto';
-          }
+          if (!open) document.body.style.pointerEvents = 'auto'
         }}>
           <DialogTrigger asChild>
             <Button size="lg" className="h-12 px-8">
@@ -275,9 +272,7 @@ export default function RoundsPage() {
           </div>
           <Dialog open={isAddChitDialogOpen} onOpenChange={(open) => {
             setIsAddChitDialogOpen(open)
-            if (!open) {
-              document.body.style.pointerEvents = 'auto';
-            }
+            if (!open) document.body.style.pointerEvents = 'auto'
           }}>
             <DialogTrigger asChild>
               <Button className="h-11 px-6 shadow-lg hover:shadow-xl transition-all">
@@ -446,7 +441,7 @@ export default function RoundsPage() {
           setIsEditChitDialogOpen(open);
           if (!open) {
             setEditingChit(null);
-            document.body.style.pointerEvents = 'auto';
+            document.body.style.pointerEvents = 'auto'
           }
         }}>
           <DialogContent className="sm:max-w-[425px]">
@@ -542,7 +537,7 @@ export default function RoundsPage() {
           setIsDeleteDialogOpen(open);
           if (!open) {
             setChitToDelete(null);
-            document.body.style.pointerEvents = 'auto';
+            document.body.style.pointerEvents = 'auto'
           }
         }}>
           <AlertDialogContent>
