@@ -29,11 +29,11 @@ import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 
 const initialMembers = [
-  { id: "1", name: "John Doe", phone: "+91 98765 43210", joinDate: "2023-01-15", monthlyAmount: 5000, status: "active", paymentStatus: "paid", totalPaid: 45000, pendingAmount: 0 },
-  { id: "2", name: "Sarah Smith", phone: "+91 98765 43211", joinDate: "2023-02-10", monthlyAmount: 5000, status: "active", paymentStatus: "paid", totalPaid: 40000, pendingAmount: 0 },
-  { id: "3", name: "Michael Chen", phone: "+91 98765 43212", joinDate: "2023-03-05", monthlyAmount: 5000, status: "inactive", paymentStatus: "pending", totalPaid: 30000, pendingAmount: 5000 },
-  { id: "4", name: "Emma Watson", phone: "+91 98765 43213", joinDate: "2023-04-20", monthlyAmount: 5000, status: "active", paymentStatus: "pending", totalPaid: 25000, pendingAmount: 5000 },
-  { id: "5", name: "Robert Wilson", phone: "+91 98765 43214", joinDate: "2023-05-12", monthlyAmount: 5000, status: "active", paymentStatus: "paid", totalPaid: 20000, pendingAmount: 0 },
+  { id: "1", name: "John Doe", phone: "+91 98765 43210", joinDate: "2023-01-15", monthlyAmount: 5000, status: "active", paymentStatus: "paid", totalPaid: 45000, pendingAmount: 0, chitGroup: "Alpha Premium 5K" },
+  { id: "2", name: "Sarah Smith", phone: "+91 98765 43211", joinDate: "2023-02-10", monthlyAmount: 5000, status: "active", paymentStatus: "paid", totalPaid: 40000, pendingAmount: 0, chitGroup: "Alpha Premium 5K" },
+  { id: "3", name: "Michael Chen", phone: "+91 98765 43212", joinDate: "2023-03-05", monthlyAmount: 5000, status: "inactive", paymentStatus: "pending", totalPaid: 30000, pendingAmount: 5000, chitGroup: "Elite 10K Monthly" },
+  { id: "4", name: "Emma Watson", phone: "+91 98765 43213", joinDate: "2023-04-20", monthlyAmount: 5000, status: "active", paymentStatus: "pending", totalPaid: 25000, pendingAmount: 5000, chitGroup: "Elite 10K Monthly" },
+  { id: "5", name: "Robert Wilson", phone: "+91 98765 43214", joinDate: "2023-05-12", monthlyAmount: 5000, status: "active", paymentStatus: "paid", totalPaid: 20000, pendingAmount: 0, chitGroup: "Alpha Premium 5K" },
 ]
 
 // Mock data for payment history based on memberId
@@ -77,7 +77,8 @@ export default function MembersPage() {
     status: "active",
     paymentStatus: "pending",
     totalPaid: 0,
-    pendingAmount: 0
+    pendingAmount: 0,
+    chitGroup: "Alpha Premium 5K"
   })
 
   const handleAddMember = (e: React.FormEvent) => {
@@ -93,7 +94,8 @@ export default function MembersPage() {
       status: "active",
       paymentStatus: "pending",
       totalPaid: 0,
-      pendingAmount: 0
+      pendingAmount: 0,
+      chitGroup: "Alpha Premium 5K"
     })
     toast({
       title: "Member Added",
@@ -102,7 +104,7 @@ export default function MembersPage() {
   }
 
   const exportMembersToCSV = () => {
-    const headers = ["Name", "Phone", "Join Date", "Monthly Amount", "Status", "Total Paid", "Pending Amount"]
+    const headers = ["Name", "Phone", "Join Date", "Monthly Amount", "Status", "Total Paid", "Pending Amount", "Chit Group"]
     const csvContent = [
       headers.join(","),
       ...members.map(m => [
@@ -112,7 +114,8 @@ export default function MembersPage() {
         m.monthlyAmount,
         m.status,
         m.totalPaid,
-        m.pendingAmount
+        m.pendingAmount,
+        m.chitGroup
       ].join(","))
     ].join("\n")
 
@@ -196,6 +199,16 @@ export default function MembersPage() {
                     />
                   </div>
                   <div className="grid gap-2">
+                    <Label htmlFor="chitGroup">Chit Group</Label>
+                    <Input 
+                      id="chitGroup" 
+                      placeholder="e.g. Alpha Premium 5K" 
+                      value={newMember.chitGroup}
+                      onChange={e => setNewMember({...newMember, chitGroup: e.target.value})}
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2">
                     <Label htmlFor="amount">Monthly Contribution (₹)</Label>
                     <Input 
                       id="amount" 
@@ -263,7 +276,7 @@ export default function MembersPage() {
                       </div>
                       <div className="flex flex-col">
                         <span className="font-medium group-hover:text-primary transition-colors">{member.name}</span>
-                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Click to view profile</span>
+                        <span className="text-[10px] text-primary font-bold tracking-wider">{member.chitGroup}</span>
                       </div>
                     </div>
                   </TableCell>
@@ -371,6 +384,13 @@ export default function MembersPage() {
             </div>
 
             <div className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Info className="size-4" /> Associated Group
+                </div>
+                <span className="font-bold">{selectedMember?.chitGroup}</span>
+              </div>
+              
               <div className="flex items-center justify-between border-b pb-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <FileText className="size-4" /> Monthly Contribution
