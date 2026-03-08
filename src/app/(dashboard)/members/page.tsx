@@ -201,19 +201,19 @@ export default function MembersPage() {
             <Download className="mr-2 size-4" />
             Export CSV
           </Button>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+            setIsAddDialogOpen(open)
+            if (!open) {
+              document.body.style.pointerEvents = 'auto';
+            }
+          }}>
             <DialogTrigger asChild>
               <Button className="h-11 px-6 shadow-lg hover:shadow-xl transition-all">
                 <UserPlus className="mr-2 size-5" />
                 Add New Member
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]" onOpenChange={(open) => {
-              if (!open) {
-                // Restore interaction on close
-                document.body.style.pointerEvents = 'auto';
-              }
-            }}>
+            <DialogContent className="sm:max-w-[425px]">
               <form onSubmit={handleAddMember}>
                 <DialogHeader>
                   <DialogTitle>Register Member</DialogTitle>
@@ -224,22 +224,24 @@ export default function MembersPage() {
                 <div className="grid gap-4 py-6">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Full Name</Label>
-                    <Input 
+                    <input 
                       id="name" 
                       placeholder="Enter name" 
                       value={newMember.name}
                       onChange={e => setNewMember({...newMember, name: e.target.value})}
                       required 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="phone">Phone Number</Label>
-                    <Input 
+                    <input 
                       id="phone" 
                       placeholder="+91 00000 00000" 
                       value={newMember.phone}
                       onChange={e => setNewMember({...newMember, phone: e.target.value})}
                       required 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -265,22 +267,24 @@ export default function MembersPage() {
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="amount">Monthly Contribution (₹)</Label>
-                    <Input 
+                    <input 
                       id="amount" 
                       type="number" 
                       value={newMember.monthlyAmount}
                       onChange={e => setNewMember({...newMember, monthlyAmount: Number(e.target.value)})}
                       required 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="joinDate">Join Date</Label>
-                    <Input 
+                    <input 
                       id="joinDate" 
                       type="date" 
                       value={newMember.joinDate}
                       onChange={e => setNewMember({...newMember, joinDate: e.target.value})}
                       required 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                 </div>

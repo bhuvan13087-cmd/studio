@@ -165,7 +165,12 @@ export default function RoundsPage() {
           <h2 className="text-2xl font-bold">No chit rounds available.</h2>
           <p className="text-muted-foreground max-w-sm">Click 'Add Chit Round' to create one and start managing your auctions.</p>
         </div>
-        <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
+        <Dialog open={isAddChitDialogOpen} onOpenChange={(open) => {
+          setIsAddChitDialogOpen(open)
+          if (!open) {
+            document.body.style.pointerEvents = 'auto';
+          }
+        }}>
           <DialogTrigger asChild>
             <Button size="lg" className="h-12 px-8">
               <Plus className="mr-2 size-5" />
@@ -181,65 +186,71 @@ export default function RoundsPage() {
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2">
                   <Label htmlFor="name">Chit Name</Label>
-                  <Input 
+                  <input 
                     id="name" 
                     placeholder="e.g. Premium Alpha 5K" 
                     value={newChit.name}
                     onChange={e => setNewChit({...newChit, name: e.target.value})}
                     required 
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="amount">Monthly Amount (₹)</Label>
-                    <Input 
+                    <input 
                       id="amount" 
                       type="number"
                       value={newChit.monthlyAmount}
                       onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})}
                       required 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="members">Total Members</Label>
-                    <Input 
+                    <input 
                       id="members" 
                       type="number"
                       value={newChit.totalMembers}
                       onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})}
                       required 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="duration">Duration (months)</Label>
-                    <Input 
+                    <input 
                       id="duration" 
                       type="number"
                       value={newChit.duration}
                       onChange={e => setNewChit({...newChit, duration: Number(e.target.value)})}
                       required 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="startDate">Start Date</Label>
-                    <Input 
+                    <input 
                       id="startDate" 
                       type="date"
                       value={newChit.startDate}
                       onChange={e => setNewChit({...newChit, startDate: e.target.value})}
                       required 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="description">Description (Optional)</Label>
-                  <Textarea 
+                  <textarea 
                     id="description" 
                     placeholder="Additional details about the scheme..." 
                     value={newChit.description}
                     onChange={e => setNewChit({...newChit, description: e.target.value})}
+                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -262,7 +273,12 @@ export default function RoundsPage() {
             <h2 className="text-3xl font-headline font-bold tracking-tight">Chit Rounds</h2>
             <p className="text-muted-foreground">Manage and track your active chit schemes.</p>
           </div>
-          <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
+          <Dialog open={isAddChitDialogOpen} onOpenChange={(open) => {
+            setIsAddChitDialogOpen(open)
+            if (!open) {
+              document.body.style.pointerEvents = 'auto';
+            }
+          }}>
             <DialogTrigger asChild>
               <Button className="h-11 px-6 shadow-lg hover:shadow-xl transition-all">
                 <Plus className="mr-2 size-5" />
@@ -278,65 +294,71 @@ export default function RoundsPage() {
                 <div className="grid gap-4 py-6">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Chit Name</Label>
-                    <Input 
+                    <input 
                       id="name" 
                       placeholder="e.g. Premium Alpha 5K" 
                       value={newChit.name}
                       onChange={e => setNewChit({...newChit, name: e.target.value})}
                       required 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="amount">Monthly Amount (₹)</Label>
-                      <Input 
+                      <input 
                         id="amount" 
                         type="number"
                         value={newChit.monthlyAmount}
                         onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})}
                         required 
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="members">Total Members</Label>
-                      <Input 
+                      <input 
                         id="members" 
                         type="number"
                         value={newChit.totalMembers}
                         onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})}
                         required 
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="duration">Duration (months)</Label>
-                      <Input 
+                      <input 
                         id="duration" 
                         type="number"
                         value={newChit.duration}
                         onChange={e => setNewChit({...newChit, duration: Number(e.target.value)})}
                         required 
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="startDate">Start Date</Label>
-                      <Input 
+                      <input 
                         id="startDate" 
                         type="date"
                         value={newChit.startDate}
                         onChange={e => setNewChit({...newChit, startDate: e.target.value})}
                         required 
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="description">Description (Optional)</Label>
-                    <Textarea 
+                    <textarea 
                       id="description" 
                       placeholder="Additional details about the scheme..." 
                       value={newChit.description}
                       onChange={e => setNewChit({...newChit, description: e.target.value})}
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -422,7 +444,10 @@ export default function RoundsPage() {
         {/* Edit Chit Dialog */}
         <Dialog open={isEditChitDialogOpen} onOpenChange={(open) => {
           setIsEditChitDialogOpen(open);
-          if (!open) setEditingChit(null);
+          if (!open) {
+            setEditingChit(null);
+            document.body.style.pointerEvents = 'auto';
+          }
         }}>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleEditChit}>
@@ -434,63 +459,69 @@ export default function RoundsPage() {
                 <div className="grid gap-4 py-6">
                   <div className="grid gap-2">
                     <Label htmlFor="edit-name">Chit Name</Label>
-                    <Input 
+                    <input 
                       id="edit-name" 
                       value={editingChit.name}
                       onChange={e => setEditingChit({...editingChit, name: e.target.value})}
                       required 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="edit-amount">Monthly Amount (₹)</Label>
-                      <Input 
+                      <input 
                         id="edit-amount" 
                         type="number"
                         value={editingChit.monthlyAmount}
                         onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})}
                         required 
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="edit-members">Total Members</Label>
-                      <Input 
+                      <input 
                         id="edit-members" 
                         type="number"
                         value={editingChit.totalMembers}
                         onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})}
                         required 
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="edit-duration">Duration (months)</Label>
-                      <Input 
+                      <input 
                         id="edit-duration" 
                         type="number"
                         value={editingChit.duration}
                         onChange={e => setEditingChit({...editingChit, duration: Number(e.target.value)})}
                         required 
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="edit-startDate">Start Date</Label>
-                      <Input 
+                      <input 
                         id="edit-startDate" 
                         type="date"
                         value={editingChit.startDate}
                         onChange={e => setEditingChit({...editingChit, startDate: e.target.value})}
                         required 
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="edit-description">Description</Label>
-                    <Textarea 
+                    <textarea 
                       id="edit-description" 
                       value={editingChit.description}
                       onChange={e => setEditingChit({...editingChit, description: e.target.value})}
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -509,7 +540,10 @@ export default function RoundsPage() {
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
           setIsDeleteDialogOpen(open);
-          if (!open) setChitToDelete(null);
+          if (!open) {
+            setChitToDelete(null);
+            document.body.style.pointerEvents = 'auto';
+          }
         }}>
           <AlertDialogContent>
             <AlertDialogHeader>
