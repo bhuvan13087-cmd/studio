@@ -2,7 +2,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock } from "lucide-react"
+import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -312,7 +312,10 @@ export default function MembersPage() {
                         <DropdownMenuItem onClick={() => handleHistoryClick(member)}>
                            <History className="mr-2 size-4" /> Payment History
                         </DropdownMenuItem>
-                        <DropdownMenuItem>Edit Details</DropdownMenuItem>
+                        <DropdownMenuItem>
+                           <Pencil className="mr-2 size-4" /> Edit Details
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem className={member.status === 'active' ? "text-destructive" : "text-emerald-600"}>
                           {member.status === 'active' ? (
                             <><UserMinus className="mr-2 size-4" /> Deactivate</>
