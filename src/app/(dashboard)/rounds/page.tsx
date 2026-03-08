@@ -2,7 +2,7 @@
 "use client"
 
 import { useState } from "react"
-import { Trophy, History, Plus, Award, Calendar, IndianRupee, Users, CheckCircle2, MoreVertical, Search, UserCheck, ChevronLeft, LayoutGrid, ArrowRight, Loader2, AlertCircle, Database, FileText, Clock, Pencil, Trash2 } from "lucide-react"
+import { Trophy, History, Plus, Award, Calendar, IndianRupee, Users, CheckCircle2, MoreVertical, Search, UserCheck, ChevronLeft, LayoutGrid, ArrowRight, Loader2, AlertCircle, Database, FileText, Clock, Pencil, Trash2, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -47,14 +47,20 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
+import { format, parseISO } from "date-fns"
 
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
   const [isEditChitDialogOpen, setIsEditChitDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
+  const [isRemoveMemberDialogOpen, setIsRemoveMemberDialogOpen] = useState(false)
+  
   const [editingChit, setEditingChit] = useState<any>(null)
   const [chitToDelete, setChitToDelete] = useState<any>(null)
+  const [historyMember, setHistoryMember] = useState<any>(null)
+  const [memberToRemove, setMemberToRemove] = useState<any>(null)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -66,6 +72,9 @@ export default function RoundsPage() {
 
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
   const { data: members } = useCollection(membersQuery);
+
+  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
+  const { data: payments } = useCollection(paymentsQuery);
 
   const [newChit, setNewChit] = useState({
     name: "",
@@ -114,6 +123,31 @@ export default function RoundsPage() {
     toast({ title: "Chit Deleted", description: `${chitToDelete.name} removed.` })
     setIsDeleteDialogOpen(false)
     setChitToDelete(null)
+  }
+
+  const confirmRemoveMember = () => {
+    if (!db || !memberToRemove) return;
+    updateDocumentNonBlocking(doc(db, 'members', memberToRemove.id), {
+      chitGroup: ""
+    })
+    toast({ title: "Member Removed", description: `${memberToRemove.name} removed from this round.` })
+    setIsRemoveMemberDialogOpen(false)
+    setMemberToRemove(null)
+  }
+
+  const currentRound = chitSchemes.find(r => r.id === selectedChitId)
+  const assignedMembers = (members || []).filter(m => m.chitGroup === currentRound?.name)
+
+  const getLastPayment = (memberId: string) => {
+    if (!payments) return null;
+    const memberPaidPayments = payments
+      .filter(p => p.memberId === memberId && p.status === 'paid')
+      .sort((a, b) => {
+        const dateA = a.paymentDate ? new Date(a.paymentDate).getTime() : 0;
+        const dateB = b.paymentDate ? new Date(b.paymentDate).getTime() : 0;
+        return dateB - dateA;
+      });
+    return memberPaidPayments.length > 0 ? memberPaidPayments[0] : null;
   }
 
   if (isRoleLoading || isRoundsLoading) {
@@ -190,12 +224,12 @@ export default function RoundsPage() {
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="flex justify-between text-sm">
-                  <span>Dues: ₹{group.monthlyAmount?.toLocaleString()}</span>
-                  <span>Members: {(members || []).filter(m => m.chitGroup === group.name).length} / {group.totalMembers}</span>
+                  <span className="font-medium text-emerald-600">Dues: ₹{group.monthlyAmount?.toLocaleString()}</span>
+                  <span className="text-muted-foreground">Members: {(members || []).filter(m => m.chitGroup === group.name).length} / {group.totalMembers}</span>
                 </div>
               </CardContent>
-              <CardFooter className="bg-muted/10 border-t">
-                <Button variant="ghost" className="w-full" onClick={() => setSelectedChitId(group.id)}>View Round Details</Button>
+              <CardFooter className="bg-muted/10 border-t p-0">
+                <Button variant="ghost" className="w-full h-12 rounded-none hover:bg-primary hover:text-primary-foreground transition-colors" onClick={() => setSelectedChitId(group.id)}>View Round Details</Button>
               </CardFooter>
             </Card>
           ))}
@@ -228,7 +262,7 @@ export default function RoundsPage() {
           if (!open) { setChitToDelete(null); document.body.style.pointerEvents = 'auto' }
         }}>
           <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Delete Chit Round?</AlertDialogTitle></AlertDialogHeader>
+            <AlertDialogHeader><AlertDialogTitle>Delete Chit Round?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme.</AlertDialogDescription></AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
               <AlertDialogAction className="bg-destructive" onClick={confirmDelete}>Confirm Delete</AlertDialogAction>
@@ -241,23 +275,177 @@ export default function RoundsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
-      <Button variant="ghost" size="sm" onClick={() => setSelectedChitId(null)} className="mb-2">
-        <ChevronLeft className="mr-1 size-4" /> Back to Schemes
-      </Button>
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-10 w-10">
+          <ChevronLeft className="size-6" />
+        </Button>
+        <div>
+          <h2 className="text-2xl font-bold font-headline">{currentRound?.name}</h2>
+          <p className="text-sm text-muted-foreground">Chit Scheme Detail Dashboard</p>
+        </div>
+      </div>
+
       <div className="grid gap-6 md:grid-cols-3">
-        <Card className="border-l-4 border-l-primary">
-          <CardHeader><CardTitle className="text-sm">Assigned Members</CardTitle></CardHeader>
+        <Card className="border-l-4 border-l-primary shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Assigned Members</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {(members || []).filter(m => m.chitGroup === chitSchemes.find(g => g.id === selectedChitId)?.name).length}
+            <div className="text-3xl font-bold flex items-center gap-2">
+              <Users className="size-5 text-primary" />
+              {assignedMembers.length}
             </div>
+            <p className="text-[10px] uppercase font-bold text-muted-foreground mt-1">Capacity: {currentRound?.totalMembers}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-emerald-500 shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Monthly Contribution</CardTitle></CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-emerald-600">₹{currentRound?.monthlyAmount?.toLocaleString()}</div>
+            <p className="text-[10px] uppercase font-bold text-muted-foreground mt-1">Per Member</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-amber-500 shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Scheme Duration</CardTitle></CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{currentRound?.duration} Months</div>
+            <p className="text-[10px] uppercase font-bold text-muted-foreground mt-1">Start: {currentRound?.startDate}</p>
           </CardContent>
         </Card>
       </div>
-      <div className="bg-muted/30 rounded-xl p-8 text-center border-2 border-dashed">
-        <h3 className="font-bold text-lg">Auction Tracking Coming Soon</h3>
-        <p className="text-muted-foreground">Detailed auction history for this scheme will be enabled in the next update.</p>
+
+      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+        <div className="p-6 border-b bg-muted/30 flex justify-between items-center">
+          <h3 className="font-bold flex items-center gap-2">
+            <Users className="size-5 text-primary" />
+            Active Participants
+          </h3>
+          <Badge variant="secondary" className="font-bold">{assignedMembers.length} Members</Badge>
+        </div>
+        <Table>
+          <TableHeader className="bg-muted/10">
+            <TableRow>
+              <TableHead className="font-semibold">Member</TableHead>
+              <TableHead className="font-semibold">Phone</TableHead>
+              <TableHead className="font-semibold">Last Paid</TableHead>
+              <TableHead className="font-semibold">Total Paid</TableHead>
+              <TableHead className="font-semibold">Status</TableHead>
+              <TableHead className="w-[80px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {assignedMembers.length > 0 ? assignedMembers.map((member) => {
+              const lastPayment = getLastPayment(member.id);
+              return (
+                <TableRow key={member.id} className="hover:bg-muted/5 transition-colors">
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                        {member.name.split(' ').map((n: string) => n[0]).join('')}
+                      </div>
+                      <span className="font-medium text-sm">{member.name}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="size-3.5" />
+                      {member.phone}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {lastPayment ? (
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-emerald-600">₹{lastPayment.amountPaid?.toLocaleString()}</span>
+                        <span className="text-[10px] text-muted-foreground">{format(parseISO(lastPayment.paymentDate), 'MMM dd')}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">None</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="font-bold text-sm text-primary">₹{(member.totalPaid || 0).toLocaleString()}</TableCell>
+                  <TableCell>
+                    <Badge variant={member.paymentStatus === 'paid' ? 'default' : 'secondary'} className={member.paymentStatus === 'paid' ? 'bg-emerald-500' : ''}>
+                      {member.paymentStatus === 'paid' ? 'Success' : 'Pending'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="size-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setHistoryMember(member); setIsHistoryDialogOpen(true); }}>
+                          <History className="mr-2 size-4" /> Payment History
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toast({ title: "Edit Member", description: "Edit member details." }) }}>
+                          <Pencil className="mr-2 size-4" /> Edit Details
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive" onSelect={(e) => { e.preventDefault(); setMemberToRemove(member); setIsRemoveMemberDialogOpen(true); }}>
+                          <Trash2 className="mr-2 size-4" /> Remove from Round
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              )
+            }) : (
+              <TableRow>
+                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground italic">
+                  No members assigned to this round yet.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </div>
+
+      {/* History Dialog */}
+      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => {
+        setIsHistoryDialogOpen(open)
+        if (!open) { setHistoryMember(null); document.body.style.pointerEvents = 'auto' }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader><DialogTitle>Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
+          <div className="py-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead className="text-right">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && p.status === 'paid').map((p, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="text-sm">{p.month}</TableCell>
+                    <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
+                    <TableCell className="text-sm text-right text-muted-foreground">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd') : '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove Member Dialog */}
+      <AlertDialog open={isRemoveMemberDialogOpen} onOpenChange={(open) => {
+        setIsRemoveMemberDialogOpen(open)
+        if (!open) { setMemberToRemove(null); document.body.style.pointerEvents = 'auto' }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from Scheme?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove {memberToRemove?.name} from {currentRound?.name}? This will clear their assignment but preserve historical data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsRemoveMemberDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive" onClick={confirmRemoveMember}>Confirm Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
