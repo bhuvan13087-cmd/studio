@@ -2,7 +2,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock, Pencil } from "lucide-react"
+import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock, Pencil, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -27,47 +27,36 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
-
-const initialMembers = [
-  { id: "1", name: "John Doe", phone: "+91 98765 43210", joinDate: "2023-01-15", monthlyAmount: 5000, status: "active", paymentStatus: "paid", totalPaid: 45000, pendingAmount: 0, chitGroup: "Alpha Premium 5K" },
-  { id: "2", name: "Sarah Smith", phone: "+91 98765 43211", joinDate: "2023-02-10", monthlyAmount: 5000, status: "active", paymentStatus: "paid", totalPaid: 40000, pendingAmount: 0, chitGroup: "Alpha Premium 5K" },
-  { id: "3", name: "Michael Chen", phone: "+91 98765 43212", joinDate: "2023-03-05", monthlyAmount: 5000, status: "inactive", paymentStatus: "pending", totalPaid: 30000, pendingAmount: 5000, chitGroup: "Elite 10K Monthly" },
-  { id: "4", name: "Emma Watson", phone: "+91 98765 43213", joinDate: "2023-04-20", monthlyAmount: 5000, status: "active", paymentStatus: "pending", totalPaid: 25000, pendingAmount: 5000, chitGroup: "Elite 10K Monthly" },
-  { id: "5", name: "Robert Wilson", phone: "+91 98765 43214", joinDate: "2023-05-12", monthlyAmount: 5000, status: "active", paymentStatus: "paid", totalPaid: 20000, pendingAmount: 0, chitGroup: "Alpha Premium 5K" },
-]
-
-// Mock data for payment history based on memberId
-const memberPaymentHistory: Record<string, any[]> = {
-  "1": [
-    { month: "September 2023", amount: 5000, status: "paid", date: "2023-09-05" },
-    { month: "August 2023", amount: 5000, status: "paid", date: "2023-08-04" },
-    { month: "July 2023", amount: 5000, status: "paid", date: "2023-07-06" },
-  ],
-  "2": [
-    { month: "September 2023", amount: 5000, status: "paid", date: "2023-09-07" },
-    { month: "August 2023", amount: 5000, status: "paid", date: "2023-08-08" },
-  ],
-  "3": [
-    { month: "September 2023", amount: 5000, status: "pending", date: "-" },
-    { month: "August 2023", amount: 5000, status: "paid", date: "2023-08-15" },
-  ],
-  "4": [
-    { month: "September 2023", amount: 5000, status: "pending", date: "-" },
-  ],
-  "5": [
-    { month: "September 2023", amount: 5000, status: "paid", date: "2023-09-15" },
-  ],
-}
+import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase"
+import { collection, query, doc, serverTimestamp } from "firebase/firestore"
+import { useRole } from "@/hooks/use-role"
 
 export default function MembersPage() {
-  const [members, setMembers] = useState(initialMembers)
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [selectedMember, setSelectedMember] = useState<typeof initialMembers[0] | null>(null)
+  const [selectedMember, setSelectedMember] = useState<any>(null)
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
-  const [historyMember, setHistoryMember] = useState<typeof initialMembers[0] | null>(null)
+  const [historyMember, setHistoryMember] = useState<any>(null)
   const { toast } = useToast()
+  
+  const db = useFirestore()
+  const { isAdmin, isLoading: isRoleLoading } = useRole()
+
+  // Real-time collections - only queried if admin is verified
+  const membersQuery = useMemoFirebase(() => {
+    if (!db || !isAdmin) return null;
+    return collection(db, 'members');
+  }, [db, isAdmin]);
+
+  const { data: members, isLoading: isMembersLoading } = useCollection(membersQuery);
+
+  const paymentsQuery = useMemoFirebase(() => {
+    if (!db || !isAdmin) return null;
+    return collection(db, 'payments');
+  }, [db, isAdmin]);
+
+  const { data: payments } = useCollection(paymentsQuery);
 
   const [newMember, setNewMember] = useState({
     name: "",
@@ -83,8 +72,15 @@ export default function MembersPage() {
 
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault()
-    const id = (members.length + 1).toString()
-    setMembers([...members, { id, ...newMember }])
+    if (!db) return;
+
+    const memberId = Math.random().toString(36).substr(2, 9)
+    addDocumentNonBlocking(collection(db, 'members'), {
+      ...newMember,
+      id: memberId,
+      createdAt: serverTimestamp()
+    })
+
     setIsAddDialogOpen(false)
     setNewMember({
       name: "",
@@ -104,6 +100,7 @@ export default function MembersPage() {
   }
 
   const exportMembersToCSV = () => {
+    if (!members) return;
     const headers = ["Name", "Phone", "Join Date", "Monthly Amount", "Status", "Total Paid", "Pending Amount", "Chit Group"]
     const csvContent = [
       headers.join(","),
@@ -135,20 +132,50 @@ export default function MembersPage() {
     })
   }
 
-  const handleMemberClick = (member: typeof initialMembers[0]) => {
+  const handleMemberClick = (member: any) => {
     setSelectedMember(member)
     setIsProfileDialogOpen(true)
   }
 
-  const handleHistoryClick = (member: typeof initialMembers[0]) => {
+  const handleHistoryClick = (member: any) => {
     setHistoryMember(member)
     setIsHistoryDialogOpen(true)
   }
 
-  const filteredMembers = members.filter(member => 
+  const toggleStatus = (member: any) => {
+    if (!db) return;
+    const newStatus = member.status === 'active' ? 'inactive' : 'active'
+    updateDocumentNonBlocking(doc(db, 'members', member.id), { status: newStatus })
+    toast({
+      title: "Status Updated",
+      description: `${member.name} is now ${newStatus}.`
+    })
+  }
+
+  const filteredMembers = (members || []).filter(member => 
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.phone.includes(searchTerm)
   )
+
+  if (isRoleLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center">
+        <AlertCircle className="size-12 text-amber-500" />
+        <h2 className="text-xl font-bold">Administrative Access Required</h2>
+        <p className="text-muted-foreground max-w-md">
+          This page is restricted to administrators.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -263,7 +290,13 @@ export default function MembersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredMembers.length > 0 ? (
+            {isMembersLoading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground animate-pulse">
+                  Loading members...
+                </TableCell>
+              </TableRow>
+            ) : filteredMembers.length > 0 ? (
               filteredMembers.map((member) => (
                 <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
                   <TableCell>
@@ -272,7 +305,7 @@ export default function MembersPage() {
                       onClick={() => handleMemberClick(member)}
                     >
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary font-bold group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                        {member.name.split(' ').map(n => n[0]).join('')}
+                        {member.name.split(' ').map((n: string) => n[0]).join('')}
                       </div>
                       <div className="flex flex-col">
                         <span className="font-medium group-hover:text-primary transition-colors">{member.name}</span>
@@ -300,8 +333,8 @@ export default function MembersPage() {
                   <TableCell className="font-medium">₹{member.monthlyAmount.toLocaleString()}</TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-xs font-semibold text-emerald-600">Paid: ₹{member.totalPaid.toLocaleString()}</span>
-                      <span className="text-xs font-semibold text-amber-600">Due: ₹{member.pendingAmount.toLocaleString()}</span>
+                      <span className="text-xs font-semibold text-emerald-600">Paid: ₹{(member.totalPaid || 0).toLocaleString()}</span>
+                      <span className="text-xs font-semibold text-amber-600">Due: ₹{(member.pendingAmount || 0).toLocaleString()}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -329,7 +362,7 @@ export default function MembersPage() {
                            <Pencil className="mr-2 size-4" /> Edit Details
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className={member.status === 'active' ? "text-destructive" : "text-emerald-600"}>
+                        <DropdownMenuItem className={member.status === 'active' ? "text-destructive" : "text-emerald-600"} onClick={() => toggleStatus(member)}>
                           {member.status === 'active' ? (
                             <><UserMinus className="mr-2 size-4" /> Deactivate</>
                           ) : (
@@ -358,7 +391,7 @@ export default function MembersPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
-                {selectedMember?.name.split(' ').map(n => n[0]).join('')}
+                {selectedMember?.name.split(' ').map((n: string) => n[0]).join('')}
               </div>
               Member Profile
             </DialogTitle>
@@ -402,14 +435,14 @@ export default function MembersPage() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <CheckCircle2 className="size-4 text-emerald-500" /> Total Paid to Date
                 </div>
-                <span className="font-bold text-emerald-600">₹{selectedMember?.totalPaid.toLocaleString()}</span>
+                <span className="font-bold text-emerald-600">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span>
               </div>
 
               <div className="flex items-center justify-between border-b pb-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <AlertCircle className="size-4 text-amber-500" /> Pending Balance
                 </div>
-                <span className="font-bold text-amber-600">₹{selectedMember?.pendingAmount.toLocaleString()}</span>
+                <span className="font-bold text-amber-600">₹{(selectedMember?.pendingAmount || 0).toLocaleString()}</span>
               </div>
 
               <div className="flex items-center justify-between border-b pb-2">
@@ -417,7 +450,7 @@ export default function MembersPage() {
                   <Info className="size-4" /> Current Month Status
                 </div>
                 <Badge variant={selectedMember?.paymentStatus === 'paid' ? 'default' : 'destructive'} className={selectedMember?.paymentStatus === 'paid' ? 'bg-emerald-500' : ''}>
-                  {selectedMember?.paymentStatus?.toUpperCase()}
+                  {selectedMember?.paymentStatus?.toUpperCase() || 'PENDING'}
                 </Badge>
               </div>
             </div>
@@ -452,11 +485,11 @@ export default function MembersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {historyMember && memberPaymentHistory[historyMember.id]?.length > 0 ? (
-                    memberPaymentHistory[historyMember.id].map((payment, i) => (
+                  {historyMember && (payments || []).filter(p => p.memberId === historyMember.id).length > 0 ? (
+                    (payments || []).filter(p => p.memberId === historyMember.id).map((payment, i) => (
                       <TableRow key={i}>
                         <TableCell className="font-medium">{payment.month}</TableCell>
-                        <TableCell>₹{payment.amount.toLocaleString()}</TableCell>
+                        <TableCell>₹{payment.amountPaid.toLocaleString()}</TableCell>
                         <TableCell>
                           {payment.status === 'paid' ? (
                             <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50">
@@ -469,11 +502,11 @@ export default function MembersPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground text-sm">
-                           {payment.date === '-' ? (
+                           {!payment.paymentDate ? (
                              <span className="flex items-center justify-end gap-1 text-amber-600">
                                <Clock className="size-3" /> Awaiting
                              </span>
-                           ) : payment.date}
+                           ) : new Date(payment.paymentDate).toLocaleDateString()}
                         </TableCell>
                       </TableRow>
                     ))

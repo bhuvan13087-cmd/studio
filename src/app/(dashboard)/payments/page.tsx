@@ -2,7 +2,7 @@
 "use client"
 
 import { useState } from "react"
-import { Search, Filter, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, Calendar, User, Plus } from "lucide-react"
+import { Search, Filter, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, Calendar, User, Plus, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -46,26 +46,21 @@ export default function PaymentsPage() {
   const [isQuickRecordOpen, setIsQuickRecordOpen] = useState(false)
   const { toast } = useToast()
   const db = useFirestore()
-  const { isAdmin, user: currentUserData } = useRole()
+  const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // Real-time collections
+  // Real-time collections - only queried if admin is verified
   const paymentsQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    let q = query(collection(db, 'payments'));
-    // If member, restrict to their own payments
-    // Note: useRole returns 'user' which is the doc from roles_admin, 
-    // but for personal filtering we usually want the auth UID which is what we check in security rules.
-    // However, the hook returns isAdmin status.
-    return q;
-  }, [db]);
+    if (!db || !isAdmin) return null;
+    return query(collection(db, 'payments'));
+  }, [db, isAdmin]);
 
   const { data: paymentsData, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const payments = paymentsData || [];
 
   const membersQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    if (!db || !isAdmin) return null;
     return collection(db, 'members');
-  }, [db]);
+  }, [db, isAdmin]);
 
   const { data: membersData } = useCollection(membersQuery);
   const members = membersData || [];
@@ -135,71 +130,89 @@ export default function PaymentsPage() {
     }
   }
 
+  if (isRoleLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center">
+        <AlertCircle className="size-12 text-amber-500" />
+        <h2 className="text-xl font-bold">Administrative Access Required</h2>
+        <p className="text-muted-foreground max-w-md">
+          This page is restricted to administrators. If you should have access, please ensure your UID is present in the <code>roles_admin</code> collection.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-headline font-bold tracking-tight">Payments</h2>
           <p className="text-muted-foreground">
-            {isAdmin ? "Track and record monthly member contributions." : "View your contribution history."}
+            Track and record monthly member contributions.
           </p>
         </div>
-        {isAdmin && (
-          <div className="flex items-center gap-2">
-            <Dialog open={isQuickRecordOpen} onOpenChange={setIsQuickRecordOpen}>
-              <DialogTrigger asChild>
-                <Button className="h-11">
-                  <Plus className="mr-2 size-5" />
-                  Quick Record
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <form onSubmit={handleQuickRecord}>
-                  <DialogHeader>
-                    <DialogTitle>Quick Record Payment</DialogTitle>
-                    <DialogDescription>Manually record a payment received from a member.</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-6">
-                    <div className="grid gap-2">
-                      <Label htmlFor="member">Member</Label>
-                      <Select value={recordData.memberId} onValueChange={(v) => setRecordData({...recordData, memberId: v})}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select member" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {members.map(m => (
-                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="amount">Amount (₹)</Label>
-                      <Input id="amount" type="number" value={recordData.amount} onChange={e => setRecordData({...recordData, amount: Number(e.target.value)})} required />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="method">Method</Label>
-                      <Select value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select method" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Cash">Cash</SelectItem>
-                          <SelectItem value="UPI">UPI</SelectItem>
-                          <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+        <div className="flex items-center gap-2">
+          <Dialog open={isQuickRecordOpen} onOpenChange={setIsQuickRecordOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-11">
+                <Plus className="mr-2 size-5" />
+                Quick Record
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <form onSubmit={handleQuickRecord}>
+                <DialogHeader>
+                  <DialogTitle>Quick Record Payment</DialogTitle>
+                  <DialogDescription>Manually record a payment received from a member.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-6">
+                  <div className="grid gap-2">
+                    <Label htmlFor="member">Member</Label>
+                    <Select value={recordData.memberId} onValueChange={(v) => setRecordData({...recordData, memberId: v})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select member" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {members.map(m => (
+                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)}>Cancel</Button>
-                    <Button type="submit">Record Payment</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-        )}
+                  <div className="grid gap-2">
+                    <Label htmlFor="amount">Amount (₹)</Label>
+                    <Input id="amount" type="number" value={recordData.amount} onChange={e => setRecordData({...recordData, amount: Number(e.target.value)})} required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="method">Method</Label>
+                    <Select value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Cash">Cash</SelectItem>
+                        <SelectItem value="UPI">UPI</SelectItem>
+                        <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)}>Cancel</Button>
+                  <Button type="submit">Record Payment</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -337,7 +350,7 @@ export default function PaymentsPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        {isAdmin && payment.status !== 'paid' && (
+                        {payment.status !== 'paid' && (
                           <DropdownMenuItem onClick={() => markAsPaid(payment)}>
                             <CreditCard className="mr-2 size-4" /> Record Payment
                           </DropdownMenuItem>

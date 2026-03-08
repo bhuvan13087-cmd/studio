@@ -1,7 +1,8 @@
+
 "use client"
 
 import { useState } from "react"
-import { Trophy, History, Plus, Award, Calendar, IndianRupee, Users, CheckCircle2, MoreVertical, Search, UserCheck, ChevronLeft, LayoutGrid, ArrowRight } from "lucide-react"
+import { Trophy, History, Plus, Award, Calendar, IndianRupee, Users, CheckCircle2, MoreVertical, Search, UserCheck, ChevronLeft, LayoutGrid, ArrowRight, Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -34,34 +35,11 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-
-const initialChitGroups = [
-  { id: "g1", name: "Alpha Premium 5K", monthlyAmount: 5000, totalMembers: 20, currentRound: 13, totalRounds: 20, startDate: "2023-01-15" },
-  { id: "g2", name: "Elite 10K Monthly", monthlyAmount: 10000, totalMembers: 12, currentRound: 4, totalRounds: 12, startDate: "2023-06-10" },
-  { id: "g3", name: "Savings Special 2K", monthlyAmount: 2000, totalMembers: 25, currentRound: 1, totalRounds: 25, startDate: "2023-10-01" },
-]
-
-const initialRounds = [
-  { id: "r1", chitGroupId: "g1", roundNumber: 13, winnerName: null, winningAmount: 0, date: "2023-10-15", commission: 5000, status: "active" },
-  { id: "r2", chitGroupId: "g1", roundNumber: 12, winnerName: "John Doe", winningAmount: 45000, date: "2023-09-15", commission: 5000, status: "completed" },
-  { id: "r3", chitGroupId: "g1", roundNumber: 11, winnerName: "Sarah Smith", winningAmount: 45000, date: "2023-08-15", commission: 5000, status: "completed" },
-  { id: "r4", chitGroupId: "g2", roundNumber: 4, winnerName: null, winningAmount: 0, date: "2023-10-10", commission: 10000, status: "active" },
-  { id: "r5", chitGroupId: "g2", roundNumber: 3, winnerName: "Michael Chen", winningAmount: 95000, date: "2023-09-10", commission: 10000, status: "completed" },
-]
-
-const mockParticipants = [
-  { name: "John Doe", status: "eligible" },
-  { name: "Sarah Smith", status: "eligible" },
-  { name: "Michael Chen", status: "eligible" },
-  { name: "Emma Watson", status: "eligible" },
-  { name: "Robert Wilson", status: "eligible" },
-  { name: "Lisa Wong", status: "eligible" },
-  { name: "David Miller", status: "eligible" },
-]
+import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase"
+import { collection, query, doc, serverTimestamp } from "firebase/firestore"
+import { useRole } from "@/hooks/use-role"
 
 export default function RoundsPage() {
-  const [chitGroups, setChitGroups] = useState(initialChitGroups)
-  const [rounds, setRounds] = useState(initialRounds)
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   
   const [isCreateChitDialogOpen, setIsCreateChitDialogOpen] = useState(false)
@@ -71,6 +49,32 @@ export default function RoundsPage() {
   const [selectedRound, setSelectedRound] = useState<any>(null)
   
   const { toast } = useToast()
+  const db = useFirestore()
+  const { isAdmin, isLoading: isRoleLoading } = useRole()
+
+  // Real-time collections - only queried if admin is verified
+  const roundsQuery = useMemoFirebase(() => {
+    if (!db || !isAdmin) return null;
+    return collection(db, 'chitRounds');
+  }, [db, isAdmin]);
+
+  const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
+  const rounds = roundsData || [];
+
+  const membersQuery = useMemoFirebase(() => {
+    if (!db || !isAdmin) return null;
+    return collection(db, 'members');
+  }, [db, isAdmin]);
+
+  const { data: membersData } = useCollection(membersQuery);
+  const members = membersData || [];
+
+  // Temporary mock for groups since they aren't in backend.json yet, 
+  // but we can manage them via rounds
+  const chitGroups = [
+    { id: "g1", name: "Alpha Premium 5K", monthlyAmount: 5000, totalMembers: 20, currentRound: 13, totalRounds: 20, startDate: "2023-01-15" },
+    { id: "g2", name: "Elite 10K Monthly", monthlyAmount: 10000, totalMembers: 12, currentRound: 4, totalRounds: 12, startDate: "2023-06-10" },
+  ]
 
   const selectedChit = chitGroups.find(g => g.id === selectedChitId)
   const filteredRounds = rounds.filter(r => r.chitGroupId === selectedChitId)
@@ -92,59 +96,62 @@ export default function RoundsPage() {
   })
 
   const [winnerData, setWinnerData] = useState({
-    winnerName: "",
+    winnerId: "",
     winningAmount: 45000,
   })
 
   const handleCreateChit = (e: React.FormEvent) => {
     e.preventDefault()
-    const id = Math.random().toString(36).substr(2, 9)
-    const chitToAdd = {
-      id,
-      ...newChit,
-      currentRound: 1
-    }
-    setChitGroups([...chitGroups, chitToAdd])
-    setIsCreateChitDialogOpen(false)
+    // For now we just toast as we don't have a groups collection in backend.json
     toast({
-      title: "Chit Group Created",
-      description: `${newChit.name} has been successfully added.`,
+      title: "Feature coming soon",
+      description: "Group management is being finalized.",
     })
+    setIsCreateChitDialogOpen(false)
   }
 
   const handleCreateRound = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedChitId) return
-    const id = Math.random().toString(36).substr(2, 9)
-    const roundToAdd = {
-      id,
+    if (!selectedChitId || !db) return
+    
+    const roundId = Math.random().toString(36).substr(2, 9)
+    addDocumentNonBlocking(collection(db, 'chitRounds'), {
+      id: roundId,
       chitGroupId: selectedChitId,
-      roundNumber: newRound.roundNumber,
-      winnerName: null,
+      roundNumber: Number(newRound.roundNumber),
+      winnerMemberId: "",
+      winnerName: "",
       winningAmount: 0,
       date: newRound.date,
-      commission: selectedChit?.monthlyAmount || 0,
-      status: "active"
-    }
-    setRounds([roundToAdd, ...rounds])
+      status: "active",
+      createdAt: serverTimestamp()
+    })
+
     setIsCreateRoundDialogOpen(false)
     toast({
       title: "Round Created",
-      description: `Round #${newRound.roundNumber} for ${selectedChit?.name} has been scheduled.`,
+      description: `Round #${newRound.roundNumber} has been scheduled.`,
     })
   }
 
   const handleSelectWinner = (e: React.FormEvent) => {
     e.preventDefault()
-    setRounds(rounds.map(r => 
-      r.id === selectedRound.id 
-        ? { ...r, winnerName: winnerData.winnerName, winningAmount: winnerData.winningAmount, status: "completed" }
-        : r
-    ))
+    if (!db || !selectedRound) return
+
+    const winner = members.find(m => m.id === winnerData.winnerId)
+    if (!winner) return
+
+    updateDocumentNonBlocking(doc(db, 'chitRounds', selectedRound.id), {
+      winnerMemberId: winner.id,
+      winnerName: winner.name,
+      winningAmount: Number(winnerData.winningAmount),
+      status: "completed"
+    })
+
     setIsWinnerDialogOpen(false)
     toast({
       title: "Winner Selected",
-      description: `${winnerData.winnerName} has won Round #${selectedRound.roundNumber}.`,
+      description: `${winner.name} has won Round #${selectedRound.roundNumber}.`,
     })
   }
 
@@ -156,6 +163,26 @@ export default function RoundsPage() {
   const openParticipantsDialog = (round: any) => {
     setSelectedRound(round)
     setIsParticipantsDialogOpen(true)
+  }
+
+  if (isRoleLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center">
+        <AlertCircle className="size-12 text-amber-500" />
+        <h2 className="text-xl font-bold">Administrative Access Required</h2>
+        <p className="text-muted-foreground max-w-md">
+          This page is restricted to administrators.
+        </p>
+      </div>
+    )
   }
 
   if (!selectedChitId) {
@@ -331,7 +358,7 @@ export default function RoundsPage() {
              <div className="text-2xl font-bold">{filteredRounds.find(r => r.status === 'completed')?.winnerName || 'No Winners Yet'}</div>
              <div className="flex items-center gap-1.5 mt-1 text-emerald-600 font-medium">
                <IndianRupee className="size-3.5" />
-               {filteredRounds.find(r => r.status === 'completed')?.winningAmount.toLocaleString() || '0'}
+               {(filteredRounds.find(r => r.status === 'completed')?.winningAmount || 0).toLocaleString()}
              </div>
              <p className="text-xs text-muted-foreground mt-2">
                Round #{filteredRounds.find(r => r.status === 'completed')?.roundNumber || '-'}
@@ -378,7 +405,13 @@ export default function RoundsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredRounds.length > 0 ? filteredRounds.map((round) => (
+            {isRoundsLoading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground animate-pulse">
+                  Loading rounds...
+                </TableCell>
+              </TableRow>
+            ) : filteredRounds.length > 0 ? filteredRounds.map((round) => (
               <TableRow key={round.id} className="hover:bg-muted/10 transition-colors">
                 <TableCell className="font-bold text-primary">#{round.roundNumber}</TableCell>
                 <TableCell>
@@ -397,7 +430,7 @@ export default function RoundsPage() {
                   )}
                 </TableCell>
                 <TableCell>
-                  <div className="font-bold text-emerald-600">₹{round.winningAmount.toLocaleString()}</div>
+                  <div className="font-bold text-emerald-600">₹{(round.winningAmount || 0).toLocaleString()}</div>
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2 text-muted-foreground">
@@ -453,13 +486,13 @@ export default function RoundsPage() {
             <div className="grid gap-4 py-6">
               <div className="grid gap-2">
                 <Label htmlFor="winnerName">Winner Member</Label>
-                <Select onValueChange={(v) => setWinnerData({...winnerData, winnerName: v})} required>
+                <Select onValueChange={(v) => setWinnerData({...winnerData, winnerId: v})} required>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockParticipants.map((p, i) => (
-                      <SelectItem key={i} value={p.name}>{p.name}</SelectItem>
+                    {members.map((p, i) => (
+                      <SelectItem key={i} value={p.id}>{p.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -505,7 +538,7 @@ export default function RoundsPage() {
                     </TableRow>
                  </TableHeader>
                  <TableBody>
-                   {mockParticipants.map((p, i) => (
+                   {members.map((p, i) => (
                      <TableRow key={i}>
                        <TableCell className="font-medium">{p.name}</TableCell>
                        <TableCell className="text-right">
