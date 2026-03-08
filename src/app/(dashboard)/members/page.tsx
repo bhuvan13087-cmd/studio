@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock, Pencil, Loader2 } from "lucide-react"
+import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock, Pencil, Loader2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -22,6 +22,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -33,7 +43,7 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
-import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase"
+import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
 import { collection, query, doc, serverTimestamp } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 
@@ -43,6 +53,8 @@ export default function MembersPage() {
   const [selectedMember, setSelectedMember] = useState<any>(null)
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
+  const [isDeleteMemberDialogOpen, setIsDeleteMemberDialogOpen] = useState(false)
+  const [memberToDelete, setMemberToDelete] = useState<any>(null)
   const [historyMember, setHistoryMember] = useState<any>(null)
   const { toast } = useToast()
   
@@ -109,6 +121,22 @@ export default function MembersPage() {
       title: "Member Added",
       description: `${newMember.name} has been successfully registered.`,
     })
+  }
+
+  const handleDeleteMember = (member: any) => {
+    setMemberToDelete(member)
+    setIsDeleteMemberDialogOpen(true)
+  }
+
+  const confirmDeleteMember = () => {
+    if (!db || !memberToDelete) return
+    deleteDocumentNonBlocking(doc(db, 'members', memberToDelete.id))
+    toast({
+      title: "Member Deleted",
+      description: `${memberToDelete.name} has been removed from the system.`,
+    })
+    setIsDeleteMemberDialogOpen(false)
+    setMemberToDelete(null)
   }
 
   const exportMembersToCSV = () => {
@@ -398,7 +426,7 @@ export default function MembersPage() {
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
-                          className={member.status === 'active' ? "text-destructive" : "text-emerald-600"} 
+                          className={member.status === 'active' ? "text-amber-600" : "text-emerald-600"} 
                           onSelect={(e) => {
                             e.preventDefault()
                             toggleStatus(member)
@@ -409,6 +437,15 @@ export default function MembersPage() {
                           ) : (
                             <><UserCheck className="mr-2 size-4" /> Activate</>
                           )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="text-destructive" 
+                          onSelect={(e) => {
+                            e.preventDefault()
+                            handleDeleteMember(member)
+                          }}
+                        >
+                          <Trash2 className="mr-2 size-4" /> Delete Member
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -580,6 +617,31 @@ export default function MembersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteMemberDialogOpen} onOpenChange={(open) => {
+        setIsDeleteMemberDialogOpen(open)
+        if (!open) {
+          setMemberToDelete(null)
+          document.body.style.pointerEvents = 'auto';
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this member?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. All historical data for this member will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setIsDeleteMemberDialogOpen(false)
+              setMemberToDelete(null)
+            }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDeleteMember}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
