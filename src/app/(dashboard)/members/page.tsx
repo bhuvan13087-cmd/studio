@@ -2,7 +2,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock, Pencil, Loader2, Trash2 } from "lucide-react"
+import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock, Pencil, Loader2, Trash2, IndianRupee } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -47,6 +47,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
 import { collection, doc, serverTimestamp, query, orderBy } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
+import { format, parseISO } from "date-fns"
 
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -184,6 +185,18 @@ export default function MembersPage() {
     member.phone.includes(searchTerm)
   )
 
+  const getLastPayment = (memberId: string) => {
+    if (!payments) return null;
+    const memberPaidPayments = payments
+      .filter(p => p.memberId === memberId && p.status === 'paid')
+      .sort((a, b) => {
+        const dateA = a.paymentDate ? new Date(a.paymentDate).getTime() : 0;
+        const dateB = b.paymentDate ? new Date(b.paymentDate).getTime() : 0;
+        return dateB - dateA;
+      });
+    return memberPaidPayments.length > 0 ? memberPaidPayments[0] : null;
+  }
+
   if (isRoleLoading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -237,24 +250,22 @@ export default function MembersPage() {
                 <div className="grid gap-4 py-6">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Full Name</Label>
-                    <input 
+                    <Input 
                       id="name" 
                       placeholder="Enter name" 
                       value={newMember.name}
                       onChange={e => setNewMember({...newMember, name: e.target.value})}
                       required 
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="phone">Phone Number</Label>
-                    <input 
+                    <Input 
                       id="phone" 
                       placeholder="+91 00000 00000" 
                       value={newMember.phone}
                       onChange={e => setNewMember({...newMember, phone: e.target.value})}
                       required 
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -280,24 +291,22 @@ export default function MembersPage() {
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="amount">Monthly Contribution (₹)</Label>
-                    <input 
+                    <Input 
                       id="amount" 
                       type="number" 
                       value={newMember.monthlyAmount}
                       onChange={e => setNewMember({...newMember, monthlyAmount: Number(e.target.value)})}
                       required 
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="joinDate">Join Date</Label>
-                    <input 
+                    <Input 
                       id="joinDate" 
                       type="date" 
                       value={newMember.joinDate}
                       onChange={e => setNewMember({...newMember, joinDate: e.target.value})}
                       required 
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -327,7 +336,7 @@ export default function MembersPage() {
             <TableRow>
               <TableHead className="font-semibold">Member</TableHead>
               <TableHead className="font-semibold">Phone</TableHead>
-              <TableHead className="font-semibold">Payment Status</TableHead>
+              <TableHead className="font-semibold">Last Payment</TableHead>
               <TableHead className="font-semibold">Monthly Amount</TableHead>
               <TableHead className="font-semibold">Balance Summary</TableHead>
               <TableHead className="font-semibold">Status</TableHead>
@@ -342,104 +351,113 @@ export default function MembersPage() {
                 </TableCell>
               </TableRow>
             ) : filteredMembers.length > 0 ? (
-              filteredMembers.map((member) => (
-                <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
-                  <TableCell>
-                    <div 
-                      className="flex items-center gap-3 cursor-pointer group"
-                      onClick={() => handleMemberClick(member)}
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary font-bold group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                        {member.name.split(' ').map((n: string) => n[0]).join('')}
+              filteredMembers.map((member) => {
+                const lastPayment = getLastPayment(member.id);
+                return (
+                  <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
+                    <TableCell>
+                      <div 
+                        className="flex items-center gap-3 cursor-pointer group"
+                        onClick={() => handleMemberClick(member)}
+                      >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary font-bold group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                          {member.name.split(' ').map((n: string) => n[0]).join('')}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-medium group-hover:text-primary transition-colors">{member.name}</span>
+                          <span className="text-[10px] text-primary font-bold tracking-wider">{member.chitGroup}</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="font-medium group-hover:text-primary transition-colors">{member.name}</span>
-                        <span className="text-[10px] text-primary font-bold tracking-wider">{member.chitGroup}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Phone className="size-3.5" />
+                        {member.phone}
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Phone className="size-3.5" />
-                      {member.phone}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {member.paymentStatus === 'paid' ? (
-                      <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50 gap-1">
-                        <CheckCircle2 className="size-3" /> Paid
+                    </TableCell>
+                    <TableCell>
+                      {lastPayment ? (
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5 text-emerald-600 font-semibold text-sm">
+                            <CheckCircle2 className="size-3.5" /> 
+                            ₹{lastPayment.amountPaid?.toLocaleString()}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground font-medium">
+                            {format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy')}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic flex items-center gap-1.5">
+                          <Clock className="size-3.5" /> No payments
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium">₹{member.monthlyAmount.toLocaleString()}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-semibold text-emerald-600">Paid: ₹{(member.totalPaid || 0).toLocaleString()}</span>
+                        <span className="text-xs font-semibold text-amber-600">Due: ₹{(member.pendingAmount || 0).toLocaleString()}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant={member.status === 'active' ? 'default' : 'secondary'}
+                        className={member.status === 'active' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-muted text-muted-foreground'}
+                      >
+                        {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                       </Badge>
-                    ) : (
-                      <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50 gap-1">
-                        <AlertCircle className="size-3" /> Pending
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium">₹{member.monthlyAmount.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-xs font-semibold text-emerald-600">Paid: ₹{(member.totalPaid || 0).toLocaleString()}</span>
-                      <span className="text-xs font-semibold text-amber-600">Due: ₹{(member.pendingAmount || 0).toLocaleString()}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant={member.status === 'active' ? 'default' : 'secondary'}
-                      className={member.status === 'active' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-muted text-muted-foreground'}
-                    >
-                      {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onSelect={(e) => {
-                          e.preventDefault()
-                          handleHistoryClick(member)
-                        }}>
-                           <History className="mr-2 size-4" /> Payment History
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={(e) => {
-                          e.preventDefault()
-                          toast({ title: "Edit Member", description: "Member editing feature is coming soon." })
-                        }}>
-                           <Pencil className="mr-2 size-4" /> Edit Details
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          className={member.status === 'active' ? "text-amber-600" : "text-emerald-600"} 
-                          onSelect={(e) => {
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onSelect={(e) => {
                             e.preventDefault()
-                            toggleStatus(member)
-                          }}
-                        >
-                          {member.status === 'active' ? (
-                            <><UserMinus className="mr-2 size-4" /> Deactivate</>
-                          ) : (
-                            <><UserCheck className="mr-2 size-4" /> Activate</>
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-destructive" 
-                          onSelect={(e) => {
+                            handleHistoryClick(member)
+                          }}>
+                             <History className="mr-2 size-4" /> Payment History
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={(e) => {
                             e.preventDefault()
-                            handleDeleteMember(member)
-                          }}
-                        >
-                          <Trash2 className="mr-2 size-4" /> Delete Member
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
+                            toast({ title: "Edit Member", description: "Member editing feature is coming soon." })
+                          }}>
+                             <Pencil className="mr-2 size-4" /> Edit Details
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            className={member.status === 'active' ? "text-amber-600" : "text-emerald-600"} 
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              toggleStatus(member)
+                            }}
+                          >
+                            {member.status === 'active' ? (
+                              <><UserMinus className="mr-2 size-4" /> Deactivate</>
+                            ) : (
+                              <><UserCheck className="mr-2 size-4" /> Activate</>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-destructive" 
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              handleDeleteMember(member)
+                            }}
+                          >
+                            <Trash2 className="mr-2 size-4" /> Delete Member
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
             ) : (
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
@@ -519,11 +537,13 @@ export default function MembersPage() {
 
               <div className="flex items-center justify-between border-b pb-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Info className="size-4" /> Current Month Status
+                  <Info className="size-4" /> Last Payment Received
                 </div>
-                <Badge variant={selectedMember?.paymentStatus === 'paid' ? 'default' : 'destructive'} className={selectedMember?.paymentStatus === 'paid' ? 'bg-emerald-500' : ''}>
-                  {selectedMember?.paymentStatus?.toUpperCase() || 'PENDING'}
-                </Badge>
+                <span className="font-bold text-emerald-600">
+                  {selectedMember && getLastPayment(selectedMember.id) 
+                    ? `₹${getLastPayment(selectedMember.id)?.amountPaid?.toLocaleString()} on ${format(parseISO(getLastPayment(selectedMember.id).paymentDate), 'MMM dd')}` 
+                    : 'No record'}
+                </span>
               </div>
             </div>
           </div>
@@ -585,7 +605,7 @@ export default function MembersPage() {
                              <span className="flex items-center justify-end gap-1 text-amber-600">
                                <Clock className="size-3" /> Awaiting
                              </span>
-                           ) : new Date(payment.paymentDate).toLocaleDateString()}
+                           ) : format(parseISO(payment.paymentDate), 'MMM dd, yyyy')}
                         </TableCell>
                       </TableRow>
                     ))
