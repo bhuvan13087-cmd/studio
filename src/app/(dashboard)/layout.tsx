@@ -1,6 +1,6 @@
-
 "use client"
 
+import { useState, useEffect } from "react"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
@@ -10,6 +10,12 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
+  const [syncTime, setSyncTime] = useState<string | null>(null)
+
+  useEffect(() => {
+    setSyncTime(new Date().toLocaleTimeString())
+  }, [])
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background font-body">
@@ -23,7 +29,7 @@ export default function DashboardLayout({
             </div>
             <div className="flex items-center gap-4">
               <div className="text-sm text-muted-foreground hidden sm:block">
-                Last Sync: {new Date().toLocaleTimeString()}
+                {syncTime ? `Last Sync: ${syncTime}` : "Initializing sync..."}
               </div>
             </div>
           </header>
