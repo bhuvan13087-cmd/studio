@@ -44,7 +44,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
@@ -62,16 +61,13 @@ export default function RoundsPage() {
   const db = useFirestore()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // Real-time collections
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
   const chitSchemes = roundsData || [];
 
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
   const { data: membersData, isLoading: isMembersLoading } = useCollection(membersQuery);
-  const members = membersData || [];
 
-  // Form State for New Chit
   const [newChit, setNewChit] = useState({
     name: "",
     monthlyAmount: 5000,
@@ -87,7 +83,7 @@ export default function RoundsPage() {
 
     addDocumentNonBlocking(collection(db, 'chitRounds'), {
       ...newChit,
-      type: 'scheme', // Distinguish scheme definition from individual rounds
+      type: 'scheme',
       createdAt: serverTimestamp()
     })
 
@@ -152,8 +148,6 @@ export default function RoundsPage() {
     setIsEditChitDialogOpen(true)
   }
 
-  const selectedChit = chitSchemes.find(g => g.id === selectedChitId)
-
   if (isRoleLoading || isRoundsLoading || isMembersLoading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
@@ -162,7 +156,6 @@ export default function RoundsPage() {
     )
   }
 
-  // Filter out the "scheme" type records for the main dashboard view
   const activeSchemes = chitSchemes.filter(r => r.type === 'scheme' || (r.name && r.monthlyAmount));
 
   if (activeSchemes.length === 0 && !selectedChitId) {
@@ -371,7 +364,7 @@ export default function RoundsPage() {
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
                           <MoreVertical className="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -419,7 +412,10 @@ export default function RoundsPage() {
         </div>
 
         {/* Edit Chit Dialog */}
-        <Dialog open={isEditChitDialogOpen} onOpenChange={setIsEditChitDialogOpen}>
+        <Dialog open={isEditChitDialogOpen} onOpenChange={(open) => {
+          setIsEditChitDialogOpen(open);
+          if (!open) setEditingChit(null);
+        }}>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleEditChit}>
               <DialogHeader>
@@ -492,7 +488,10 @@ export default function RoundsPage() {
                 </div>
               )}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsEditChitDialogOpen(false)}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => {
+                  setIsEditChitDialogOpen(false);
+                  setEditingChit(null);
+                }}>Cancel</Button>
                 <Button type="submit">Save Changes</Button>
               </DialogFooter>
             </form>
@@ -500,7 +499,10 @@ export default function RoundsPage() {
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
-        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+          setIsDeleteDialogOpen(open);
+          if (!open) setChitToDelete(null);
+        }}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Are you sure you want to delete this chit round?</AlertDialogTitle>
@@ -510,8 +512,8 @@ export default function RoundsPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={() => {
-                setIsDeleteDialogOpen(false)
-                setChitToDelete(null)
+                setIsDeleteDialogOpen(false);
+                setChitToDelete(null);
               }}>Cancel</AlertDialogCancel>
               <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDelete}>Delete</AlertDialogAction>
             </AlertDialogFooter>
@@ -521,7 +523,6 @@ export default function RoundsPage() {
     )
   }
 
-  // Drill down view (Selected Scheme)
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -530,7 +531,7 @@ export default function RoundsPage() {
             <ChevronLeft className="mr-1 size-4" /> Back to Schemes
           </Button>
           <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-headline font-bold tracking-tight">{selectedChit?.name}</h2>
+            <h2 className="text-3xl font-headline font-bold tracking-tight">{chitSchemes.find(g => g.id === selectedChitId)?.name}</h2>
             <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">Active Scheme</Badge>
           </div>
           <p className="text-muted-foreground">Manage rounds and auctions for this scheme.</p>
@@ -544,8 +545,8 @@ export default function RoundsPage() {
              <Calendar className="size-4 text-accent" />
            </CardHeader>
            <CardContent>
-             <div className="text-2xl font-bold">{selectedChit?.startDate}</div>
-             <p className="text-xs text-muted-foreground mt-1">Duration: {selectedChit?.duration} months</p>
+             <div className="text-2xl font-bold">{chitSchemes.find(g => g.id === selectedChitId)?.startDate}</div>
+             <p className="text-xs text-muted-foreground mt-1">Duration: {chitSchemes.find(g => g.id === selectedChitId)?.duration} months</p>
            </CardContent>
          </Card>
          
@@ -555,7 +556,7 @@ export default function RoundsPage() {
              <IndianRupee className="size-4 text-primary" />
            </CardHeader>
            <CardContent>
-             <div className="text-2xl font-bold">₹{selectedChit?.monthlyAmount?.toLocaleString()}</div>
+             <div className="text-2xl font-bold">₹{chitSchemes.find(g => g.id === selectedChitId)?.monthlyAmount?.toLocaleString()}</div>
              <p className="text-xs text-muted-foreground mt-1">Per member contribution</p>
            </CardContent>
          </Card>
@@ -566,7 +567,7 @@ export default function RoundsPage() {
              <Users className="size-4 text-emerald-500" />
            </CardHeader>
            <CardContent>
-             <div className="text-2xl font-bold">{selectedChit?.totalMembers}</div>
+             <div className="text-2xl font-bold">{chitSchemes.find(g => g.id === selectedChitId)?.totalMembers}</div>
              <p className="text-xs text-muted-foreground mt-1">Active participants registered</p>
            </CardContent>
          </Card>
