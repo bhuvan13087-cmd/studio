@@ -85,6 +85,14 @@ export default function MembersPage() {
     chitGroup: ""
   })
 
+  const restoreInteraction = (open: boolean) => {
+    if (!open) {
+      setTimeout(() => {
+        document.body.style.pointerEvents = 'auto'
+      }, 100)
+    }
+  }
+
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!db || isActionPending) return;
@@ -169,14 +177,6 @@ export default function MembersPage() {
         <Loader2 className="size-8 animate-spin text-primary" />
       </div>
     )
-  }
-
-  const restoreInteraction = (open: boolean) => {
-    if (!open) {
-      setTimeout(() => {
-        document.body.style.pointerEvents = 'auto'
-      }, 100)
-    }
   }
 
   return (

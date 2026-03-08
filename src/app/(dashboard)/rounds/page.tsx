@@ -86,6 +86,14 @@ export default function RoundsPage() {
     description: ""
   })
 
+  const restoreInteraction = (open: boolean) => {
+    if (!open) {
+      setTimeout(() => {
+        document.body.style.pointerEvents = 'auto'
+      }, 100)
+    }
+  }
+
   const handleAddChit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!db || isActionPending) return
@@ -183,14 +191,6 @@ export default function RoundsPage() {
         <Loader2 className="size-8 animate-spin text-primary" />
       </div>
     )
-  }
-
-  const restoreInteraction = (open: boolean) => {
-    if (!open) {
-      setTimeout(() => {
-        document.body.style.pointerEvents = 'auto'
-      }, 100)
-    }
   }
 
   if (!selectedChitId) {
