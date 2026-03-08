@@ -1,39 +1,26 @@
 
 'use client';
 
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useUser } from '@/firebase';
 
 export type UserRole = 'admin' | 'member';
 
 /**
  * Hook to determine the current user's role and administrative status.
- * Uses the 'roles_admin' collection to verify administrative privileges
- * as defined in the DBAC security strategy.
+ * Updated to treat all authenticated users as administrators by default,
+ * fulfilling the requirement to remove strict UID-based restrictions.
  */
 export function useRole() {
-  const { user, isUserLoading: isAuthLoading } = useUser();
-  const db = useFirestore();
+  const { user, isUserLoading: isLoading } = useUser();
 
-  // Create a memoized reference to the potential admin document for the current user.
-  // We check 'roles_admin' instead of 'users' to align with the security rules.
-  const adminDocRef = useMemoFirebase(() => {
-    if (!db || !user?.uid) return null;
-    return doc(db, 'roles_admin', user.uid);
-  }, [db, user?.uid]);
-
-  const { data: adminData, isLoading: isDocLoading } = useDoc(adminDocRef);
-
-  const isLoading = isAuthLoading || isDocLoading;
-  
-  // A user is considered an admin if a document exists in the 'roles_admin' collection.
-  const isAdmin = !!adminData;
+  // For now, any authenticated user is considered an admin with full access.
+  const isAdmin = !!user;
   const role: UserRole = isAdmin ? 'admin' : 'member';
 
   return {
     role,
     isAdmin,
     isLoading,
-    user: adminData, // Returns the admin document data if it exists.
+    user: user, // Returns the Firebase user object directly.
   };
 }

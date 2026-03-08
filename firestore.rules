@@ -6,16 +6,9 @@ service cloud.firestore {
     /**
      * CHITFUND PRO SECURITY RULES
      * 
-     * CORE PHILOSOPHY:
-     * This ruleset implements a strict Administrative Access model using Database-Backed Access Control (DBAC).
-     * Access to business-critical data (Members, Payments, Chit Rounds) is restricted exclusively to 
-     * users whose UIDs are present in the 'roles_admin' collection.
-     * 
-     * DATA STRUCTURE:
-     * - /roles_admin/{uid}: Map of administrative users.
-     * - /members/{memberId}: Detailed records of chit fund participants.
-     * - /payments/{paymentId}: Transaction history for member contributions.
-     * - /chitRounds/{roundId}: Historical data of completed auction rounds and winners.
+     * UPDATED PHILOSOPHY:
+     * Access is granted to any authenticated user. The strict UID-based 
+     * 'roles_admin' check has been removed per requirements.
      */
 
     // --- Global Helper Functions ---
@@ -25,12 +18,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    /** @description Checks if the authenticated user has an entry in the roles_admin collection. */
+    /** @description Checks if the user is authorized. Currently all signed-in users are authorized. */
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+      return isSignedIn();
     }
 
-    /** @description Combines admin check with existence check for destructive operations. */
+    /** @description Checks if user is authorized and resource exists. */
     function isExistingAdmin() {
       return isAdmin() && resource != null;
     }
@@ -38,8 +31,7 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     /**
-     * @description Collection used for Database-Backed Access Control (DBAC).
-     * @path /roles_admin/{adminId}
+     * @description Collection for admin roles (retained for structure).
      */
     match /roles_admin/{adminId} {
       allow get: if isSignedIn();
