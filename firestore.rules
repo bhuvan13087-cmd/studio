@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -15,18 +16,6 @@ service cloud.firestore {
      * - /members/{memberId}: Detailed records of chit fund participants.
      * - /payments/{paymentId}: Transaction history for member contributions.
      * - /chitRounds/{roundId}: Historical data of completed auction rounds and winners.
-     * 
-     * KEY SECURITY DECISIONS:
-     * - Authorization Independence: Rules do not rely on ownership fields within data documents. 
-     *   Instead, they perform an existence check on the 'roles_admin' collection.
-     * - Secure Queryable Access Patterns: Because all data in the core collections share the 
-     *   same admin-only posture, list operations are inherently safe for authorized users.
-     * - Relational Integrity: On creation, documents must contain an 'id' field that matches 
-     *   their Firestore document ID to ensure consistency between the path and the data.
-     * 
-     * PROTOTYPING MODE:
-     * This ruleset prioritizes secure authorization over strict schema validation. Content 
-     * fields are not type-checked to allow for rapid iteration on the data model.
      */
 
     // --- Global Helper Functions ---
@@ -51,9 +40,6 @@ service cloud.firestore {
     /**
      * @description Collection used for Database-Backed Access Control (DBAC).
      * @path /roles_admin/{adminId}
-     * @allow (get) Any signed-in user can check their own admin status.
-     * @deny (list) Non-admin users cannot list the directory of administrators.
-     * @principle DBAC: Existence of a UID here grants site-wide administrative privileges.
      */
     match /roles_admin/{adminId} {
       allow get: if isSignedIn();
@@ -63,10 +49,6 @@ service cloud.firestore {
 
     /**
      * @description Stores individual member details for the chit fund.
-     * @path /members/{memberId}
-     * @allow (create) Admin user creates a member document where data.id matches the path ID.
-     * @deny (get) Anonymous or non-admin user attempts to view member details.
-     * @principle Admin-Only Access: Business data is protected by global role check.
      */
     match /members/{memberId} {
       allow get, list: if isAdmin();
@@ -77,10 +59,6 @@ service cloud.firestore {
 
     /**
      * @description Records all monthly payments made by members.
-     * @path /payments/{paymentId}
-     * @allow (update) Admin updates payment status from 'pending' to 'paid'.
-     * @deny (create) User attempts to create a payment record without being in the roles_admin collection.
-     * @principle Relational Integrity: Ensures the internal ID remains immutable and matches the path.
      */
     match /payments/{paymentId} {
       allow get, list: if isAdmin();
@@ -91,10 +69,6 @@ service cloud.firestore {
 
     /**
      * @description Stores details of completed chit fund rounds.
-     * @path /chitRounds/{roundId}
-     * @allow (list) Admin views the history of all completed rounds.
-     * @deny (delete) Any user attempts to delete a round record without being an admin.
-     * @principle Homogeneous Security: Entire collection shares a single security posture.
      */
     match /chitRounds/{roundId} {
       allow get, list: if isAdmin();
