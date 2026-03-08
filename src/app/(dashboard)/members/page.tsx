@@ -1,7 +1,8 @@
+
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info } from "lucide-react"
+import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -35,12 +36,37 @@ const initialMembers = [
   { id: "5", name: "Robert Wilson", phone: "+91 98765 43214", joinDate: "2023-05-12", monthlyAmount: 5000, status: "active", paymentStatus: "paid", totalPaid: 20000, pendingAmount: 0 },
 ]
 
+// Mock data for payment history based on memberId
+const memberPaymentHistory: Record<string, any[]> = {
+  "1": [
+    { month: "September 2023", amount: 5000, status: "paid", date: "2023-09-05" },
+    { month: "August 2023", amount: 5000, status: "paid", date: "2023-08-04" },
+    { month: "July 2023", amount: 5000, status: "paid", date: "2023-07-06" },
+  ],
+  "2": [
+    { month: "September 2023", amount: 5000, status: "paid", date: "2023-09-07" },
+    { month: "August 2023", amount: 5000, status: "paid", date: "2023-08-08" },
+  ],
+  "3": [
+    { month: "September 2023", amount: 5000, status: "pending", date: "-" },
+    { month: "August 2023", amount: 5000, status: "paid", date: "2023-08-15" },
+  ],
+  "4": [
+    { month: "September 2023", amount: 5000, status: "pending", date: "-" },
+  ],
+  "5": [
+    { month: "September 2023", amount: 5000, status: "paid", date: "2023-09-15" },
+  ],
+}
+
 export default function MembersPage() {
   const [members, setMembers] = useState(initialMembers)
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [selectedMember, setSelectedMember] = useState<typeof initialMembers[0] | null>(null)
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
+  const [historyMember, setHistoryMember] = useState<typeof initialMembers[0] | null>(null)
   const { toast } = useToast()
 
   const [newMember, setNewMember] = useState({
@@ -109,6 +135,11 @@ export default function MembersPage() {
   const handleMemberClick = (member: typeof initialMembers[0]) => {
     setSelectedMember(member)
     setIsProfileDialogOpen(true)
+  }
+
+  const handleHistoryClick = (member: typeof initialMembers[0]) => {
+    setHistoryMember(member)
+    setIsHistoryDialogOpen(true)
   }
 
   const filteredMembers = members.filter(member => 
@@ -279,6 +310,9 @@ export default function MembersPage() {
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleMemberClick(member)}>View Profile</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleHistoryClick(member)}>
+                           <History className="mr-2 size-4" /> Payment History
+                        </DropdownMenuItem>
                         <DropdownMenuItem>Edit Details</DropdownMenuItem>
                         <DropdownMenuItem className={member.status === 'active' ? "text-destructive" : "text-emerald-600"}>
                           {member.status === 'active' ? (
@@ -369,6 +403,72 @@ export default function MembersPage() {
 
           <DialogFooter>
             <Button onClick={() => setIsProfileDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Member Payment History Dialog */}
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="size-5 text-primary" />
+              Payment History: {historyMember?.name}
+            </DialogTitle>
+            <DialogDescription>Viewing all contribution records for this member.</DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead>Month</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Payment Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historyMember && memberPaymentHistory[historyMember.id]?.length > 0 ? (
+                    memberPaymentHistory[historyMember.id].map((payment, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{payment.month}</TableCell>
+                        <TableCell>₹{payment.amount.toLocaleString()}</TableCell>
+                        <TableCell>
+                          {payment.status === 'paid' ? (
+                            <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50">
+                              Paid
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">
+                              Pending
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground text-sm">
+                           {payment.date === '-' ? (
+                             <span className="flex items-center justify-end gap-1 text-amber-600">
+                               <Clock className="size-3" /> Awaiting
+                             </span>
+                           ) : payment.date}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic">
+                        No payment records found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
