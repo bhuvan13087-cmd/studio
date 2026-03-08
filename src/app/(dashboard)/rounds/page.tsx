@@ -2,7 +2,7 @@
 "use client"
 
 import { useState } from "react"
-import { Trophy, History, Plus, Award, Calendar, IndianRupee, Users, CheckCircle2, MoreVertical, Search, UserCheck, ChevronLeft, LayoutGrid, ArrowRight, Loader2, AlertCircle, Database, FileText, Clock, Pencil } from "lucide-react"
+import { Trophy, History, Plus, Award, Calendar, IndianRupee, Users, CheckCircle2, MoreVertical, Search, UserCheck, ChevronLeft, LayoutGrid, ArrowRight, Loader2, AlertCircle, Database, FileText, Clock, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -34,9 +34,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/select"
 import { useToast } from "@/hooks/use-toast"
-import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase"
+import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 
@@ -118,6 +118,17 @@ export default function RoundsPage() {
     toast({
       title: "Chit Scheme Updated",
       description: "Changes have been saved successfully.",
+    })
+  }
+
+  const handleDeleteChit = (chit: any) => {
+    if (!db) return;
+    
+    deleteDocumentNonBlocking(doc(db, 'chitRounds', chit.id));
+    
+    toast({
+      title: "Chit Scheme Deleted",
+      description: `${chit.name} has been removed.`,
     })
   }
 
@@ -350,8 +361,13 @@ export default function RoundsPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => openEditDialog(group)}>
                           <Pencil className="mr-2 size-4" /> Edit Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={() => handleDeleteChit(group)}>
+                          <Trash2 className="mr-2 size-4" /> Delete Scheme
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
