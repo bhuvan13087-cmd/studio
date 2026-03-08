@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Download, Printer, TrendingUp, DollarSign, FileText, User, Clock, Trophy, Loader2, Database, Calendar, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import {
   ChartConfig,
   ChartContainer,
