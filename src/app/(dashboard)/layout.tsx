@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { useUser } from "@/firebase"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
+import { Calendar as CalendarIcon } from "lucide-react"
 
 export default function DashboardLayout({
   children,
@@ -43,14 +44,24 @@ export default function DashboardLayout({
         <SidebarInset className="flex flex-col">
           <header className="flex h-16 shrink-0 items-center justify-between border-b px-6 sticky top-0 bg-background/80 backdrop-blur-md z-30">
             <div className="flex items-center gap-4">
-              <h1 className="font-headline font-semibold text-lg hidden sm:block text-primary">Admin Console</h1>
+              <h1 className="font-headline font-semibold text-lg hidden sm:block text-primary">
+                Management <span className="text-accent italic">Hub</span>
+              </h1>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex flex-col items-end">
-                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                  {currentTime ? format(currentTime, 'EEEE, MMM dd') : '...'}
-                </span>
-              </div>
+               <div className="flex items-center gap-3 bg-muted/50 px-4 py-2 rounded-2xl border shadow-inner transition-all hover:bg-muted/70">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <CalendarIcon className="size-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none mb-1">
+                       {currentTime ? format(currentTime, 'EEEE') : '...'}
+                    </span>
+                    <span className="text-sm font-bold text-foreground tabular-nums leading-none tracking-tight">
+                       {currentTime ? format(currentTime, 'MMMM dd, yyyy') : '...'}
+                    </span>
+                  </div>
+               </div>
             </div>
           </header>
           <main className="flex-1 p-6 md:p-8 lg:p-10 max-w-7xl mx-auto w-full">
