@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from "react"
@@ -74,7 +73,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                </Label>
+                </div>
                 <Input
                   id="password"
                   type="password"
