@@ -350,19 +350,27 @@ export default function MembersPage() {
                       {lastPayment ? (
                         <Popover>
                           <PopoverTrigger asChild>
-                            <button className="text-[11px] font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 cursor-help underline decoration-dotted underline-offset-4">
-                              {format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy')}
+                            <button className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/40 hover:bg-muted/60 transition-all text-sm font-medium border border-transparent hover:border-border cursor-help">
+                              <Calendar className="size-3.5 text-primary/60" />
+                              <span className="text-foreground tabular-nums">
+                                {format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy')}
+                              </span>
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-auto p-3" align="start">
-                            <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm">
-                              <CheckCircle2 className="size-4" />
-                              <span>Last Payment: ₹{lastPayment.amountPaid?.toLocaleString()}</span>
+                          <PopoverContent className="w-auto p-4 shadow-xl border-border/50" align="start">
+                            <div className="space-y-2">
+                               <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm">
+                                <CheckCircle2 className="size-4" />
+                                <span>Paid Amount: ₹{lastPayment.amountPaid?.toLocaleString()}</span>
+                              </div>
+                              <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                                Period: {lastPayment.month}
+                              </div>
                             </div>
                           </PopoverContent>
                         </Popover>
                       ) : (
-                        <span className="text-xs text-muted-foreground italic flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground italic flex items-center gap-1.5 px-3">
                           <Clock className="size-3.5" /> No records
                         </span>
                       )}
@@ -461,7 +469,9 @@ export default function MembersPage() {
                 <CardContent className="p-4 flex flex-col items-center justify-center text-center">
                   <Calendar className="size-4 text-primary mb-1" />
                   <span className="text-[10px] text-muted-foreground uppercase font-bold">Joined</span>
-                  <span className="font-semibold text-sm">{selectedMember?.joinDate}</span>
+                  <span className="font-semibold text-sm">
+                    {selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}
+                  </span>
                 </CardContent>
               </Card>
             </div>
@@ -522,7 +532,7 @@ export default function MembersPage() {
                     <TableCell>₹{payment.amountPaid?.toLocaleString()}</TableCell>
                     <TableCell><Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Paid</Badge></TableCell>
                     <TableCell className="text-right text-muted-foreground">
-                      {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd') : '-'}
+                      {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : '-'}
                     </TableCell>
                   </TableRow>
                 ))}
