@@ -78,6 +78,8 @@ export default function PaymentsPage() {
     if (!member) return;
 
     const paymentId = Math.random().toString(36).substr(2, 9);
+    
+    // Add payment record
     addDocumentNonBlocking(collection(db, 'payments'), {
       id: paymentId,
       memberId: member.id,
@@ -88,6 +90,12 @@ export default function PaymentsPage() {
       status: "paid",
       method: recordData.method,
       createdAt: serverTimestamp()
+    });
+
+    // Sync member status
+    updateDocumentNonBlocking(doc(db, 'members', member.id), {
+      paymentStatus: "paid",
+      totalPaid: (member.totalPaid || 0) + Number(recordData.amount)
     });
 
     setIsQuickRecordOpen(false);
@@ -105,6 +113,18 @@ export default function PaymentsPage() {
       paymentDate: new Date().toISOString(),
       method: "Cash"
     });
+
+    // Update member's primary status too
+    if (payment.memberId) {
+      const member = members.find(m => m.id === payment.memberId);
+      if (member) {
+        updateDocumentNonBlocking(doc(db, 'members', payment.memberId), {
+          paymentStatus: "paid",
+          totalPaid: (member.totalPaid || 0) + (payment.amountPaid || 0)
+        });
+      }
+    }
+
     toast({
       title: "Payment Updated",
       description: "Member's contribution has been marked as paid.",
