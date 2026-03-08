@@ -37,6 +37,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, addDoc, updateDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
+import { format, parseISO } from "date-fns"
 
 export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -212,8 +213,8 @@ export default function PaymentsPage() {
               <TableHead className="font-semibold">Period</TableHead>
               <TableHead className="font-semibold">Amount Paid</TableHead>
               <TableHead className="font-semibold">Method</TableHead>
+              <TableHead className="font-semibold">Payment Date</TableHead>
               <TableHead className="font-semibold">Payment Status</TableHead>
-              <TableHead className="font-semibold">Status</TableHead>
               <TableHead className="w-[100px]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -234,7 +235,7 @@ export default function PaymentsPage() {
                     {payment.method || "Cash"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
-                    {payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString() : "-"}
+                    {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : "-"}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50 gap-1.5">
@@ -299,7 +300,7 @@ export default function PaymentsPage() {
                     <TableCell className="text-sm font-medium">{entry.month}</TableCell>
                     <TableCell className="text-sm">₹{entry.amountPaid?.toLocaleString()}</TableCell>
                     <TableCell className="text-sm text-right text-muted-foreground">
-                      {entry.paymentDate ? new Date(entry.paymentDate).toLocaleDateString() : "-"}
+                      {entry.paymentDate ? format(parseISO(entry.paymentDate), 'MMM dd, yyyy') : "-"}
                     </TableCell>
                   </TableRow>
                 ))}

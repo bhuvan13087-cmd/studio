@@ -347,32 +347,34 @@ export default function MembersPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {lastPayment ? (
+                      {member.paymentStatus === 'paid' ? (
                         <Popover>
                           <PopoverTrigger asChild>
-                            <button className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/40 hover:bg-muted/60 transition-all text-sm font-medium border border-transparent hover:border-border cursor-help">
-                              <Calendar className="size-3.5 text-primary/60" />
-                              <span className="text-foreground tabular-nums">
-                                {format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy')}
-                              </span>
+                            <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[10px] font-bold border border-emerald-200 uppercase tracking-wider shadow-sm">
+                              <CheckCircle2 className="size-3" />
+                              Paid
                             </button>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-4 shadow-xl border-border/50" align="start">
                             <div className="space-y-2">
                                <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm">
                                 <CheckCircle2 className="size-4" />
-                                <span>Paid Amount: ₹{lastPayment.amountPaid?.toLocaleString()}</span>
+                                <span>Amount: ₹{lastPayment?.amountPaid?.toLocaleString()}</span>
                               </div>
                               <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                                Period: {lastPayment.month}
+                                Last Date: {lastPayment ? format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy') : 'No record'}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                                Period: {lastPayment?.month}
                               </div>
                             </div>
                           </PopoverContent>
                         </Popover>
                       ) : (
-                        <span className="text-xs text-muted-foreground italic flex items-center gap-1.5 px-3">
-                          <Clock className="size-3.5" /> No records
-                        </span>
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 uppercase tracking-wider shadow-sm w-fit">
+                          <Clock className="size-3" />
+                          Pending
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="font-medium">₹{member.monthlyAmount.toLocaleString()}</TableCell>
