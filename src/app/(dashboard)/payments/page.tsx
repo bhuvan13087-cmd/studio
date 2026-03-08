@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -77,54 +78,60 @@ export default function PaymentsPage() {
     const member = members.find(m => m.id === recordData.memberId);
     if (!member) return;
     
-    // Add payment record
+    const amount = Number(recordData.amount);
+
+    // Add payment record with "paid" status as required
     addDocumentNonBlocking(collection(db, 'payments'), {
       memberId: member.id,
       memberName: member.name,
       month: recordData.month,
-      amountPaid: Number(recordData.amount),
+      amountPaid: amount,
       paymentDate: new Date().toISOString(),
       status: "paid",
       method: recordData.method,
       createdAt: serverTimestamp()
     });
 
-    // Sync member status - IMPORTANT: This ensures status updates everywhere
+    // Sync member status - This ensures Dashboard and Profile reflect "Paid" instantly
     updateDocumentNonBlocking(doc(db, 'members', member.id), {
       paymentStatus: "paid",
-      totalPaid: (member.totalPaid || 0) + Number(recordData.amount)
+      totalPaid: (member.totalPaid || 0) + amount,
+      pendingAmount: Math.max(0, (member.pendingAmount || 0) - amount)
     });
 
     setIsQuickRecordOpen(false);
     toast({
       title: "Payment Recorded",
-      description: `Payment for ${member.name} has been added.`,
+      description: `Payment for ${member.name} has been saved as Paid.`,
     });
   }
 
   const markAsPaid = (payment: any) => {
     if (!db) return;
     const docRef = doc(db, 'payments', payment.id);
+    const amount = payment.amountPaid || 0;
+
     updateDocumentNonBlocking(docRef, {
       status: "paid",
       paymentDate: new Date().toISOString(),
       method: "Cash"
     });
 
-    // Update member's primary status too
+    // Update member document to reflect real-time status everywhere
     if (payment.memberId) {
       const member = members.find(m => m.id === payment.memberId);
       if (member) {
         updateDocumentNonBlocking(doc(db, 'members', payment.memberId), {
           paymentStatus: "paid",
-          totalPaid: (member.totalPaid || 0) + (payment.amountPaid || 0)
+          totalPaid: (member.totalPaid || 0) + amount,
+          pendingAmount: Math.max(0, (member.pendingAmount || 0) - amount)
         });
       }
     }
 
     toast({
-      title: "Payment Updated",
-      description: "Member's contribution has been marked as paid.",
+      title: "Payment Success",
+      description: "Member's contribution has been recorded as paid.",
     })
   }
 

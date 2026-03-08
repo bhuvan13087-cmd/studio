@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -84,6 +85,8 @@ export default function DashboardPage() {
   const now = new Date()
   const currentMonthPayments = (payments || []).filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))
   const collectedThisMonth = currentMonthPayments.filter(p => p.status === 'paid').reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+  
+  // Real-time pending count derived from members who haven't paid this cycle
   const pendingPaymentsCount = (members || []).filter(m => m.paymentStatus === 'pending').length
   
   const futureRounds = (rounds || []).filter(r => r.date && parseISO(r.date) > now).sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
