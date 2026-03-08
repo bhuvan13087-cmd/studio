@@ -52,7 +52,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, deleteDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO } from "date-fns"
+import { format, parseISO, isSameMonth } from "date-fns"
 
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -321,6 +321,9 @@ export default function MembersPage() {
             ) : filteredMembers.length > 0 ? (
               filteredMembers.map((member) => {
                 const lastPayment = getLastPayment(member.id);
+                // Source of truth: Determine if paid based on existence of recent payment or direct status
+                const isPaid = member.paymentStatus === 'paid' || member.paymentStatus === 'success' || !!lastPayment;
+                
                 return (
                   <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
                     <TableCell>
@@ -347,7 +350,7 @@ export default function MembersPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {(member.paymentStatus === 'paid' || member.paymentStatus === 'success') ? (
+                      {isPaid ? (
                         <Popover>
                           <PopoverTrigger asChild>
                             <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[10px] font-bold border border-emerald-200 uppercase tracking-wider shadow-sm">
@@ -359,13 +362,13 @@ export default function MembersPage() {
                             <div className="space-y-2">
                                <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm">
                                 <CheckCircle2 className="size-4" />
-                                <span>Amount: ₹{lastPayment?.amountPaid?.toLocaleString()}</span>
+                                <span>Amount: ₹{lastPayment?.amountPaid?.toLocaleString() || 'Record Found'}</span>
                               </div>
                               <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                                Last Date: {lastPayment ? format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy') : 'No record'}
+                                Last Date: {lastPayment ? format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy') : 'Recently recorded'}
                               </div>
                               <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                                Period: {lastPayment?.month}
+                                Period: {lastPayment?.month || 'Current Cycle'}
                               </div>
                             </div>
                           </PopoverContent>

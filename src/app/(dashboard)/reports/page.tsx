@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -91,13 +92,14 @@ export default function ReportsPage() {
 
   // --- Aggregations ---
   const now = new Date()
-  const ytdPayments = (payments || []).filter(p => p.paymentDate && isSameYear(parseISO(p.paymentDate), now) && p.status === 'paid')
+  const successPayments = (payments || []).filter(p => p.status === 'paid' || p.status === 'success');
+  const ytdPayments = successPayments.filter(p => p.paymentDate && isSameYear(parseISO(p.paymentDate), now))
   const totalRevenue = ytdPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
   // Monthly Revenue Growth Chart
   const last6Months = Array.from({ length: 6 }).map((_, i) => subMonths(now, i)).reverse()
   const collectionData = last6Months.map(monthDate => {
-    const amount = (payments || []).filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), monthDate) && p.status === 'paid')
+    const amount = successPayments.filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), monthDate))
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
     return {
       month: format(monthDate, 'MMM'),
@@ -105,16 +107,20 @@ export default function ReportsPage() {
     }
   })
 
-  // Pie Chart: Member Status Distribution
-  const paidCount = (members || []).filter(m => m.paymentStatus === 'paid').length
-  const pendingCount = (members || []).filter(m => m.paymentStatus === 'pending').length
+  // Pie Chart: Member Status Distribution (Current Month)
+  const paidMembersCount = (members || []).filter(m => 
+    successPayments.some(p => p.memberId === m.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))
+  ).length
   const totalM = members?.length || 1
+  const pendingMembersCount = Math.max(0, totalM - paidMembersCount)
+  
   const statusData = [
-    { name: "Paid", value: Math.round((paidCount / totalM) * 100), color: "hsl(var(--primary))" },
-    { name: "Pending", value: Math.round((pendingCount / totalM) * 100), color: "hsl(var(--accent))" },
+    { name: "Success", value: Math.round((paidMembersCount / totalM) * 100), color: "hsl(var(--primary))" },
+    { name: "Pending", value: Math.round((pendingMembersCount / totalM) * 100), color: "hsl(var(--accent))" },
   ]
 
-  // Pending Payments List
+  // Pending Payments List (Simulated based on member monthly dues minus successful payments)
+  // For reporting, we'll show actual 'pending' status records if any exist in the database
   const overduePayments = (payments || []).filter(p => p.status === 'pending')
 
   return (
@@ -173,7 +179,7 @@ export default function ReportsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{Math.round((paidCount / (paidCount + pendingCount || 1)) * 100)}%</div>
+            <div className="text-3xl font-bold">{Math.round((paidMembersCount / (totalM || 1)) * 100)}%</div>
             <p className="text-xs text-muted-foreground mt-1">Active month target: 95%</p>
           </CardContent>
         </Card>
@@ -305,21 +311,24 @@ export default function ReportsPage() {
                     <TableRow>
                       <TableHead>Member Name</TableHead>
                       <TableHead>Total Paid</TableHead>
-                      <TableHead className="text-right">Status</TableHead>
+                      <TableHead className="text-right">Current Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {members?.map((row, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{row.name}</TableCell>
-                        <TableCell className="text-emerald-600 font-semibold">₹{(row.totalPaid || 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant={row.paymentStatus === 'paid' ? 'default' : 'secondary'}>
-                            {row.paymentStatus || 'pending'}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {members?.map((row, i) => {
+                       const paidThisMonth = successPayments.some(p => p.memberId === row.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now));
+                       return (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{row.name}</TableCell>
+                          <TableCell className="text-emerald-600 font-semibold">₹{(row.totalPaid || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant={paidThisMonth ? 'default' : 'secondary'}>
+                              {paidThisMonth ? 'Success' : 'Pending'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                       )
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -331,7 +340,7 @@ export default function ReportsPage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Overdue Contributions</CardTitle>
-                  <CardDescription>Members who haven't fulfilled their dues.</CardDescription>
+                  <CardDescription>Detailed list of missing payments for the current cycle.</CardDescription>
                 </div>
               </CardHeader>
               <CardContent>
@@ -339,23 +348,23 @@ export default function ReportsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Member Name</TableHead>
-                      <TableHead>Period</TableHead>
-                      <TableHead className="text-right">Amount Due</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead className="text-right">Monthly Due</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {overduePayments.length > 0 ? (
-                      overduePayments.map((row, i) => (
+                    {members?.filter(m => !successPayments.some(p => p.memberId === m.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))).length > 0 ? (
+                      members?.filter(m => !successPayments.some(p => p.memberId === m.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))).map((row, i) => (
                         <TableRow key={i}>
-                          <TableCell className="font-medium">{row.memberName}</TableCell>
-                          <TableCell>{row.month}</TableCell>
-                          <TableCell className="text-right text-rose-600 font-bold">₹{(row.amountPaid || 0).toLocaleString()}</TableCell>
+                          <TableCell className="font-medium">{row.name}</TableCell>
+                          <TableCell>{row.phone}</TableCell>
+                          <TableCell className="text-right text-rose-600 font-bold">₹{(row.monthlyAmount || 0).toLocaleString()}</TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
                         <TableCell colSpan={3} className="h-24 text-center text-muted-foreground italic">
-                          No pending payments for this period.
+                          No pending members for this cycle. All caught up!
                         </TableCell>
                       </TableRow>
                     )}

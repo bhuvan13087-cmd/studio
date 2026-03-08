@@ -86,8 +86,12 @@ export default function DashboardPage() {
   const currentMonthPayments = (payments || []).filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))
   const collectedThisMonth = currentMonthPayments.filter(p => p.status === 'paid' || p.status === 'success').reduce((acc, p) => acc + (p.amountPaid || 0), 0)
   
-  // Real-time pending count derived from members who haven't paid this cycle
-  const pendingPaymentsCount = (members || []).filter(m => m.paymentStatus === 'pending').length
+  // Real-time pending count derived from payments records in the current cycle
+  const pendingMembers = (members || []).filter(m => {
+    const paidThisMonth = currentMonthPayments.some(p => p.memberId === m.id && (p.status === 'paid' || p.status === 'success'));
+    return !paidThisMonth;
+  });
+  const pendingPaymentsCount = pendingMembers.length
   
   const futureRounds = (rounds || []).filter(r => r.date && parseISO(r.date) > now).sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
   const nextRoundDate = futureRounds.length > 0 ? format(parseISO(futureRounds[0].date), 'MMM dd') : 'None scheduled'
@@ -110,8 +114,8 @@ export default function DashboardPage() {
   // Recent Payments
   const recentPaymentsList = (payments || []).filter(p => p.status === 'paid' || p.status === 'success').slice(0, 5)
 
-  // Pending Members
-  const pendingMembersList = (members || []).filter(m => m.paymentStatus === 'pending').slice(0, 3)
+  // Pending Members (derived)
+  const pendingMembersList = pendingMembers.slice(0, 3)
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
@@ -301,7 +305,7 @@ export default function DashboardPage() {
             <CardTitle className="flex items-center gap-2">
                <CheckCircle2 className="size-5 text-emerald-500" />
                Recent Payments
-            </CardTitle>
+            </CheckCircle2>
             <CardDescription>Latest transactions recorded in the system.</CardDescription>
           </CardHeader>
           <CardContent>
