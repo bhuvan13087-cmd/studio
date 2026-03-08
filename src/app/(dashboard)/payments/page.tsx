@@ -65,11 +65,13 @@ export default function PaymentsPage() {
     method: "Cash"
   })
 
+  // Robust interaction restoration
   const restoreInteraction = (open: boolean) => {
     if (!open) {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'
-      }, 100)
+        document.body.style.overflow = 'auto'
+      }, 200)
     }
   }
 
@@ -84,7 +86,6 @@ export default function PaymentsPage() {
     const amount = Number(recordData.amount);
 
     try {
-      // Use non-blocking helpers to initiate writes and update cache immediately
       addDocumentNonBlocking(collection(db, 'payments'), {
         memberId: member.id,
         memberName: member.name,
@@ -97,12 +98,13 @@ export default function PaymentsPage() {
       });
 
       updateDocumentNonBlocking(doc(db, 'members', member.id), {
-        paymentStatus: "success", // Update status to 'success' per user request
+        paymentStatus: "success",
         totalPaid: (member.totalPaid || 0) + amount,
         pendingAmount: Math.max(0, (member.pendingAmount || 0) - amount)
       });
 
       setIsQuickRecordOpen(false);
+      restoreInteraction(false);
       toast({
         title: "Payment Recorded",
         description: `Payment of ₹${amount} for ${member.name} saved successfully.`,
@@ -186,7 +188,7 @@ export default function PaymentsPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)} disabled={isActionPending}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => { setIsQuickRecordOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
                 <Button type="submit" disabled={isActionPending}>
                   {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   Save Payment
@@ -215,7 +217,7 @@ export default function PaymentsPage() {
               <TableHead className="font-semibold">Period</TableHead>
               <TableHead className="font-semibold">Amount Paid</TableHead>
               <TableHead className="font-semibold">Method</TableHead>
-              <TableHead className="font-semibold">Payment Date</TableHead>
+              <TableHead className="font-semibold">Date</TableHead>
               <TableHead className="font-semibold">Payment Status</TableHead>
               <TableHead className="w-[100px]"></TableHead>
             </TableRow>
@@ -309,6 +311,9 @@ export default function PaymentsPage() {
               </TableBody>
             </Table>
           </div>
+          <DialogFooter>
+            <Button onClick={() => { setIsHistoryOpen(false); restoreInteraction(false); }}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

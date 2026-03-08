@@ -86,11 +86,13 @@ export default function RoundsPage() {
     description: ""
   })
 
+  // Robust interaction restoration
   const restoreInteraction = (open: boolean) => {
     if (!open) {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'
-      }, 100)
+        document.body.style.overflow = 'auto'
+      }, 200)
     }
   }
 
@@ -105,6 +107,7 @@ export default function RoundsPage() {
         createdAt: serverTimestamp()
       })
       setIsAddChitDialogOpen(false)
+      restoreInteraction(false)
       setNewChit({ name: "", monthlyAmount: 5000, totalMembers: 20, duration: 20, startDate: new Date().toISOString().split('T')[0], description: "" })
       toast({ title: "Chit Round Created", description: "Your new chit scheme is now active." })
     } catch (error: any) {
@@ -129,6 +132,7 @@ export default function RoundsPage() {
         description: editingChit.description || ""
       })
       setIsEditChitDialogOpen(false)
+      restoreInteraction(false)
       setEditingChit(null)
       toast({ title: "Chit Updated", description: "Changes saved successfully." })
     } catch (error: any) {
@@ -145,6 +149,7 @@ export default function RoundsPage() {
       await deleteDoc(doc(db, 'chitRounds', chitToDelete.id));
       toast({ title: "Chit Deleted", description: `${chitToDelete.name} removed.` })
       setIsDeleteDialogOpen(false)
+      restoreInteraction(false)
       setChitToDelete(null)
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to delete round." })
@@ -162,6 +167,7 @@ export default function RoundsPage() {
       })
       toast({ title: "Member Removed", description: `${memberToRemove.name} removed from this round.` })
       setIsRemoveMemberDialogOpen(false)
+      restoreInteraction(false)
       setMemberToRemove(null)
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to remove member." })
@@ -176,7 +182,7 @@ export default function RoundsPage() {
   const getLastPayment = (memberId: string) => {
     if (!payments) return null;
     const memberPaidPayments = payments
-      .filter(p => p.memberId === memberId && p.status === 'paid')
+      .filter(p => p.memberId === memberId && (p.status === 'paid' || p.status === 'success'))
       .sort((a, b) => {
         const dateA = a.paymentDate ? new Date(a.paymentDate).getTime() : 0;
         const dateB = b.paymentDate ? new Date(b.paymentDate).getTime() : 0;
@@ -228,7 +234,7 @@ export default function RoundsPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsAddChitDialogOpen(false)} disabled={isActionPending}>Cancel</Button>
+                  <Button type="button" variant="outline" onClick={() => { setIsAddChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
                   <Button type="submit" disabled={isActionPending}>
                     {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                     Create
@@ -248,10 +254,18 @@ export default function RoundsPage() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setEditingChit({...group}); setIsEditChitDialogOpen(true); }}>
+                      <DropdownMenuItem onSelect={(e) => { 
+                        e.preventDefault(); 
+                        setEditingChit({...group}); 
+                        setIsEditChitDialogOpen(true); 
+                      }}>
                         <Pencil className="mr-2 size-4" /> Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive" onSelect={(e) => { e.preventDefault(); setChitToDelete(group); setIsDeleteDialogOpen(true); }}>
+                      <DropdownMenuItem className="text-destructive" onSelect={(e) => { 
+                        e.preventDefault(); 
+                        setChitToDelete(group); 
+                        setIsDeleteDialogOpen(true); 
+                      }}>
                         <Trash2 className="mr-2 size-4" /> Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -290,7 +304,7 @@ export default function RoundsPage() {
                 </div>
               )}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsEditChitDialogOpen(false)} disabled={isActionPending}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => { setIsEditChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
                 <Button type="submit" disabled={isActionPending}>
                   {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   Save Changes
@@ -308,7 +322,7 @@ export default function RoundsPage() {
           <AlertDialogContent>
             <AlertDialogHeader><AlertDialogTitle>Delete Chit Round?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme.</AlertDialogDescription></AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={isActionPending}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel onClick={() => { setIsDeleteDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
               <AlertDialogAction 
                 className="bg-destructive hover:bg-destructive/90" 
                 disabled={isActionPending}
@@ -416,8 +430,8 @@ export default function RoundsPage() {
                   </TableCell>
                   <TableCell className="font-bold text-sm text-primary">₹{(member.totalPaid || 0).toLocaleString()}</TableCell>
                   <TableCell>
-                    <Badge variant={member.paymentStatus === 'paid' ? 'default' : 'secondary'} className={member.paymentStatus === 'paid' ? 'bg-emerald-500' : ''}>
-                      {member.paymentStatus === 'paid' ? 'Success' : 'Pending'}
+                    <Badge variant={member.paymentStatus === 'paid' || member.paymentStatus === 'success' ? 'default' : 'secondary'} className={member.paymentStatus === 'paid' || member.paymentStatus === 'success' ? 'bg-emerald-500' : ''}>
+                      {member.paymentStatus === 'paid' || member.paymentStatus === 'success' ? 'Success' : 'Pending'}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -426,14 +440,25 @@ export default function RoundsPage() {
                         <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="size-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setHistoryMember(member); setIsHistoryDialogOpen(true); }}>
+                        <DropdownMenuItem onSelect={(e) => { 
+                          e.preventDefault(); 
+                          setHistoryMember(member); 
+                          setIsHistoryDialogOpen(true); 
+                        }}>
                           <History className="mr-2 size-4" /> Payment History
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toast({ title: "Edit Member", description: "Edit details enabled in next update." }) }}>
+                        <DropdownMenuItem onSelect={(e) => { 
+                          e.preventDefault(); 
+                          toast({ title: "Edit Member", description: "Edit details enabled in next update." }) 
+                        }}>
                           <Pencil className="mr-2 size-4" /> Edit Details
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive" onSelect={(e) => { e.preventDefault(); setMemberToRemove(member); setIsRemoveMemberDialogOpen(true); }}>
+                        <DropdownMenuItem className="text-destructive" onSelect={(e) => { 
+                          e.preventDefault(); 
+                          setMemberToRemove(member); 
+                          setIsRemoveMemberDialogOpen(true); 
+                        }}>
                           <Trash2 className="mr-2 size-4" /> Remove from Round
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -452,6 +477,7 @@ export default function RoundsPage() {
         </Table>
       </div>
 
+      {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => {
         setIsHistoryDialogOpen(open)
         restoreInteraction(open)
@@ -469,7 +495,7 @@ export default function RoundsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && p.status === 'paid').map((p, i) => (
+                {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (
                   <TableRow key={i}>
                     <TableCell className="text-sm">{p.month}</TableCell>
                     <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
@@ -479,6 +505,9 @@ export default function RoundsPage() {
               </TableBody>
             </Table>
           </div>
+          <DialogFooter>
+            <Button onClick={() => { setIsHistoryDialogOpen(false); restoreInteraction(false); }}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -495,7 +524,7 @@ export default function RoundsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsRemoveMemberDialogOpen(false)} disabled={isActionPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => { setIsRemoveMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               className="bg-destructive hover:bg-destructive/90" 
               disabled={isActionPending}

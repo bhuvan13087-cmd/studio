@@ -52,7 +52,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, deleteDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth } from "date-fns"
+import { format, parseISO } from "date-fns"
 
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -90,11 +90,13 @@ export default function MembersPage() {
     chitGroup: ""
   })
 
+  // Robust interaction restoration to fix cursor/scroll lock issues
   const restoreInteraction = (open: boolean) => {
     if (!open) {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'
-      }, 100)
+        document.body.style.overflow = 'auto'
+      }, 200)
     }
   }
 
@@ -110,6 +112,7 @@ export default function MembersPage() {
       })
 
       setIsAddDialogOpen(false)
+      restoreInteraction(false)
       setNewMember({
         name: "",
         phone: "",
@@ -147,6 +150,7 @@ export default function MembersPage() {
         description: `${memberToDelete.name} has been removed from the system.`,
       })
       setIsDeleteMemberDialogOpen(false)
+      restoreInteraction(false)
       setMemberToDelete(null)
     } catch (error: any) {
       toast({
@@ -276,7 +280,7 @@ export default function MembersPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isActionPending}>Cancel</Button>
+                  <Button type="button" variant="outline" onClick={() => { setIsAddDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
                   <Button type="submit" disabled={isActionPending}>
                     {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                     Add Member
@@ -321,7 +325,6 @@ export default function MembersPage() {
             ) : filteredMembers.length > 0 ? (
               filteredMembers.map((member) => {
                 const lastPayment = getLastPayment(member.id);
-                // Source of truth: Determine if paid based on existence of recent payment or direct status
                 const isPaid = member.paymentStatus === 'paid' || member.paymentStatus === 'success' || !!lastPayment;
                 
                 return (
@@ -365,7 +368,7 @@ export default function MembersPage() {
                                 <span>Amount: ₹{lastPayment?.amountPaid?.toLocaleString() || 'Record Found'}</span>
                               </div>
                               <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                                Last Date: {lastPayment ? format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy') : 'Recently recorded'}
+                                Date: {lastPayment ? format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy') : 'Recently recorded'}
                               </div>
                               <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
                                 Period: {lastPayment?.month || 'Current Cycle'}
@@ -406,7 +409,7 @@ export default function MembersPage() {
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onSelect={(e) => {
-                            e.preventDefault()
+                            e.preventDefault() // Prevents focus trap issues
                             setHistoryMember(member)
                             setIsHistoryDialogOpen(true)
                           }}>
@@ -502,10 +505,14 @@ export default function MembersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setIsProfileDialogOpen(false)
-              setHistoryMember(selectedMember)
-              setIsHistoryDialogOpen(true)
+              restoreInteraction(false)
+              // Delay next dialog slightly for clean transition
+              setTimeout(() => {
+                setHistoryMember(selectedMember)
+                setIsHistoryDialogOpen(true)
+              }, 150)
             }}>View History</Button>
-            <Button onClick={() => setIsProfileDialogOpen(false)}>Close</Button>
+            <Button onClick={() => { setIsProfileDialogOpen(false); restoreInteraction(false); }}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -551,6 +558,9 @@ export default function MembersPage() {
               </TableBody>
             </Table>
           </div>
+          <DialogFooter>
+            <Button onClick={() => { setIsHistoryDialogOpen(false); restoreInteraction(false); }}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -566,7 +576,7 @@ export default function MembersPage() {
             <AlertDialogDescription>This will permanently remove {memberToDelete?.name} and all associated data.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsDeleteMemberDialogOpen(false)} disabled={isActionPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => { setIsDeleteMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               className="bg-destructive hover:bg-destructive/90" 
               onClick={(e) => {
