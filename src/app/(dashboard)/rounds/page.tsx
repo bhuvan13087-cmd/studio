@@ -371,10 +371,19 @@ export default function RoundsPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => openEditDialog(group)}>
+                        <DropdownMenuItem onSelect={(e) => {
+                          e.preventDefault();
+                          openEditDialog(group);
+                        }}>
                           <Pencil className="mr-2 size-4" /> Edit Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={() => handleDeleteClick(group)}>
+                        <DropdownMenuItem 
+                          className="text-destructive focus:bg-destructive/10 focus:text-destructive" 
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            handleDeleteClick(group);
+                          }}
+                        >
                           <Trash2 className="mr-2 size-4" /> Delete Scheme
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -440,7 +449,7 @@ export default function RoundsPage() {
                         id="edit-amount" 
                         type="number"
                         value={editingChit.monthlyAmount}
-                        onChange={e => setEditingChit({...editingChit, monthlyAmount: e.target.value})}
+                        onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})}
                         required 
                       />
                     </div>
@@ -450,7 +459,7 @@ export default function RoundsPage() {
                         id="edit-members" 
                         type="number"
                         value={editingChit.totalMembers}
-                        onChange={e => setEditingChit({...editingChit, totalMembers: e.target.value})}
+                        onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})}
                         required 
                       />
                     </div>
@@ -462,7 +471,7 @@ export default function RoundsPage() {
                         id="edit-duration" 
                         type="number"
                         value={editingChit.duration}
-                        onChange={e => setEditingChit({...editingChit, duration: e.target.value})}
+                        onChange={e => setEditingChit({...editingChit, duration: Number(e.target.value)})}
                         required 
                       />
                     </div>
