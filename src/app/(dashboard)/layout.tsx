@@ -8,7 +8,6 @@ import { Toaster } from "@/components/ui/toaster"
 import { useUser } from "@/firebase"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
-import { Calendar as CalendarIcon } from "lucide-react"
 
 export default function DashboardLayout({
   children,
@@ -49,11 +48,8 @@ export default function DashboardLayout({
               </h1>
             </div>
             <div className="flex items-center gap-4">
-               <div className="flex items-center gap-3 bg-muted/50 px-4 py-2 rounded-2xl border shadow-inner transition-all hover:bg-muted/70">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <CalendarIcon className="size-4" />
-                  </div>
-                  <div className="flex flex-col">
+               <div className="flex items-center gap-3 bg-muted/50 px-5 py-2 rounded-2xl border shadow-inner transition-all hover:bg-muted/70">
+                  <div className="flex flex-col items-end">
                     <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none mb-1">
                        {currentTime ? format(currentTime, 'EEEE') : '...'}
                     </span>
