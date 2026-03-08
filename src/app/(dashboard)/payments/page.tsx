@@ -35,7 +35,8 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, addDoc, updateDoc } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
+import { addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
 
@@ -83,7 +84,8 @@ export default function PaymentsPage() {
     const amount = Number(recordData.amount);
 
     try {
-      await addDoc(collection(db, 'payments'), {
+      // Use non-blocking helpers to initiate writes and update cache immediately
+      addDocumentNonBlocking(collection(db, 'payments'), {
         memberId: member.id,
         memberName: member.name,
         month: recordData.month,
@@ -94,8 +96,8 @@ export default function PaymentsPage() {
         createdAt: serverTimestamp()
       });
 
-      await updateDoc(doc(db, 'members', member.id), {
-        paymentStatus: "paid",
+      updateDocumentNonBlocking(doc(db, 'members', member.id), {
+        paymentStatus: "success", // Update status to 'success' per user request
         totalPaid: (member.totalPaid || 0) + amount,
         pendingAmount: Math.max(0, (member.pendingAmount || 0) - amount)
       });
@@ -109,14 +111,14 @@ export default function PaymentsPage() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message || "Failed to record payment.",
+        description: error.message || "Failed to initiate payment recording.",
       });
     } finally {
       setIsActionPending(false)
     }
   }
 
-  const successfulPayments = payments.filter(p => p.status === 'paid' && 
+  const successfulPayments = payments.filter(p => (p.status === 'paid' || p.status === 'success') && 
     (p.memberName?.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
@@ -295,7 +297,7 @@ export default function PaymentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {payments.filter(p => p.memberId === historyMember?.memberId && p.status === 'paid').map((entry, i) => (
+                {payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success')).map((entry, i) => (
                   <TableRow key={i}>
                     <TableCell className="text-sm font-medium">{entry.month}</TableCell>
                     <TableCell className="text-sm">₹{entry.amountPaid?.toLocaleString()}</TableCell>

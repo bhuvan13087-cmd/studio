@@ -167,7 +167,7 @@ export default function MembersPage() {
   const getLastPayment = (memberId: string) => {
     if (!payments) return null;
     const memberPaidPayments = payments
-      .filter(p => p.memberId === memberId && p.status === 'paid')
+      .filter(p => p.memberId === memberId && (p.status === 'paid' || p.status === 'success'))
       .sort((a, b) => {
         const dateA = a.paymentDate ? new Date(a.paymentDate).getTime() : 0;
         const dateB = b.paymentDate ? new Date(b.paymentDate).getTime() : 0;
@@ -347,12 +347,12 @@ export default function MembersPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {member.paymentStatus === 'paid' ? (
+                      {(member.paymentStatus === 'paid' || member.paymentStatus === 'success') ? (
                         <Popover>
                           <PopoverTrigger asChild>
                             <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[10px] font-bold border border-emerald-200 uppercase tracking-wider shadow-sm">
                               <CheckCircle2 className="size-3" />
-                              Paid
+                              Success
                             </button>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-4 shadow-xl border-border/50" align="start">
@@ -528,17 +528,17 @@ export default function MembersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && p.status === 'paid').map((payment, i) => (
+                {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((payment, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-medium">{payment.month}</TableCell>
                     <TableCell>₹{payment.amountPaid?.toLocaleString()}</TableCell>
-                    <TableCell><Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Paid</Badge></TableCell>
+                    <TableCell><Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Success</Badge></TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : '-'}
                     </TableCell>
                   </TableRow>
                 ))}
-                {(!historyMember || (payments || []).filter(p => p.memberId === historyMember.id && p.status === 'paid').length === 0) && (
+                {(!historyMember || (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).length === 0) && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground italic py-8">
                       No successful payments recorded.

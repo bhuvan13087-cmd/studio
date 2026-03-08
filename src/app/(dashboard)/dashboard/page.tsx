@@ -84,7 +84,7 @@ export default function DashboardPage() {
   // --- Calculations ---
   const now = new Date()
   const currentMonthPayments = (payments || []).filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))
-  const collectedThisMonth = currentMonthPayments.filter(p => p.status === 'paid').reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+  const collectedThisMonth = currentMonthPayments.filter(p => p.status === 'paid' || p.status === 'success').reduce((acc, p) => acc + (p.amountPaid || 0), 0)
   
   // Real-time pending count derived from members who haven't paid this cycle
   const pendingPaymentsCount = (members || []).filter(m => m.paymentStatus === 'pending').length
@@ -99,7 +99,7 @@ export default function DashboardPage() {
     const monthPayments = (payments || []).filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), monthDate))
     return {
       month: format(monthDate, 'MMM'),
-      collected: monthPayments.filter(p => p.status === 'paid').reduce((acc, p) => acc + (p.amountPaid || 0), 0),
+      collected: monthPayments.filter(p => p.status === 'paid' || p.status === 'success').reduce((acc, p) => acc + (p.amountPaid || 0), 0),
       pending: monthPayments.filter(p => p.status === 'pending').reduce((acc, p) => acc + (p.amountPaid || 0), 0),
     }
   })
@@ -108,7 +108,7 @@ export default function DashboardPage() {
   const recentWinners = (rounds || []).filter(r => r.status === 'completed').slice(0, 4)
   
   // Recent Payments
-  const recentPaymentsList = (payments || []).filter(p => p.status === 'paid').slice(0, 5)
+  const recentPaymentsList = (payments || []).filter(p => p.status === 'paid' || p.status === 'success').slice(0, 5)
 
   // Pending Members
   const pendingMembersList = (members || []).filter(m => m.paymentStatus === 'pending').slice(0, 3)
@@ -250,7 +250,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-emerald-600">
-              ₹{payments?.filter(p => p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd') && p.status === 'paid').reduce((acc, p) => acc + (p.amountPaid || 0), 0).toLocaleString()}
+              ₹{payments?.filter(p => p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd') && (p.status === 'paid' || p.status === 'success')).reduce((acc, p) => acc + (p.amountPaid || 0), 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Total payments received today</p>
           </CardContent>
@@ -315,7 +315,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex flex-col items-end">
                          <span className="font-bold text-emerald-600 text-sm">₹{payment.amountPaid?.toLocaleString()}</span>
-                         <span className="text-[10px] uppercase font-semibold text-muted-foreground">{payment.status}</span>
+                         <span className="text-[10px] uppercase font-semibold text-muted-foreground">Success</span>
                       </div>
                    </div>
                  ))}
