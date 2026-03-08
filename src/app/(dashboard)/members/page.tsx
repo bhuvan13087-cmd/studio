@@ -309,7 +309,6 @@ export default function MembersPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleMemberClick(member)}>View Profile</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleHistoryClick(member)}>
                            <History className="mr-2 size-4" /> Payment History
                         </DropdownMenuItem>
