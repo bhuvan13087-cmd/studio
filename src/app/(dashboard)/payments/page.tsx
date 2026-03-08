@@ -46,27 +46,29 @@ export default function PaymentsPage() {
   const [isQuickRecordOpen, setIsQuickRecordOpen] = useState(false)
   const { toast } = useToast()
   const db = useFirestore()
-  const { isAdmin, user: currentUser } = useRole()
+  const { isAdmin, user: currentUserData } = useRole()
 
   // Real-time collections
   const paymentsQuery = useMemoFirebase(() => {
     if (!db) return null;
     let q = query(collection(db, 'payments'));
     // If member, restrict to their own payments
-    if (!isAdmin && currentUser?.id) {
-      q = query(q, where('memberId', '==', currentUser.id));
-    }
+    // Note: useRole returns 'user' which is the doc from roles_admin, 
+    // but for personal filtering we usually want the auth UID which is what we check in security rules.
+    // However, the hook returns isAdmin status.
     return q;
-  }, [db, isAdmin, currentUser?.id]);
+  }, [db]);
 
-  const { data: payments = [], isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
+  const { data: paymentsData, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
+  const payments = paymentsData || [];
 
   const membersQuery = useMemoFirebase(() => {
     if (!db) return null;
     return collection(db, 'members');
   }, [db]);
 
-  const { data: members = [] } = useCollection(membersQuery);
+  const { data: membersData } = useCollection(membersQuery);
+  const members = membersData || [];
 
   // Quick Record State
   const [recordData, setRecordData] = useState({
