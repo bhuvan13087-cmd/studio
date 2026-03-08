@@ -21,6 +21,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -56,6 +63,13 @@ export default function MembersPage() {
 
   const { data: payments } = useCollection(paymentsQuery);
 
+  const chitRoundsQuery = useMemoFirebase(() => {
+    if (!db || !isAdmin) return null;
+    return collection(db, 'chitRounds');
+  }, [db, isAdmin]);
+
+  const { data: chitRounds } = useCollection(chitRoundsQuery);
+
   const [newMember, setNewMember] = useState({
     name: "",
     phone: "",
@@ -65,7 +79,7 @@ export default function MembersPage() {
     paymentStatus: "pending",
     totalPaid: 0,
     pendingAmount: 0,
-    chitGroup: "Alpha Premium 5K"
+    chitGroup: ""
   })
 
   const handleAddMember = (e: React.FormEvent) => {
@@ -89,7 +103,7 @@ export default function MembersPage() {
       paymentStatus: "pending",
       totalPaid: 0,
       pendingAmount: 0,
-      chitGroup: "Alpha Premium 5K"
+      chitGroup: ""
     })
     toast({
       title: "Member Added",
@@ -194,7 +208,12 @@ export default function MembersPage() {
                 Add New Member
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px]" onOpenChange={(open) => {
+              if (!open) {
+                // Restore interaction on close
+                document.body.style.pointerEvents = 'auto';
+              }
+            }}>
               <form onSubmit={handleAddMember}>
                 <DialogHeader>
                   <DialogTitle>Register Member</DialogTitle>
@@ -225,13 +244,24 @@ export default function MembersPage() {
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="chitGroup">Chit Group</Label>
-                    <Input 
-                      id="chitGroup" 
-                      placeholder="e.g. Alpha Premium 5K" 
-                      value={newMember.chitGroup}
-                      onChange={e => setNewMember({...newMember, chitGroup: e.target.value})}
-                      required 
-                    />
+                    <Select 
+                      value={newMember.chitGroup} 
+                      onValueChange={v => setNewMember({...newMember, chitGroup: v})}
+                    >
+                      <SelectTrigger id="chitGroup">
+                        <SelectValue placeholder="Select a chit group" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {chitRounds?.filter((r: any) => r.name).map((round: any) => (
+                          <SelectItem key={round.id} value={round.name}>
+                            {round.name}
+                          </SelectItem>
+                        ))}
+                        {(!chitRounds || chitRounds.length === 0) && (
+                          <SelectItem value="none" disabled>No chit groups found</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="amount">Monthly Contribution (₹)</Label>
@@ -395,7 +425,10 @@ export default function MembersPage() {
       {/* Member Profile Dialog */}
       <Dialog open={isProfileDialogOpen} onOpenChange={(open) => {
         setIsProfileDialogOpen(open)
-        if (!open) setSelectedMember(null)
+        if (!open) {
+          setSelectedMember(null)
+          document.body.style.pointerEvents = 'auto';
+        }
       }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -475,7 +508,10 @@ export default function MembersPage() {
       {/* Member Payment History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => {
         setIsHistoryDialogOpen(open)
-        if (!open) setHistoryMember(null)
+        if (!open) {
+          setHistoryMember(null)
+          document.body.style.pointerEvents = 'auto';
+        }
       }}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
