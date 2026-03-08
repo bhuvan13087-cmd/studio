@@ -1,7 +1,8 @@
+
 "use client"
 
 import { useState } from "react"
-import { Trophy, History, Plus, Award, Calendar, IndianRupee, Users, CheckCircle2, MoreVertical, Search, UserCheck, ChevronLeft, LayoutGrid, ArrowRight, Loader2, AlertCircle, Database } from "lucide-react"
+import { Trophy, History, Plus, Award, Calendar, IndianRupee, Users, CheckCircle2, MoreVertical, Search, UserCheck, ChevronLeft, LayoutGrid, ArrowRight, Loader2, AlertCircle, Database, FileText, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -32,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase"
@@ -40,8 +42,7 @@ import { useRole } from "@/hooks/use-role"
 
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
-  
-  const [isCreateChitDialogOpen, setIsCreateChitDialogOpen] = useState(false)
+  const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
   const [isCreateRoundDialogOpen, setIsCreateRoundDialogOpen] = useState(false)
   const [isWinnerDialogOpen, setIsWinnerDialogOpen] = useState(false)
   const [isParticipantsDialogOpen, setIsParticipantsDialogOpen] = useState(false)
@@ -52,43 +53,25 @@ export default function RoundsPage() {
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
   // Real-time collections
-  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('roundNumber', 'asc')), [db]);
+  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
-  const rounds = roundsData || [];
+  const chitSchemes = roundsData || [];
 
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
   const { data: membersData, isLoading: isMembersLoading } = useCollection(membersQuery);
   const members = membersData || [];
 
-  // Derive groups from members collection
-  const uniqueGroups = Array.from(new Set(members.map(m => m.chitGroup).filter(Boolean)))
-  const chitGroups = uniqueGroups.map(groupName => {
-    const groupMembers = members.filter(m => m.chitGroup === groupName)
-    const groupRounds = rounds.filter(r => r.chitGroupName === groupName)
-    const completedRounds = groupRounds.filter(r => r.status === 'completed').length
-    
-    return {
-      id: groupName,
-      name: groupName,
-      monthlyAmount: groupMembers[0]?.monthlyAmount || 0,
-      totalMembers: groupMembers.length,
-      currentRound: completedRounds + 1,
-      totalRounds: groupMembers.length, // Typically matches member count
-      startDate: groupMembers[0]?.joinDate || '-',
-    }
-  })
-
-  const selectedChit = chitGroups.find(g => g.id === selectedChitId)
-  const filteredRounds = rounds.filter(r => r.chitGroupName === selectedChitId)
-
+  // Form State for New Chit
   const [newChit, setNewChit] = useState({
     name: "",
     monthlyAmount: 5000,
     totalMembers: 20,
-    totalRounds: 20,
+    duration: 20,
     startDate: new Date().toISOString().split('T')[0],
+    description: ""
   })
 
+  // Round specific states (for drill down)
   const [newRound, setNewRound] = useState({
     roundNumber: 1,
     date: new Date().toISOString().split('T')[0],
@@ -100,59 +83,43 @@ export default function RoundsPage() {
     winningAmount: 0,
   })
 
-  const handleCreateChit = (e: React.FormEvent) => {
+  const handleAddChit = (e: React.FormEvent) => {
     e.preventDefault()
-    toast({
-      title: "Action Not Supported",
-      description: "Please add a member and assign them to a new group name to create a chit group.",
+    if (!db) return
+
+    addDocumentNonBlocking(collection(db, 'chitRounds'), {
+      ...newChit,
+      type: 'scheme', // Distinguish scheme definition from individual rounds
+      createdAt: serverTimestamp()
     })
-    setIsCreateChitDialogOpen(false)
+
+    setIsAddChitDialogOpen(false)
+    setNewChit({
+      name: "",
+      monthlyAmount: 5000,
+      totalMembers: 20,
+      duration: 20,
+      startDate: new Date().toISOString().split('T')[0],
+      description: ""
+    })
+    
+    toast({
+      title: "Chit Round Created Successfully",
+      description: "Your new chit scheme is now active and ready for rounds.",
+    })
   }
 
   const handleCreateRound = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedChitId || !db) return
-    
-    const roundId = Math.random().toString(36).substr(2, 9)
-    addDocumentNonBlocking(collection(db, 'chitRounds'), {
-      id: roundId,
-      chitGroupName: selectedChitId,
-      roundNumber: Number(newRound.roundNumber),
-      winnerMemberId: "",
-      winnerName: "",
-      winningAmount: 0,
-      date: newRound.date,
-      status: "active",
-      createdAt: serverTimestamp()
+    // Drill-down round creation logic
+    toast({
+      title: "Feature Coming Soon",
+      description: "Individual round management within schemes is being finalized.",
     })
-
     setIsCreateRoundDialogOpen(false)
-    toast({
-      title: "Round Created",
-      description: `Round #${newRound.roundNumber} has been scheduled for ${selectedChitId}.`,
-    })
   }
 
-  const handleSelectWinner = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!db || !selectedRound) return
-
-    const winner = members.find(m => m.id === winnerData.winnerId)
-    if (!winner) return
-
-    updateDocumentNonBlocking(doc(db, 'chitRounds', selectedRound.id), {
-      winnerMemberId: winner.id,
-      winnerName: winner.name,
-      winningAmount: Number(winnerData.winningAmount),
-      status: "completed"
-    })
-
-    setIsWinnerDialogOpen(false)
-    toast({
-      title: "Winner Selected",
-      description: `${winner.name} has won Round #${selectedRound.roundNumber}.`,
-    })
-  }
+  const selectedChit = chitSchemes.find(g => g.id === selectedChitId)
 
   if (isRoleLoading || isRoundsLoading || isMembersLoading) {
     return (
@@ -162,12 +129,102 @@ export default function RoundsPage() {
     )
   }
 
-  if (chitGroups.length === 0 && !selectedChitId) {
+  // Filter out the "scheme" type records for the main dashboard view
+  const activeSchemes = chitSchemes.filter(r => r.type === 'scheme' || (r.name && r.monthlyAmount));
+
+  if (activeSchemes.length === 0 && !selectedChitId) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
-        <Database className="size-16 text-muted-foreground/20" />
-        <h2 className="text-xl font-semibold">No data available. Please add records.</h2>
-        <p className="text-muted-foreground text-center">Add members to a chit group to start managing rounds.</p>
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-in fade-in duration-700">
+        <Database className="size-20 text-muted-foreground/20" />
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold">No chit rounds available.</h2>
+          <p className="text-muted-foreground max-w-sm">Click 'Add Chit Round' to create one and start managing your auctions.</p>
+        </div>
+        <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="lg" className="h-12 px-8">
+              <Plus className="mr-2 size-5" />
+              Add Chit Round
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <form onSubmit={handleAddChit}>
+              <DialogHeader>
+                <DialogTitle>Add New Chit Round</DialogTitle>
+                <DialogDescription>Define the parameters for a new chit fund scheme.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-6">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Chit Name</Label>
+                  <Input 
+                    id="name" 
+                    placeholder="e.g. Premium Alpha 5K" 
+                    value={newChit.name}
+                    onChange={e => setNewChit({...newChit, name: e.target.value})}
+                    required 
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="amount">Monthly Amount (₹)</Label>
+                    <Input 
+                      id="amount" 
+                      type="number"
+                      value={newChit.monthlyAmount}
+                      onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})}
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="members">Total Members</Label>
+                    <Input 
+                      id="members" 
+                      type="number"
+                      value={newChit.totalMembers}
+                      onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})}
+                      required 
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="duration">Duration (months)</Label>
+                    <Input 
+                      id="duration" 
+                      type="number"
+                      value={newChit.duration}
+                      onChange={e => setNewChit({...newChit, duration: Number(e.target.value)})}
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="startDate">Start Date</Label>
+                    <Input 
+                      id="startDate" 
+                      type="date"
+                      value={newChit.startDate}
+                      onChange={e => setNewChit({...newChit, startDate: e.target.value})}
+                      required 
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="description">Description (Optional)</Label>
+                  <Textarea 
+                    id="description" 
+                    placeholder="Additional details about the scheme..." 
+                    value={newChit.description}
+                    onChange={e => setNewChit({...newChit, description: e.target.value})}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsAddChitDialogOpen(false)}>Cancel</Button>
+                <Button type="submit">Create Chit Scheme</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
@@ -177,39 +234,131 @@ export default function RoundsPage() {
       <div className="space-y-8 animate-in fade-in duration-500 pb-10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-headline font-bold tracking-tight">Chit Groups</h2>
-            <p className="text-muted-foreground">Select a group to manage its rounds and auctions.</p>
+            <h2 className="text-3xl font-headline font-bold tracking-tight">Chit Rounds</h2>
+            <p className="text-muted-foreground">Manage and track your active chit schemes.</p>
           </div>
+          <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-11 px-6 shadow-lg hover:shadow-xl transition-all">
+                <Plus className="mr-2 size-5" />
+                Add Chit Round
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <form onSubmit={handleAddChit}>
+                <DialogHeader>
+                  <DialogTitle>Add New Chit Round</DialogTitle>
+                  <DialogDescription>Define the parameters for a new chit fund scheme.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-6">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">Chit Name</Label>
+                    <Input 
+                      id="name" 
+                      placeholder="e.g. Premium Alpha 5K" 
+                      value={newChit.name}
+                      onChange={e => setNewChit({...newChit, name: e.target.value})}
+                      required 
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="amount">Monthly Amount (₹)</Label>
+                      <Input 
+                        id="amount" 
+                        type="number"
+                        value={newChit.monthlyAmount}
+                        onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})}
+                        required 
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="members">Total Members</Label>
+                      <Input 
+                        id="members" 
+                        type="number"
+                        value={newChit.totalMembers}
+                        onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})}
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="duration">Duration (months)</Label>
+                      <Input 
+                        id="duration" 
+                        type="number"
+                        value={newChit.duration}
+                        onChange={e => setNewChit({...newChit, duration: Number(e.target.value)})}
+                        required 
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="startDate">Start Date</Label>
+                      <Input 
+                        id="startDate" 
+                        type="date"
+                        value={newChit.startDate}
+                        onChange={e => setNewChit({...newChit, startDate: e.target.value})}
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="description">Description (Optional)</Label>
+                    <Textarea 
+                      id="description" 
+                      placeholder="Additional details about the scheme..." 
+                      value={newChit.description}
+                      onChange={e => setNewChit({...newChit, description: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAddChitDialogOpen(false)}>Cancel</Button>
+                  <Button type="submit">Create Chit Scheme</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {chitGroups.map((group) => (
+          {activeSchemes.map((group) => (
             <Card key={group.id} className="hover:shadow-lg transition-all duration-300 border-border/50 overflow-hidden group">
               <CardHeader className="bg-muted/30 pb-4">
                 <div className="flex justify-between items-start">
                   <div className="p-2 rounded-lg bg-primary/10 text-primary mb-2">
                     <LayoutGrid className="size-5" />
                   </div>
-                  <Badge variant="outline" className="bg-background">Round {group.currentRound}</Badge>
+                  <Badge variant="outline" className="bg-background">
+                    {group.duration} Months
+                  </Badge>
                 </div>
                 <CardTitle className="text-xl group-hover:text-primary transition-colors">{group.name}</CardTitle>
-                <CardDescription>Members: {group.totalMembers}</CardDescription>
+                <CardDescription>Scheme defined on {group.startDate}</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Contribution</span>
-                    <p className="font-bold text-lg">₹{group.monthlyAmount.toLocaleString()}</p>
+                    <p className="font-bold text-lg">₹{group.monthlyAmount?.toLocaleString()}</p>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Start Date</span>
-                    <p className="font-bold text-sm">{group.startDate}</p>
+                    <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Members</span>
+                    <p className="font-bold text-lg">{group.totalMembers}</p>
                   </div>
                 </div>
+                {group.description && (
+                  <p className="text-sm text-muted-foreground line-clamp-2 italic">
+                    "{group.description}"
+                  </p>
+                )}
               </CardContent>
               <CardFooter className="bg-muted/10 border-t pt-4">
                 <Button variant="ghost" className="w-full group" onClick={() => setSelectedChitId(group.id)}>
-                  Manage Rounds
+                  View Details
                   <ArrowRight className="ml-2 size-4 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </CardFooter>
@@ -220,234 +369,64 @@ export default function RoundsPage() {
     )
   }
 
+  // Drill down view (Selected Scheme)
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <Button variant="ghost" size="sm" className="-ml-2 h-8 text-muted-foreground hover:text-primary" onClick={() => setSelectedChitId(null)}>
-            <ChevronLeft className="mr-1 size-4" /> Back to Groups
+            <ChevronLeft className="mr-1 size-4" /> Back to Schemes
           </Button>
           <div className="flex items-center gap-3">
             <h2 className="text-3xl font-headline font-bold tracking-tight">{selectedChit?.name}</h2>
             <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">Active Scheme</Badge>
           </div>
-          <p className="text-muted-foreground">Manage rounds and auctions for this group.</p>
+          <p className="text-muted-foreground">Manage rounds and auctions for this scheme.</p>
         </div>
-        <Dialog open={isCreateRoundDialogOpen} onOpenChange={setIsCreateRoundDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="h-11 px-6 shadow-lg hover:shadow-xl transition-all">
-              <Plus className="mr-2 size-5" />
-              Schedule Next Round
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <form onSubmit={handleCreateRound}>
-              <DialogHeader>
-                <DialogTitle>Create New Chit Round</DialogTitle>
-                <DialogDescription>
-                  Setup the next auction round for {selectedChit?.name}.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-6">
-                <div className="grid gap-2">
-                  <Label htmlFor="roundNumber">Round Number</Label>
-                  <Input 
-                    id="roundNumber" 
-                    type="number"
-                    value={newRound.roundNumber}
-                    onChange={e => setNewRound({...newRound, roundNumber: parseInt(e.target.value)})}
-                    required 
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="date">Scheduled Date</Label>
-                  <Input 
-                    id="date" 
-                    type="date"
-                    value={newRound.date}
-                    onChange={e => setNewRound({...newRound, date: e.target.value})}
-                    required 
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsCreateRoundDialogOpen(false)}>Cancel</Button>
-                <Button type="submit">Create Round</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
          <Card className="border-l-4 border-l-accent shadow-sm">
            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-             <CardTitle className="text-sm font-medium">Last Round Winner</CardTitle>
-             <Trophy className="size-4 text-accent" />
+             <CardTitle className="text-sm font-medium">Scheme Start</CardTitle>
+             <Calendar className="size-4 text-accent" />
            </CardHeader>
            <CardContent>
-             <div className="text-2xl font-bold">{filteredRounds.find(r => r.status === 'completed')?.winnerName || 'No Winners Yet'}</div>
-             <div className="flex items-center gap-1.5 mt-1 text-emerald-600 font-medium">
-               <IndianRupee className="size-3.5" />
-               {(filteredRounds.find(r => r.status === 'completed')?.winningAmount || 0).toLocaleString()}
-             </div>
+             <div className="text-2xl font-bold">{selectedChit?.startDate}</div>
+             <p className="text-xs text-muted-foreground mt-1">Duration: {selectedChit?.duration} months</p>
            </CardContent>
          </Card>
          
          <Card className="border-l-4 border-l-primary shadow-sm">
            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-             <CardTitle className="text-sm font-medium">Completed Rounds</CardTitle>
-             <History className="size-4 text-primary" />
+             <CardTitle className="text-sm font-medium">Monthly Dues</CardTitle>
+             <IndianRupee className="size-4 text-primary" />
            </CardHeader>
            <CardContent>
-             <div className="text-2xl font-bold">{filteredRounds.filter(r => r.status === 'completed').length}</div>
-             <p className="text-xs text-muted-foreground mt-2">Total cycles finished</p>
+             <div className="text-2xl font-bold">₹{selectedChit?.monthlyAmount?.toLocaleString()}</div>
+             <p className="text-xs text-muted-foreground mt-1">Per member contribution</p>
            </CardContent>
          </Card>
 
          <Card className="border-l-4 border-l-emerald-500 shadow-sm">
            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-             <CardTitle className="text-sm font-medium">Total Funds Distributed</CardTitle>
-             <Award className="size-4 text-emerald-500" />
+             <CardTitle className="text-sm font-medium">Total Participants</CardTitle>
+             <Users className="size-4 text-emerald-500" />
            </CardHeader>
            <CardContent>
-             <div className="text-2xl font-bold">₹{filteredRounds.reduce((acc, r) => acc + (r.winningAmount || 0), 0).toLocaleString()}</div>
-             <p className="text-xs text-muted-foreground mt-1">Real payout data</p>
+             <div className="text-2xl font-bold">{selectedChit?.totalMembers}</div>
+             <p className="text-xs text-muted-foreground mt-1">Active participants registered</p>
            </CardContent>
          </Card>
       </div>
 
-      <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader className="bg-muted/30">
-            <TableRow>
-              <TableHead className="font-semibold">Round #</TableHead>
-              <TableHead className="font-semibold">Status</TableHead>
-              <TableHead className="font-semibold">Winner</TableHead>
-              <TableHead className="font-semibold">Winning Amount</TableHead>
-              <TableHead className="font-semibold">Date</TableHead>
-              <TableHead className="w-[100px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredRounds.length > 0 ? filteredRounds.map((round) => (
-              <TableRow key={round.id} className="hover:bg-muted/10 transition-colors">
-                <TableCell className="font-bold text-primary">#{round.roundNumber}</TableCell>
-                <TableCell>
-                  <Badge 
-                    variant={round.status === 'active' ? 'outline' : 'default'}
-                    className={round.status === 'active' ? 'border-primary text-primary bg-primary/5' : 'bg-emerald-500'}
-                  >
-                    {round.status?.toUpperCase()}
-                  </Badge>
-                </TableCell>
-                <TableCell>{round.winnerName || <span className="text-muted-foreground italic">TBD</span>}</TableCell>
-                <TableCell className="font-bold text-emerald-600">₹{(round.winningAmount || 0).toLocaleString()}</TableCell>
-                <TableCell>{round.date}</TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {round.status === 'active' && (
-                        <DropdownMenuItem onClick={() => { setSelectedRound(round); setIsWinnerDialogOpen(true); }}>
-                          <Trophy className="mr-2 size-4 text-accent" /> Select Winner
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={() => { setSelectedRound(round); setIsParticipantsDialogOpen(true); }}>
-                        <Users className="mr-2 size-4 text-primary" /> Participants
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            )) : (
-              <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground italic">
-                  No rounds scheduled. Click "Schedule Next Round" to begin.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+      <div className="bg-muted/30 rounded-xl p-8 border-2 border-dashed flex flex-col items-center justify-center text-center space-y-4">
+        <Clock className="size-12 text-muted-foreground/40" />
+        <div className="space-y-1">
+          <h3 className="font-bold text-lg">Auction Tracking Coming Soon</h3>
+          <p className="text-muted-foreground max-w-sm">Detailed round-by-round auction tracking and winner selection for this scheme is being enabled.</p>
+        </div>
       </div>
-
-      {/* Winner Selection Dialog */}
-      <Dialog open={isWinnerDialogOpen} onOpenChange={setIsWinnerDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <form onSubmit={handleSelectWinner}>
-            <DialogHeader>
-              <DialogTitle>Select Round Winner</DialogTitle>
-              <DialogDescription>Assign a winner for Round #{selectedRound?.roundNumber}.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-6">
-              <div className="grid gap-2">
-                <Label>Winner Member</Label>
-                <Select onValueChange={(v) => setWinnerData({...winnerData, winnerId: v})} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {members.filter(m => m.chitGroup === selectedChitId).map((p, i) => (
-                      <SelectItem key={i} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>Winning Bid Amount (₹)</Label>
-                <Input 
-                  type="number"
-                  value={winnerData.winningAmount}
-                  onChange={e => setWinnerData({...winnerData, winningAmount: parseInt(e.target.value)})}
-                  required 
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsWinnerDialogOpen(false)}>Cancel</Button>
-              <Button type="submit">Confirm Winner</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Participants List Dialog */}
-      <Dialog open={isParticipantsDialogOpen} onOpenChange={setIsParticipantsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Round #{selectedRound?.roundNumber} Participants</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-             <div className="rounded-md border">
-               <Table>
-                 <TableHeader className="bg-muted/50">
-                    <TableRow>
-                      <TableHead>Member Name</TableHead>
-                      <TableHead className="text-right">Status</TableHead>
-                    </TableRow>
-                 </TableHeader>
-                 <TableBody>
-                   {members.filter(m => m.chitGroup === selectedChitId).map((p, i) => (
-                     <TableRow key={i}>
-                       <TableCell className="font-medium">{p.name}</TableCell>
-                       <TableCell className="text-right">
-                         <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">Eligible</Badge>
-                       </TableCell>
-                     </TableRow>
-                   ))}
-                 </TableBody>
-               </Table>
-             </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setIsParticipantsDialogOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
