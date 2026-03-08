@@ -45,12 +45,12 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border/50 py-4">
-        {/* Application branding removed */}
+        {/* Branding removed from header per previous request */}
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-xs font-bold uppercase tracking-wider mb-4 opacity-60">
-            Main Navigation
+            ChitFund Console
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-2">
