@@ -305,7 +305,7 @@ export default function DashboardPage() {
             <CardTitle className="flex items-center gap-2">
                <CheckCircle2 className="size-5 text-emerald-500" />
                Recent Payments
-            </CheckCircle2>
+            </CardTitle>
             <CardDescription>Latest transactions recorded in the system.</CardDescription>
           </CardHeader>
           <CardContent>
