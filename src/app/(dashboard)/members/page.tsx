@@ -39,6 +39,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -343,15 +348,19 @@ export default function MembersPage() {
                     </TableCell>
                     <TableCell>
                       {lastPayment ? (
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1.5 text-emerald-600 font-semibold text-sm">
-                            <CheckCircle2 className="size-3.5" /> 
-                            ₹{lastPayment.amountPaid?.toLocaleString()}
-                          </div>
-                          <span className="text-[10px] text-muted-foreground font-medium">
-                            {format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy')}
-                          </span>
-                        </div>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className="text-[11px] font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 cursor-help underline decoration-dotted underline-offset-4">
+                              {format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy')}
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-3" align="start">
+                            <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm">
+                              <CheckCircle2 className="size-4" />
+                              <span>Last Payment: ₹{lastPayment.amountPaid?.toLocaleString()}</span>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       ) : (
                         <span className="text-xs text-muted-foreground italic flex items-center gap-1.5">
                           <Clock className="size-3.5" /> No records
