@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from "react"
@@ -43,7 +42,6 @@ export default function MembersPage() {
   const db = useFirestore()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // Real-time collections - only queried if admin is verified
   const membersQuery = useMemoFirebase(() => {
     if (!db || !isAdmin) return null;
     return collection(db, 'members');
@@ -355,14 +353,23 @@ export default function MembersPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleHistoryClick(member)}>
+                        <DropdownMenuItem onSelect={(e) => {
+                          e.preventDefault()
+                          handleHistoryClick(member)
+                        }}>
                            <History className="mr-2 size-4" /> Payment History
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                            <Pencil className="mr-2 size-4" /> Edit Details
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className={member.status === 'active' ? "text-destructive" : "text-emerald-600"} onClick={() => toggleStatus(member)}>
+                        <DropdownMenuItem 
+                          className={member.status === 'active' ? "text-destructive" : "text-emerald-600"} 
+                          onSelect={(e) => {
+                            e.preventDefault()
+                            toggleStatus(member)
+                          }}
+                        >
                           {member.status === 'active' ? (
                             <><UserMinus className="mr-2 size-4" /> Deactivate</>
                           ) : (
@@ -386,12 +393,15 @@ export default function MembersPage() {
       </div>
 
       {/* Member Profile Dialog */}
-      <Dialog open={isProfileDialogOpen} onOpenChange={setIsProfileDialogOpen}>
+      <Dialog open={isProfileDialogOpen} onOpenChange={(open) => {
+        setIsProfileDialogOpen(open)
+        if (!open) setSelectedMember(null)
+      }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
-                {selectedMember?.name.split(' ').map((n: string) => n[0]).join('')}
+                {selectedMember?.name?.split(' ').map((n: string) => n[0]).join('')}
               </div>
               Member Profile
             </DialogTitle>
@@ -428,7 +438,7 @@ export default function MembersPage() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <FileText className="size-4" /> Monthly Contribution
                 </div>
-                <span className="font-bold">₹{selectedMember?.monthlyAmount.toLocaleString()}</span>
+                <span className="font-bold">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span>
               </div>
               
               <div className="flex items-center justify-between border-b pb-2">
@@ -463,7 +473,10 @@ export default function MembersPage() {
       </Dialog>
 
       {/* Member Payment History Dialog */}
-      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => {
+        setIsHistoryDialogOpen(open)
+        if (!open) setHistoryMember(null)
+      }}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -489,7 +502,7 @@ export default function MembersPage() {
                     (payments || []).filter(p => p.memberId === historyMember.id).map((payment, i) => (
                       <TableRow key={i}>
                         <TableCell className="font-medium">{payment.month}</TableCell>
-                        <TableCell>₹{payment.amountPaid.toLocaleString()}</TableCell>
+                        <TableCell>₹{payment.amountPaid?.toLocaleString()}</TableCell>
                         <TableCell>
                           {payment.status === 'paid' ? (
                             <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50">

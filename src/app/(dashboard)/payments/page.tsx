@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from "react"
@@ -48,7 +47,6 @@ export default function PaymentsPage() {
   const db = useFirestore()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // Real-time collections - only queried if admin is verified
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !isAdmin) return null;
     return query(collection(db, 'payments'));
@@ -65,7 +63,6 @@ export default function PaymentsPage() {
   const { data: membersData } = useCollection(membersQuery);
   const members = membersData || [];
 
-  // Quick Record State
   const [recordData, setRecordData] = useState({
     memberId: "",
     amount: 5000,
@@ -144,7 +141,7 @@ export default function PaymentsPage() {
         <AlertCircle className="size-12 text-amber-500" />
         <h2 className="text-xl font-bold">Administrative Access Required</h2>
         <p className="text-muted-foreground max-w-md">
-          This page is restricted to administrators. If you should have access, please ensure your UID is present in the <code>roles_admin</code> collection.
+          This page is restricted to administrators.
         </p>
       </div>
     )
@@ -351,15 +348,21 @@ export default function PaymentsPage() {
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {payment.status !== 'paid' && (
-                          <DropdownMenuItem onClick={() => markAsPaid(payment)}>
+                          <DropdownMenuItem onSelect={(e) => {
+                            e.preventDefault()
+                            markAsPaid(payment)
+                          }}>
                             <CreditCard className="mr-2 size-4" /> Record Payment
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onClick={() => setHistoryMember(payment)}>
+                        <DropdownMenuItem onSelect={(e) => {
+                          e.preventDefault()
+                          setHistoryMember(payment)
+                        }}>
                           <History className="mr-2 size-4" /> Payment History
                         </DropdownMenuItem>
                         {payment.status === 'paid' && (
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                             <Download className="mr-2 size-4" /> Download Receipt
                           </DropdownMenuItem>
                         )}
@@ -380,7 +383,9 @@ export default function PaymentsPage() {
       </div>
 
       {/* Payment History Dialog */}
-      <Dialog open={!!historyMember} onOpenChange={(open) => !open && setHistoryMember(null)}>
+      <Dialog open={!!historyMember} onOpenChange={(open) => {
+        if (!open) setHistoryMember(null)
+      }}>
         <DialogContent className="sm:max-w-[550px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
