@@ -2,7 +2,7 @@
 "use client"
 
 import { useState } from "react"
-import { Trophy, History, Plus, Award, Calendar, IndianRupee, Users, CheckCircle2, MoreVertical, Search, UserCheck, ChevronLeft, LayoutGrid, ArrowRight, Loader2, AlertCircle, Database, FileText, Clock } from "lucide-react"
+import { Trophy, History, Plus, Award, Calendar, IndianRupee, Users, CheckCircle2, MoreVertical, Search, UserCheck, ChevronLeft, LayoutGrid, ArrowRight, Loader2, AlertCircle, Database, FileText, Clock, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -43,6 +43,8 @@ import { useRole } from "@/hooks/use-role"
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
+  const [isEditChitDialogOpen, setIsEditChitDialogOpen] = useState(false)
+  const [editingChit, setEditingChit] = useState<any>(null)
   const [isCreateRoundDialogOpen, setIsCreateRoundDialogOpen] = useState(false)
   const [isWinnerDialogOpen, setIsWinnerDialogOpen] = useState(false)
   const [isParticipantsDialogOpen, setIsParticipantsDialogOpen] = useState(false)
@@ -71,18 +73,6 @@ export default function RoundsPage() {
     description: ""
   })
 
-  // Round specific states (for drill down)
-  const [newRound, setNewRound] = useState({
-    roundNumber: 1,
-    date: new Date().toISOString().split('T')[0],
-    amount: 50000,
-  })
-
-  const [winnerData, setWinnerData] = useState({
-    winnerId: "",
-    winningAmount: 0,
-  })
-
   const handleAddChit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!db) return
@@ -109,14 +99,31 @@ export default function RoundsPage() {
     })
   }
 
-  const handleCreateRound = (e: React.FormEvent) => {
+  const handleEditChit = (e: React.FormEvent) => {
     e.preventDefault()
-    // Drill-down round creation logic
-    toast({
-      title: "Feature Coming Soon",
-      description: "Individual round management within schemes is being finalized.",
+    if (!db || !editingChit) return
+
+    updateDocumentNonBlocking(doc(db, 'chitRounds', editingChit.id), {
+      name: editingChit.name,
+      monthlyAmount: Number(editingChit.monthlyAmount),
+      totalMembers: Number(editingChit.totalMembers),
+      duration: Number(editingChit.duration),
+      startDate: editingChit.startDate,
+      description: editingChit.description || ""
     })
-    setIsCreateRoundDialogOpen(false)
+
+    setIsEditChitDialogOpen(false)
+    setEditingChit(null)
+    
+    toast({
+      title: "Chit Scheme Updated",
+      description: "Changes have been saved successfully.",
+    })
+  }
+
+  const openEditDialog = (chit: any) => {
+    setEditingChit({ ...chit })
+    setIsEditChitDialogOpen(true)
   }
 
   const selectedChit = chitSchemes.find(g => g.id === selectedChitId)
@@ -332,9 +339,23 @@ export default function RoundsPage() {
                   <div className="p-2 rounded-lg bg-primary/10 text-primary mb-2">
                     <LayoutGrid className="size-5" />
                   </div>
-                  <Badge variant="outline" className="bg-background">
-                    {group.duration} Months
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-background">
+                      {group.duration} Months
+                    </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <MoreVertical className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEditDialog(group)}>
+                          <Pencil className="mr-2 size-4" /> Edit Details
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
                 <CardTitle className="text-xl group-hover:text-primary transition-colors">{group.name}</CardTitle>
                 <CardDescription>Scheme defined on {group.startDate}</CardDescription>
@@ -365,6 +386,87 @@ export default function RoundsPage() {
             </Card>
           ))}
         </div>
+
+        {/* Edit Chit Dialog */}
+        <Dialog open={isEditChitDialogOpen} onOpenChange={setIsEditChitDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <form onSubmit={handleEditChit}>
+              <DialogHeader>
+                <DialogTitle>Edit Chit Scheme</DialogTitle>
+                <DialogDescription>Modify the details of your chit scheme.</DialogDescription>
+              </DialogHeader>
+              {editingChit && (
+                <div className="grid gap-4 py-6">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-name">Chit Name</Label>
+                    <Input 
+                      id="edit-name" 
+                      value={editingChit.name}
+                      onChange={e => setEditingChit({...editingChit, name: e.target.value})}
+                      required 
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-amount">Monthly Amount (₹)</Label>
+                      <Input 
+                        id="edit-amount" 
+                        type="number"
+                        value={editingChit.monthlyAmount}
+                        onChange={e => setEditingChit({...editingChit, monthlyAmount: e.target.value})}
+                        required 
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-members">Total Members</Label>
+                      <Input 
+                        id="edit-members" 
+                        type="number"
+                        value={editingChit.totalMembers}
+                        onChange={e => setEditingChit({...editingChit, totalMembers: e.target.value})}
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-duration">Duration (months)</Label>
+                      <Input 
+                        id="edit-duration" 
+                        type="number"
+                        value={editingChit.duration}
+                        onChange={e => setEditingChit({...editingChit, duration: e.target.value})}
+                        required 
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-startDate">Start Date</Label>
+                      <Input 
+                        id="edit-startDate" 
+                        type="date"
+                        value={editingChit.startDate}
+                        onChange={e => setEditingChit({...editingChit, startDate: e.target.value})}
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-description">Description</Label>
+                    <Textarea 
+                      id="edit-description" 
+                      value={editingChit.description}
+                      onChange={e => setEditingChit({...editingChit, description: e.target.value})}
+                    />
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditChitDialogOpen(false)}>Cancel</Button>
+                <Button type="submit">Save Changes</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
