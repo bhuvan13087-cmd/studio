@@ -6,9 +6,9 @@ service cloud.firestore {
     /**
      * CHITFUND PRO SECURITY RULES
      * 
-     * UPDATED PHILOSOPHY:
-     * Access is granted to any authenticated user. The strict UID-based 
-     * 'roles_admin' check has been removed per requirements.
+     * PHILOSOPHY:
+     * Access is granted to any authenticated user. This supports the simplified
+     * admin model where any logged-in user can manage members, payments, and rounds.
      */
 
     // --- Global Helper Functions ---
@@ -31,21 +31,11 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     /**
-     * @description Collection for admin roles (retained for structure).
-     */
-    match /roles_admin/{adminId} {
-      allow get: if isSignedIn();
-      allow list: if isAdmin();
-      allow create, update, delete: if isAdmin();
-    }
-
-    /**
      * @description Stores individual member details for the chit fund.
      */
     match /members/{memberId} {
       allow get, list: if isAdmin();
-      allow create: if isAdmin() && request.resource.data.id == memberId;
-      allow update: if isExistingAdmin() && request.resource.data.id == resource.data.id;
+      allow create, update: if isAdmin();
       allow delete: if isExistingAdmin();
     }
 
@@ -54,18 +44,16 @@ service cloud.firestore {
      */
     match /payments/{paymentId} {
       allow get, list: if isAdmin();
-      allow create: if isAdmin() && request.resource.data.id == paymentId;
-      allow update: if isExistingAdmin() && request.resource.data.id == resource.data.id;
+      allow create, update: if isAdmin();
       allow delete: if isExistingAdmin();
     }
 
     /**
-     * @description Stores details of completed chit fund rounds.
+     * @description Stores details of chit fund schemes and rounds.
      */
     match /chitRounds/{roundId} {
       allow get, list: if isAdmin();
-      allow create: if isAdmin() && request.resource.data.id == roundId;
-      allow update: if isExistingAdmin() && request.resource.data.id == resource.data.id;
+      allow create, update: if isAdmin();
       allow delete: if isExistingAdmin();
     }
   }
