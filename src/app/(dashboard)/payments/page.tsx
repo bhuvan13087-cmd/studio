@@ -34,8 +34,8 @@ import {
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
+import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
+import { collection, query, doc, serverTimestamp, orderBy, addDoc, updateDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 
 export default function PaymentsPage() {
@@ -43,6 +43,7 @@ export default function PaymentsPage() {
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [isQuickRecordOpen, setIsQuickRecordOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [isActionPending, setIsActionPending] = useState(false)
   const { toast } = useToast()
   const db = useFirestore()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
@@ -62,40 +63,50 @@ export default function PaymentsPage() {
     method: "Cash"
   })
 
-  const handleQuickRecord = (e: React.FormEvent) => {
+  const handleQuickRecord = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db) return;
+    if (!db || isActionPending) return;
 
     const member = members.find(m => m.id === recordData.memberId);
     if (!member) return;
     
+    setIsActionPending(true)
     const amount = Number(recordData.amount);
 
-    addDocumentNonBlocking(collection(db, 'payments'), {
-      memberId: member.id,
-      memberName: member.name,
-      month: recordData.month,
-      amountPaid: amount,
-      paymentDate: new Date().toISOString(),
-      status: "paid", // Production requirement: all records here are successful
-      method: recordData.method,
-      createdAt: serverTimestamp()
-    });
+    try {
+      await addDoc(collection(db, 'payments'), {
+        memberId: member.id,
+        memberName: member.name,
+        month: recordData.month,
+        amountPaid: amount,
+        paymentDate: new Date().toISOString(),
+        status: "paid",
+        method: recordData.method,
+        createdAt: serverTimestamp()
+      });
 
-    updateDocumentNonBlocking(doc(db, 'members', member.id), {
-      paymentStatus: "paid",
-      totalPaid: (member.totalPaid || 0) + amount,
-      pendingAmount: Math.max(0, (member.pendingAmount || 0) - amount)
-    });
+      await updateDoc(doc(db, 'members', member.id), {
+        paymentStatus: "paid",
+        totalPaid: (member.totalPaid || 0) + amount,
+        pendingAmount: Math.max(0, (member.pendingAmount || 0) - amount)
+      });
 
-    setIsQuickRecordOpen(false);
-    toast({
-      title: "Payment Recorded",
-      description: `Payment of ₹${amount} for ${member.name} saved successfully.`,
-    });
+      setIsQuickRecordOpen(false);
+      toast({
+        title: "Payment Recorded",
+        description: `Payment of ₹${amount} for ${member.name} saved successfully.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to record payment.",
+      });
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
-  // Filter to strictly show only successful payments
   const successfulPayments = payments.filter(p => p.status === 'paid' && 
     (p.memberName?.toLowerCase().includes(searchTerm.toLowerCase()))
   )
@@ -108,6 +119,14 @@ export default function PaymentsPage() {
     )
   }
 
+  const restoreInteraction = (open: boolean) => {
+    if (!open) {
+      setTimeout(() => {
+        document.body.style.pointerEvents = 'auto'
+      }, 100)
+    }
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -117,7 +136,7 @@ export default function PaymentsPage() {
         </div>
         <Dialog open={isQuickRecordOpen} onOpenChange={(open) => {
           setIsQuickRecordOpen(open)
-          if (!open) document.body.style.pointerEvents = 'auto'
+          restoreInteraction(open)
         }}>
           <DialogTrigger asChild>
             <Button className="h-11 shadow-md">
@@ -134,7 +153,7 @@ export default function PaymentsPage() {
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2">
                   <Label htmlFor="member">Member</Label>
-                  <Select value={recordData.memberId} onValueChange={(v) => setRecordData({...recordData, memberId: v})}>
+                  <Select disabled={isActionPending} value={recordData.memberId} onValueChange={(v) => setRecordData({...recordData, memberId: v})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select member" />
                     </SelectTrigger>
@@ -147,11 +166,11 @@ export default function PaymentsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="amount">Amount (₹)</Label>
-                  <Input id="amount" type="number" value={recordData.amount} onChange={e => setRecordData({...recordData, amount: Number(e.target.value)})} required />
+                  <Input disabled={isActionPending} id="amount" type="number" value={recordData.amount} onChange={e => setRecordData({...recordData, amount: Number(e.target.value)})} required />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="method">Method</Label>
-                  <Select value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
+                  <Select disabled={isActionPending} value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select method" />
                     </SelectTrigger>
@@ -164,8 +183,11 @@ export default function PaymentsPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)}>Cancel</Button>
-                <Button type="submit">Save Payment</Button>
+                <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)} disabled={isActionPending}>Cancel</Button>
+                <Button type="submit" disabled={isActionPending}>
+                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Save Payment
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -251,13 +273,10 @@ export default function PaymentsPage() {
         </Table>
       </div>
 
-      {/* History Dialog */}
       <Dialog open={isHistoryOpen} onOpenChange={(open) => {
         setIsHistoryOpen(open)
-        if (!open) {
-          setHistoryMember(null)
-          document.body.style.pointerEvents = 'auto'
-        }
+        restoreInteraction(open)
+        if (!open) setHistoryMember(null)
       }}>
         <DialogContent className="sm:max-w-[550px]">
           <DialogHeader>

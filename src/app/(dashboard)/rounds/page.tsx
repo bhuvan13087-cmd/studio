@@ -44,8 +44,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
+import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
+import { collection, query, doc, serverTimestamp, orderBy, addDoc, updateDoc, deleteDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
 
@@ -56,6 +56,7 @@ export default function RoundsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isRemoveMemberDialogOpen, setIsRemoveMemberDialogOpen] = useState(false)
+  const [isActionPending, setIsActionPending] = useState(false)
   
   const [editingChit, setEditingChit] = useState<any>(null)
   const [chitToDelete, setChitToDelete] = useState<any>(null)
@@ -85,54 +86,80 @@ export default function RoundsPage() {
     description: ""
   })
 
-  const handleAddChit = (e: React.FormEvent) => {
+  const handleAddChit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!db) return
+    if (!db || isActionPending) return
 
-    addDocumentNonBlocking(collection(db, 'chitRounds'), {
-      ...newChit,
-      createdAt: serverTimestamp()
-    })
-
-    setIsAddChitDialogOpen(false)
-    setNewChit({ name: "", monthlyAmount: 5000, totalMembers: 20, duration: 20, startDate: new Date().toISOString().split('T')[0], description: "" })
-    toast({ title: "Chit Round Created", description: "Your new chit scheme is now active." })
+    setIsActionPending(true)
+    try {
+      await addDoc(collection(db, 'chitRounds'), {
+        ...newChit,
+        createdAt: serverTimestamp()
+      })
+      setIsAddChitDialogOpen(false)
+      setNewChit({ name: "", monthlyAmount: 5000, totalMembers: 20, duration: 20, startDate: new Date().toISOString().split('T')[0], description: "" })
+      toast({ title: "Chit Round Created", description: "Your new chit scheme is now active." })
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to create round." })
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
-  const handleEditChit = (e: React.FormEvent) => {
+  const handleEditChit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!db || !editingChit) return
+    if (!db || !editingChit || isActionPending) return
 
-    updateDocumentNonBlocking(doc(db, 'chitRounds', editingChit.id), {
-      name: editingChit.name,
-      monthlyAmount: Number(editingChit.monthlyAmount),
-      totalMembers: Number(editingChit.totalMembers),
-      duration: Number(editingChit.duration),
-      startDate: editingChit.startDate,
-      description: editingChit.description || ""
-    })
-
-    setIsEditChitDialogOpen(false)
-    setEditingChit(null)
-    toast({ title: "Chit Updated", description: "Changes saved successfully." })
+    setIsActionPending(true)
+    try {
+      await updateDoc(doc(db, 'chitRounds', editingChit.id), {
+        name: editingChit.name,
+        monthlyAmount: Number(editingChit.monthlyAmount),
+        totalMembers: Number(editingChit.totalMembers),
+        duration: Number(editingChit.duration),
+        startDate: editingChit.startDate,
+        description: editingChit.description || ""
+      })
+      setIsEditChitDialogOpen(false)
+      setEditingChit(null)
+      toast({ title: "Chit Updated", description: "Changes saved successfully." })
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update round." })
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
-  const confirmDelete = () => {
-    if (!db || !chitToDelete) return;
-    deleteDocumentNonBlocking(doc(db, 'chitRounds', chitToDelete.id));
-    toast({ title: "Chit Deleted", description: `${chitToDelete.name} removed.` })
-    setIsDeleteDialogOpen(false)
-    setChitToDelete(null)
+  const confirmDelete = async () => {
+    if (!db || !chitToDelete || isActionPending) return;
+    setIsActionPending(true)
+    try {
+      await deleteDoc(doc(db, 'chitRounds', chitToDelete.id));
+      toast({ title: "Chit Deleted", description: `${chitToDelete.name} removed.` })
+      setIsDeleteDialogOpen(false)
+      setChitToDelete(null)
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to delete round." })
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
-  const confirmRemoveMember = () => {
-    if (!db || !memberToRemove) return;
-    updateDocumentNonBlocking(doc(db, 'members', memberToRemove.id), {
-      chitGroup: ""
-    })
-    toast({ title: "Member Removed", description: `${memberToRemove.name} removed from this round.` })
-    setIsRemoveMemberDialogOpen(false)
-    setMemberToRemove(null)
+  const confirmRemoveMember = async () => {
+    if (!db || !memberToRemove || isActionPending) return;
+    setIsActionPending(true)
+    try {
+      await updateDoc(doc(db, 'members', memberToRemove.id), {
+        chitGroup: ""
+      })
+      toast({ title: "Member Removed", description: `${memberToRemove.name} removed from this round.` })
+      setIsRemoveMemberDialogOpen(false)
+      setMemberToRemove(null)
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to remove member." })
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
   const currentRound = chitSchemes.find(r => r.id === selectedChitId)
@@ -158,6 +185,14 @@ export default function RoundsPage() {
     )
   }
 
+  const restoreInteraction = (open: boolean) => {
+    if (!open) {
+      setTimeout(() => {
+        document.body.style.pointerEvents = 'auto'
+      }, 100)
+    }
+  }
+
   if (!selectedChitId) {
     return (
       <div className="space-y-8 animate-in fade-in duration-500 pb-10">
@@ -168,7 +203,7 @@ export default function RoundsPage() {
           </div>
           <Dialog open={isAddChitDialogOpen} onOpenChange={(open) => {
             setIsAddChitDialogOpen(open)
-            if (!open) document.body.style.pointerEvents = 'auto'
+            restoreInteraction(open)
           }}>
             <DialogTrigger asChild>
               <Button className="h-11 shadow-lg"><Plus className="mr-2 size-5" /> Add Chit Round</Button>
@@ -179,22 +214,25 @@ export default function RoundsPage() {
                 <div className="grid gap-4 py-6">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Chit Name</Label>
-                    <Input id="name" value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required />
+                    <Input disabled={isActionPending} id="name" value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label>Monthly Amount (₹)</Label>
-                      <Input type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required />
+                      <Input disabled={isActionPending} type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required />
                     </div>
                     <div className="grid gap-2">
                       <Label>Total Members</Label>
-                      <Input type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required />
+                      <Input disabled={isActionPending} type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required />
                     </div>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsAddChitDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit">Create</Button>
+                  <Button type="button" variant="outline" onClick={() => setIsAddChitDialogOpen(false)} disabled={isActionPending}>Cancel</Button>
+                  <Button type="submit" disabled={isActionPending}>
+                    {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    Create
+                  </Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -235,10 +273,10 @@ export default function RoundsPage() {
           ))}
         </div>
 
-        {/* Edit Dialog */}
         <Dialog open={isEditChitDialogOpen} onOpenChange={(open) => {
           setIsEditChitDialogOpen(open)
-          if (!open) { setEditingChit(null); document.body.style.pointerEvents = 'auto' }
+          restoreInteraction(open)
+          if (!open) setEditingChit(null)
         }}>
           <DialogContent>
             <form onSubmit={handleEditChit}>
@@ -247,25 +285,41 @@ export default function RoundsPage() {
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
                     <Label>Name</Label>
-                    <Input value={editingChit.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required />
+                    <Input disabled={isActionPending} value={editingChit.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required />
                   </div>
                 </div>
               )}
-              <DialogFooter><Button type="submit">Save Changes</Button></DialogFooter>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditChitDialogOpen(false)} disabled={isActionPending}>Cancel</Button>
+                <Button type="submit" disabled={isActionPending}>
+                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Save Changes
+                </Button>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
 
-        {/* Delete Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
           setIsDeleteDialogOpen(open)
-          if (!open) { setChitToDelete(null); document.body.style.pointerEvents = 'auto' }
+          restoreInteraction(open)
+          if (!open) setChitToDelete(null)
         }}>
           <AlertDialogContent>
             <AlertDialogHeader><AlertDialogTitle>Delete Chit Round?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme.</AlertDialogDescription></AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction className="bg-destructive" onClick={confirmDelete}>Confirm Delete</AlertDialogAction>
+              <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={isActionPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                className="bg-destructive hover:bg-destructive/90" 
+                disabled={isActionPending}
+                onClick={(e) => {
+                  e.preventDefault()
+                  confirmDelete()
+                }}
+              >
+                {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                Confirm Delete
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -375,7 +429,7 @@ export default function RoundsPage() {
                         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setHistoryMember(member); setIsHistoryDialogOpen(true); }}>
                           <History className="mr-2 size-4" /> Payment History
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toast({ title: "Edit Member", description: "Edit member details." }) }}>
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toast({ title: "Edit Member", description: "Edit details enabled in next update." }) }}>
                           <Pencil className="mr-2 size-4" /> Edit Details
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -398,10 +452,10 @@ export default function RoundsPage() {
         </Table>
       </div>
 
-      {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => {
         setIsHistoryDialogOpen(open)
-        if (!open) { setHistoryMember(null); document.body.style.pointerEvents = 'auto' }
+        restoreInteraction(open)
+        if (!open) setHistoryMember(null)
       }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader><DialogTitle>Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
@@ -428,10 +482,10 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Remove Member Dialog */}
       <AlertDialog open={isRemoveMemberDialogOpen} onOpenChange={(open) => {
         setIsRemoveMemberDialogOpen(open)
-        if (!open) { setMemberToRemove(null); document.body.style.pointerEvents = 'auto' }
+        restoreInteraction(open)
+        if (!open) setMemberToRemove(null)
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -441,8 +495,18 @@ export default function RoundsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsRemoveMemberDialogOpen(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive" onClick={confirmRemoveMember}>Confirm Remove</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setIsRemoveMemberDialogOpen(false)} disabled={isActionPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              className="bg-destructive hover:bg-destructive/90" 
+              disabled={isActionPending}
+              onClick={(e) => {
+                e.preventDefault()
+                confirmRemoveMember()
+              }}
+            >
+              {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              Confirm Remove
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

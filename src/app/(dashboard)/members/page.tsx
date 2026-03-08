@@ -44,8 +44,8 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
-import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
-import { collection, doc, serverTimestamp, query, orderBy } from "firebase/firestore"
+import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
+import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, deleteDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
 
@@ -58,6 +58,7 @@ export default function MembersPage() {
   const [isDeleteMemberDialogOpen, setIsDeleteMemberDialogOpen] = useState(false)
   const [memberToDelete, setMemberToDelete] = useState<any>(null)
   const [historyMember, setHistoryMember] = useState<any>(null)
+  const [isActionPending, setIsActionPending] = useState(false)
   const { toast } = useToast()
   
   const db = useFirestore()
@@ -84,42 +85,65 @@ export default function MembersPage() {
     chitGroup: ""
   })
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!db) return;
+    if (!db || isActionPending) return;
 
-    addDocumentNonBlocking(collection(db, 'members'), {
-      ...newMember,
-      createdAt: serverTimestamp()
-    })
+    setIsActionPending(true)
+    try {
+      await addDoc(collection(db, 'members'), {
+        ...newMember,
+        createdAt: serverTimestamp()
+      })
 
-    setIsAddDialogOpen(false)
-    setNewMember({
-      name: "",
-      phone: "",
-      monthlyAmount: 5000,
-      joinDate: new Date().toISOString().split('T')[0],
-      status: "active",
-      paymentStatus: "pending",
-      totalPaid: 0,
-      pendingAmount: 0,
-      chitGroup: ""
-    })
-    toast({
-      title: "Member Added",
-      description: `${newMember.name} has been successfully registered.`,
-    })
+      setIsAddDialogOpen(false)
+      setNewMember({
+        name: "",
+        phone: "",
+        monthlyAmount: 5000,
+        joinDate: new Date().toISOString().split('T')[0],
+        status: "active",
+        paymentStatus: "pending",
+        totalPaid: 0,
+        pendingAmount: 0,
+        chitGroup: ""
+      })
+      toast({
+        title: "Member Added",
+        description: `${newMember.name} has been successfully registered.`,
+      })
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to add member.",
+      })
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
-  const confirmDeleteMember = () => {
-    if (!db || !memberToDelete) return
-    deleteDocumentNonBlocking(doc(db, 'members', memberToDelete.id))
-    toast({
-      title: "Member Deleted",
-      description: `${memberToDelete.name} has been removed from the system.`,
-    })
-    setIsDeleteMemberDialogOpen(false)
-    setMemberToDelete(null)
+  const confirmDeleteMember = async () => {
+    if (!db || !memberToDelete || isActionPending) return
+    
+    setIsActionPending(true)
+    try {
+      await deleteDoc(doc(db, 'members', memberToDelete.id))
+      toast({
+        title: "Member Deleted",
+        description: `${memberToDelete.name} has been removed from the system.`,
+      })
+      setIsDeleteMemberDialogOpen(false)
+      setMemberToDelete(null)
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to delete member.",
+      })
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
   const filteredMembers = (members || []).filter(member => 
@@ -129,7 +153,6 @@ export default function MembersPage() {
 
   const getLastPayment = (memberId: string) => {
     if (!payments) return null;
-    // Strictly fetch only successful payments (paidStatus == "Success" / status == "paid")
     const memberPaidPayments = payments
       .filter(p => p.memberId === memberId && p.status === 'paid')
       .sort((a, b) => {
@@ -148,6 +171,14 @@ export default function MembersPage() {
     )
   }
 
+  const restoreInteraction = (open: boolean) => {
+    if (!open) {
+      setTimeout(() => {
+        document.body.style.pointerEvents = 'auto'
+      }, 100)
+    }
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -158,7 +189,7 @@ export default function MembersPage() {
         <div className="flex flex-wrap items-center gap-3">
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
             setIsAddDialogOpen(open)
-            if (!open) document.body.style.pointerEvents = 'auto'
+            restoreInteraction(open)
           }}>
             <DialogTrigger asChild>
               <Button className="h-11 px-6 shadow-lg hover:shadow-xl transition-all">
@@ -183,6 +214,7 @@ export default function MembersPage() {
                       value={newMember.name}
                       onChange={e => setNewMember({...newMember, name: e.target.value})}
                       required 
+                      disabled={isActionPending}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -193,11 +225,13 @@ export default function MembersPage() {
                       value={newMember.phone}
                       onChange={e => setNewMember({...newMember, phone: e.target.value})}
                       required 
+                      disabled={isActionPending}
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="chitGroup">Chit Group</Label>
                     <Select 
+                      disabled={isActionPending}
                       value={newMember.chitGroup} 
                       onValueChange={v => setNewMember({...newMember, chitGroup: v})}
                     >
@@ -221,6 +255,7 @@ export default function MembersPage() {
                       value={newMember.monthlyAmount}
                       onChange={e => setNewMember({...newMember, monthlyAmount: Number(e.target.value)})}
                       required 
+                      disabled={isActionPending}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -231,12 +266,16 @@ export default function MembersPage() {
                       value={newMember.joinDate}
                       onChange={e => setNewMember({...newMember, joinDate: e.target.value})}
                       required 
+                      disabled={isActionPending}
                     />
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit">Add Member</Button>
+                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isActionPending}>Cancel</Button>
+                  <Button type="submit" disabled={isActionPending}>
+                    {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    Add Member
+                  </Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -315,7 +354,7 @@ export default function MembersPage() {
                         </div>
                       ) : (
                         <span className="text-xs text-muted-foreground italic flex items-center gap-1.5">
-                          <Clock className="size-3.5" /> No successful payments
+                          <Clock className="size-3.5" /> No records
                         </span>
                       )}
                     </TableCell>
@@ -388,10 +427,8 @@ export default function MembersPage() {
       {/* Member Profile Dialog */}
       <Dialog open={isProfileDialogOpen} onOpenChange={(open) => {
         setIsProfileDialogOpen(open)
-        if (!open) {
-          setSelectedMember(null)
-          document.body.style.pointerEvents = 'auto'
-        }
+        restoreInteraction(open)
+        if (!open) setSelectedMember(null)
       }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -452,10 +489,8 @@ export default function MembersPage() {
       {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => {
         setIsHistoryDialogOpen(open)
-        if (!open) {
-          setHistoryMember(null)
-          document.body.style.pointerEvents = 'auto'
-        }
+        restoreInteraction(open)
+        if (!open) setHistoryMember(null)
       }}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -498,10 +533,8 @@ export default function MembersPage() {
       {/* Delete Dialog */}
       <AlertDialog open={isDeleteMemberDialogOpen} onOpenChange={(open) => {
         setIsDeleteMemberDialogOpen(open)
-        if (!open) {
-          setMemberToDelete(null)
-          document.body.style.pointerEvents = 'auto'
-        }
+        restoreInteraction(open)
+        if (!open) setMemberToDelete(null)
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -509,8 +542,18 @@ export default function MembersPage() {
             <AlertDialogDescription>This will permanently remove {memberToDelete?.name} and all associated data.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsDeleteMemberDialogOpen(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive" onClick={confirmDeleteMember}>Delete</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setIsDeleteMemberDialogOpen(false)} disabled={isActionPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              className="bg-destructive hover:bg-destructive/90" 
+              onClick={(e) => {
+                e.preventDefault()
+                confirmDeleteMember()
+              }}
+              disabled={isActionPending}
+            >
+              {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              Delete
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
