@@ -304,7 +304,7 @@ export default function MembersPage() {
             <TableRow>
               <TableHead className="font-semibold">Member</TableHead>
               <TableHead className="font-semibold">Phone</TableHead>
-              <TableHead className="font-semibold">Last Paid Date</TableHead>
+              <TableHead className="font-semibold">Payment Status</TableHead>
               <TableHead className="font-semibold">Monthly Amount</TableHead>
               <TableHead className="font-semibold">Balance Summary</TableHead>
               <TableHead className="font-semibold">Status</TableHead>

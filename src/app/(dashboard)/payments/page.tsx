@@ -212,7 +212,7 @@ export default function PaymentsPage() {
               <TableHead className="font-semibold">Period</TableHead>
               <TableHead className="font-semibold">Amount Paid</TableHead>
               <TableHead className="font-semibold">Method</TableHead>
-              <TableHead className="font-semibold">Last Paid Date</TableHead>
+              <TableHead className="font-semibold">Payment Status</TableHead>
               <TableHead className="font-semibold">Status</TableHead>
               <TableHead className="w-[100px]"></TableHead>
             </TableRow>
