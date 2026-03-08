@@ -30,11 +30,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
@@ -44,11 +54,9 @@ export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
   const [isEditChitDialogOpen, setIsEditChitDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [editingChit, setEditingChit] = useState<any>(null)
-  const [isCreateRoundDialogOpen, setIsCreateRoundDialogOpen] = useState(false)
-  const [isWinnerDialogOpen, setIsWinnerDialogOpen] = useState(false)
-  const [isParticipantsDialogOpen, setIsParticipantsDialogOpen] = useState(false)
-  const [selectedRound, setSelectedRound] = useState<any>(null)
+  const [chitToDelete, setChitToDelete] = useState<any>(null)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -121,15 +129,22 @@ export default function RoundsPage() {
     })
   }
 
-  const handleDeleteChit = (chit: any) => {
-    if (!db) return;
+  const handleDeleteClick = (chit: any) => {
+    setChitToDelete(chit)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (!db || !chitToDelete) return;
     
-    deleteDocumentNonBlocking(doc(db, 'chitRounds', chit.id));
+    deleteDocumentNonBlocking(doc(db, 'chitRounds', chitToDelete.id));
     
     toast({
-      title: "Chit Scheme Deleted",
-      description: `${chit.name} has been removed.`,
+      title: "Chit Round Deleted Successfully",
+      description: `${chitToDelete.name} has been removed.`,
     })
+    setIsDeleteDialogOpen(false)
+    setChitToDelete(null)
   }
 
   const openEditDialog = (chit: any) => {
@@ -356,7 +371,7 @@ export default function RoundsPage() {
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 transition-opacity">
                           <MoreVertical className="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -366,7 +381,7 @@ export default function RoundsPage() {
                         <DropdownMenuItem onClick={() => openEditDialog(group)}>
                           <Pencil className="mr-2 size-4" /> Edit Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={() => handleDeleteChit(group)}>
+                        <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={() => handleDeleteClick(group)}>
                           <Trash2 className="mr-2 size-4" /> Delete Scheme
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -483,6 +498,25 @@ export default function RoundsPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure you want to delete this chit round?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the chit scheme and all its data.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {
+                setIsDeleteDialogOpen(false)
+                setChitToDelete(null)
+              }}>Cancel</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDelete}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     )
   }
