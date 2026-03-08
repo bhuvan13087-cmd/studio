@@ -7,18 +7,20 @@ import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
 import { useUser } from "@/firebase"
 import { useRouter } from "next/navigation"
+import { Badge } from "@/components/ui/badge"
+import { format } from "date-fns"
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const [syncTime, setSyncTime] = useState<string | null>(null)
   const { user, isUserLoading } = useUser()
   const router = useRouter()
+  const [currentTime, setCurrentTime] = useState<Date | null>(null)
 
   useEffect(() => {
-    setSyncTime(new Date().toLocaleTimeString())
+    setCurrentTime(new Date())
   }, [])
 
   useEffect(() => {
@@ -44,12 +46,21 @@ export default function DashboardLayout({
             <div className="flex items-center gap-4">
               <SidebarTrigger className="-ml-1" />
               <div className="h-4 w-px bg-border hidden sm:block" />
-              <h1 className="font-headline font-semibold text-lg hidden sm:block">Console</h1>
+              <h1 className="font-headline font-semibold text-lg hidden sm:block text-primary">Admin Console</h1>
             </div>
             <div className="flex items-center gap-4">
-              <div className="text-sm text-muted-foreground hidden sm:block">
-                {syncTime ? `Last Sync: ${syncTime}` : "Initializing sync..."}
+              <div className="flex flex-col items-end hidden md:flex">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  {currentTime ? format(currentTime, 'EEEE, MMM dd') : '...'}
+                </span>
+                <span className="text-sm font-semibold text-primary">
+                  {user?.email}
+                </span>
               </div>
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1.5 hidden sm:flex h-7 px-3">
+                <div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                Live Sync
+              </Badge>
             </div>
           </header>
           <main className="flex-1 p-6 md:p-8 lg:p-10 max-w-7xl mx-auto w-full">
