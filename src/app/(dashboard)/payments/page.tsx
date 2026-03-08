@@ -230,7 +230,7 @@ export default function PaymentsPage() {
                   <TableCell className="font-medium">{payment.memberName}</TableCell>
                   <TableCell>{payment.month}</TableCell>
                   <TableCell className="font-bold text-emerald-600">₹{payment.amountPaid?.toLocaleString()}</TableCell>
-                  <TableCell className="text-accent font-bold text-sm">
+                  <TableCell className="font-bold text-sm text-foreground">
                     {payment.method || "Cash"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
