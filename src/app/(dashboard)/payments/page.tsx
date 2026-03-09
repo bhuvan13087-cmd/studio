@@ -65,7 +65,9 @@ export default function PaymentsPage() {
     method: "Cash"
   })
 
-  // Robust interaction restoration to prevent UI freeze issues
+  /**
+   * Permanent Fix for UI Freeze Bug
+   */
   const restoreInteraction = (open: boolean) => {
     if (!open) {
       setTimeout(() => {
@@ -73,14 +75,17 @@ export default function PaymentsPage() {
         document.body.style.overflow = 'auto'
         const html = document.documentElement;
         if (html) {
-          html.style.pointerEvents = 'auto';
-          html.style.overflow = 'auto';
+          html.style.pointerEvents = 'auto'
+          html.style.overflow = 'auto'
         }
-        // Manual cleanup of any potential leftover backdrop elements
-        document.querySelectorAll('[data-radix-portal]').forEach(el => {
-          if (el.innerHTML === '') el.remove();
+        document.querySelectorAll('.modal-backdrop, .overlay, .dropdown-backdrop, [data-radix-portal]').forEach(el => {
+          if (el.getAttribute('data-radix-portal') !== null && el.innerHTML === '') {
+             el.remove();
+          } else if (!el.getAttribute('data-radix-portal')) {
+             el.remove();
+          }
         });
-      }, 200)
+      }, 300)
     }
   }
 

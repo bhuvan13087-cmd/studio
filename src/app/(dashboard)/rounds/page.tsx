@@ -85,7 +85,9 @@ export default function RoundsPage() {
     description: ""
   })
 
-  // Robust interaction restoration
+  /**
+   * Permanent Fix for UI Freeze Bug
+   */
   const restoreInteraction = (open: boolean) => {
     if (!open) {
       setTimeout(() => {
@@ -93,13 +95,17 @@ export default function RoundsPage() {
         document.body.style.overflow = 'auto'
         const html = document.documentElement;
         if (html) {
-          html.style.pointerEvents = 'auto';
-          html.style.overflow = 'auto';
+          html.style.pointerEvents = 'auto'
+          html.style.overflow = 'auto'
         }
-        document.querySelectorAll('[data-radix-portal]').forEach(el => {
-          if (el.innerHTML === '') el.remove();
+        document.querySelectorAll('.modal-backdrop, .overlay, .dropdown-backdrop, [data-radix-portal]').forEach(el => {
+          if (el.getAttribute('data-radix-portal') !== null && el.innerHTML === '') {
+             el.remove();
+          } else if (!el.getAttribute('data-radix-portal')) {
+             el.remove();
+          }
         });
-      }, 200)
+      }, 300)
     }
   }
 

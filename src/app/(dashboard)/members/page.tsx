@@ -89,24 +89,41 @@ export default function MembersPage() {
     chitGroup: ""
   })
 
-  // Robust interaction restoration to fix repeated UI freeze issues
+  /**
+   * Permanent Fix for UI Freeze Bug
+   * Aggressively restores document interaction and cleans up lingering overlays.
+   */
   const restoreInteraction = (open: boolean) => {
     if (!open) {
-      // Small delay to allow Radix UI cleanup cycle to complete
+      // Safety delay to let React and Radix complete their unmount/close cycles
       setTimeout(() => {
+        // 1. Restore pointer events and overflow to body and html
         document.body.style.pointerEvents = 'auto'
         document.body.style.overflow = 'auto'
-        // Extra safeguard: reset html style if needed
         const html = document.documentElement;
         if (html) {
-          html.style.pointerEvents = 'auto';
-          html.style.overflow = 'auto';
+          html.style.pointerEvents = 'auto'
+          html.style.overflow = 'auto'
         }
-        // Manual cleanup of any potential leftover backdrop classes (generic check)
-        document.querySelectorAll('[data-radix-portal]').forEach(el => {
-          if (el.innerHTML === '') el.remove();
+
+        // 2. Remove lingering backdrop or overlay elements manually
+        const selectors = ['.modal-backdrop', '.overlay', '.dropdown-backdrop', '[data-radix-portal]'];
+        selectors.forEach(selector => {
+          document.querySelectorAll(selector).forEach(el => {
+            // Only remove portal if it's empty/stuck
+            if (selector === '[data-radix-portal]') {
+               if (el.innerHTML === '') el.remove();
+            } else {
+               el.remove();
+            }
+          });
         });
-      }, 200)
+
+        // 3. Clear focus from potentially stuck elements
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      }, 300)
     }
   }
 
@@ -331,7 +348,7 @@ export default function MembersPage() {
                       />
                     </div>
                   </div>
-                  <DialogFooter className="sticky bottom-0 bg-background pt-2">
+                  <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t">
                     <Button type="button" variant="outline" onClick={() => { setIsAddDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
                     <Button type="submit" disabled={isActionPending}>
                       {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
@@ -670,7 +687,7 @@ export default function MembersPage() {
                   setTimeout(() => {
                     setHistoryMember(selectedMember)
                     setIsHistoryDialogOpen(true)
-                  }, 250)
+                  }, 350)
                 }}>View History</Button>
                 <Button className="w-full sm:w-auto" onClick={() => { setIsProfileDialogOpen(false); restoreInteraction(false); }}>Close</Button>
               </DialogFooter>
