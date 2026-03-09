@@ -76,6 +76,10 @@ export default function PaymentsPage() {
           html.style.pointerEvents = 'auto';
           html.style.overflow = 'auto';
         }
+        // Manual cleanup of any potential leftover backdrop elements
+        document.querySelectorAll('[data-radix-portal]').forEach(el => {
+          if (el.innerHTML === '') el.remove();
+        });
       }, 200)
     }
   }

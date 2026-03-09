@@ -20,7 +20,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   DropdownMenu,
@@ -92,7 +91,15 @@ export default function RoundsPage() {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'
         document.body.style.overflow = 'auto'
-      }, 150)
+        const html = document.documentElement;
+        if (html) {
+          html.style.pointerEvents = 'auto';
+          html.style.overflow = 'auto';
+        }
+        document.querySelectorAll('[data-radix-portal]').forEach(el => {
+          if (el.innerHTML === '') el.remove();
+        });
+      }, 200)
     }
   }
 
@@ -207,42 +214,7 @@ export default function RoundsPage() {
             <h2 className="text-3xl font-headline font-bold">Chit Rounds</h2>
             <p className="text-muted-foreground">Manage your active and historical chit schemes.</p>
           </div>
-          <Dialog open={isAddChitDialogOpen} onOpenChange={(open) => {
-            setIsAddChitDialogOpen(open)
-            restoreInteraction(open)
-          }}>
-            <DialogTrigger asChild>
-              <Button className="h-11 shadow-lg"><Plus className="mr-2 size-5" /> Add Chit Round</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
-              <form onSubmit={handleAddChit}>
-                <DialogHeader><DialogTitle>Add Chit Round</DialogTitle></DialogHeader>
-                <div className="grid gap-4 py-6">
-                  <div className="grid gap-2">
-                    <Label htmlFor="name">Chit Name</Label>
-                    <Input disabled={isActionPending} id="name" value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label>Monthly Amount (₹)</Label>
-                      <Input disabled={isActionPending} type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Total Members</Label>
-                      <Input disabled={isActionPending} type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required />
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter className="sticky bottom-0 bg-background pt-2">
-                  <Button type="button" variant="outline" onClick={() => { setIsAddChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
-                  <Button type="submit" disabled={isActionPending}>
-                    {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                    Create
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button className="h-11 shadow-lg" onClick={() => setIsAddChitDialogOpen(true)}><Plus className="mr-2 size-5" /> Add Chit Round</Button>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -287,64 +259,107 @@ export default function RoundsPage() {
           ))}
         </div>
 
+        {/* Add Dialog */}
+        <Dialog open={isAddChitDialogOpen} onOpenChange={(open) => {
+          setIsAddChitDialogOpen(open)
+          restoreInteraction(open)
+        }}>
+          <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
+            {isAddChitDialogOpen && (
+              <form onSubmit={handleAddChit}>
+                <DialogHeader><DialogTitle>Add Chit Round</DialogTitle></DialogHeader>
+                <div className="grid gap-4 py-6">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">Chit Name</Label>
+                    <Input disabled={isActionPending} id="name" value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>Monthly Amount (₹)</Label>
+                      <Input disabled={isActionPending} type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Total Members</Label>
+                      <Input disabled={isActionPending} type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter className="sticky bottom-0 bg-background pt-2">
+                  <Button type="button" variant="outline" onClick={() => { setIsAddChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
+                  <Button type="submit" disabled={isActionPending}>
+                    {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    Create
+                  </Button>
+                </DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Dialog */}
         <Dialog open={isEditChitDialogOpen} onOpenChange={(open) => {
           setIsEditChitDialogOpen(open)
           restoreInteraction(open)
           if (!open) setEditingChit(null)
         }}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
-            <form onSubmit={handleEditChit}>
-              <DialogHeader><DialogTitle>Edit Scheme</DialogTitle></DialogHeader>
-              {editingChit && (
+          <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
+            {isEditChitDialogOpen && (
+              <form onSubmit={handleEditChit}>
+                <DialogHeader><DialogTitle>Edit Scheme</DialogTitle></DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
                     <Label>Name</Label>
-                    <Input disabled={isActionPending} value={editingChit.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required />
+                    <Input disabled={isActionPending} value={editingChit?.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label>Monthly Amount (₹)</Label>
-                      <Input disabled={isActionPending} type="number" value={editingChit.monthlyAmount} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required />
+                      <Input disabled={isActionPending} type="number" value={editingChit?.monthlyAmount} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required />
                     </div>
                     <div className="grid gap-2">
                       <Label>Total Members</Label>
-                      <Input disabled={isActionPending} type="number" value={editingChit.totalMembers} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required />
+                      <Input disabled={isActionPending} type="number" value={editingChit?.totalMembers} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required />
                     </div>
                   </div>
                 </div>
-              )}
-              <DialogFooter className="sticky bottom-0 bg-background pt-2">
-                <Button type="button" variant="outline" onClick={() => { setIsEditChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
-                <Button type="submit" disabled={isActionPending}>
-                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  Save Changes
-                </Button>
-              </DialogFooter>
-            </form>
+                <DialogFooter className="sticky bottom-0 bg-background pt-2">
+                  <Button type="button" variant="outline" onClick={() => { setIsEditChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
+                  <Button type="submit" disabled={isActionPending}>
+                    {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    Save Changes
+                  </Button>
+                </DialogFooter>
+              </form>
+            )}
           </DialogContent>
         </Dialog>
 
+        {/* Delete Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
           setIsDeleteDialogOpen(open)
           restoreInteraction(open)
           if (!open) setChitToDelete(null)
         }}>
-          <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Delete Chit Round?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme.</AlertDialogDescription></AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => { setIsDeleteDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
-              <AlertDialogAction 
-                className="bg-destructive hover:bg-destructive/90" 
-                disabled={isActionPending}
-                onClick={(e) => {
-                  e.preventDefault()
-                  confirmDelete()
-                }}
-              >
-                {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                Confirm Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
+          <AlertDialogContent className="focus:outline-none">
+            {isDeleteDialogOpen && (
+              <>
+                <AlertDialogHeader><AlertDialogTitle>Delete Chit Round?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme.</AlertDialogDescription></AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => { setIsDeleteDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    className="bg-destructive hover:bg-destructive/90" 
+                    disabled={isActionPending}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      confirmDelete()
+                    }}
+                  >
+                    {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    Confirm Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </>
+            )}
           </AlertDialogContent>
         </AlertDialog>
       </div>
@@ -493,60 +508,69 @@ export default function RoundsPage() {
         restoreInteraction(open)
         if (!open) setHistoryMember(null)
       }}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
-          <div className="py-4">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Month</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead className="text-right">Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="text-sm">{p.month}</TableCell>
-                    <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
-                    <TableCell className="text-sm text-right text-muted-foreground">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd') : '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <DialogFooter className="sticky bottom-0 bg-background pt-2">
-            <Button onClick={() => { setIsHistoryDialogOpen(false); restoreInteraction(false); }}>Close</Button>
-          </DialogFooter>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto focus:outline-none">
+          {isHistoryDialogOpen && (
+            <>
+              <DialogHeader><DialogTitle>Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
+              <div className="py-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead className="text-right">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="text-sm">{p.month}</TableCell>
+                        <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
+                        <TableCell className="text-sm text-right text-muted-foreground">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd') : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t">
+                <Button onClick={() => { setIsHistoryDialogOpen(false); restoreInteraction(false); }}>Close</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
+      {/* Remove Member Dialog */}
       <AlertDialog open={isRemoveMemberDialogOpen} onOpenChange={(open) => {
         setIsRemoveMemberDialogOpen(open)
         restoreInteraction(open)
         if (!open) setMemberToRemove(null)
       }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove from Scheme?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to remove {memberToRemove?.name} from {currentRound?.name}? This will clear their assignment but preserve historical data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setIsRemoveMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              className="bg-destructive hover:bg-destructive/90" 
-              disabled={isActionPending}
-              onClick={(e) => {
-                e.preventDefault()
-                confirmRemoveMember()
-              }}
-            >
-              {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-              Confirm Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
+        <AlertDialogContent className="focus:outline-none">
+          {isRemoveMemberDialogOpen && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove from Scheme?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to remove {memberToRemove?.name} from {currentRound?.name}? This will clear their assignment but preserve historical data.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => { setIsRemoveMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction 
+                  className="bg-destructive hover:bg-destructive/90" 
+                  disabled={isActionPending}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    confirmRemoveMember()
+                  }}
+                >
+                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Confirm Remove
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
     </div>
