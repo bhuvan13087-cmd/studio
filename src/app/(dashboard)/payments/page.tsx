@@ -65,13 +65,18 @@ export default function PaymentsPage() {
     method: "Cash"
   })
 
-  // Robust interaction restoration
+  // Robust interaction restoration to prevent UI freeze issues
   const restoreInteraction = (open: boolean) => {
     if (!open) {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'
         document.body.style.overflow = 'auto'
-      }, 150)
+        const html = document.documentElement;
+        if (html) {
+          html.style.pointerEvents = 'auto';
+          html.style.overflow = 'auto';
+        }
+      }, 200)
     }
   }
 
@@ -136,65 +141,67 @@ export default function PaymentsPage() {
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-headline font-bold tracking-tight">Payments</h2>
-          <p className="text-muted-foreground">Viewing only successful contribution records.</p>
+          <h2 className="text-3xl font-headline font-bold tracking-tight text-primary">Payments</h2>
+          <p className="text-muted-foreground">Comprehensive history of all successful member contributions.</p>
         </div>
         <Dialog open={isQuickRecordOpen} onOpenChange={(open) => {
           setIsQuickRecordOpen(open)
           restoreInteraction(open)
         }}>
           <DialogTrigger asChild>
-            <Button className="h-11 shadow-md">
+            <Button className="h-11 shadow-lg hover:shadow-xl transition-all">
               <Plus className="mr-2 size-5" />
               Quick Record
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
-            <form onSubmit={handleQuickRecord}>
-              <DialogHeader>
-                <DialogTitle>Record Payment</DialogTitle>
-                <DialogDescription>Manually record a successful payment received from a member.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-6">
-                <div className="grid gap-2">
-                  <Label htmlFor="member">Member</Label>
-                  <Select disabled={isActionPending} value={recordData.memberId} onValueChange={(v) => setRecordData({...recordData, memberId: v})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {members.map(m => (
-                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {isQuickRecordOpen && (
+              <form onSubmit={handleQuickRecord}>
+                <DialogHeader>
+                  <DialogTitle>Record Payment</DialogTitle>
+                  <DialogDescription>Manually record a successful payment received from a member.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-6">
+                  <div className="grid gap-2">
+                    <Label htmlFor="member">Member</Label>
+                    <Select disabled={isActionPending} value={recordData.memberId} onValueChange={(v) => setRecordData({...recordData, memberId: v})}>
+                      <SelectTrigger className="bg-muted/30">
+                        <SelectValue placeholder="Select member" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {members.map(m => (
+                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="amount">Amount (₹)</Label>
+                    <Input disabled={isActionPending} id="amount" type="number" value={recordData.amount} onChange={e => setRecordData({...recordData, amount: Number(e.target.value)})} required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="method">Method</Label>
+                    <Select disabled={isActionPending} value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
+                      <SelectTrigger className="bg-muted/30">
+                        <SelectValue placeholder="Select method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Cash">Cash</SelectItem>
+                        <SelectItem value="UPI">UPI</SelectItem>
+                        <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="amount">Amount (₹)</Label>
-                  <Input disabled={isActionPending} id="amount" type="number" value={recordData.amount} onChange={e => setRecordData({...recordData, amount: Number(e.target.value)})} required />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="method">Method</Label>
-                  <Select disabled={isActionPending} value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select method" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Cash">Cash</SelectItem>
-                      <SelectItem value="UPI">UPI</SelectItem>
-                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter className="sticky bottom-0 bg-background pt-2">
-                <Button type="button" variant="outline" onClick={() => { setIsQuickRecordOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
-                <Button type="submit" disabled={isActionPending}>
-                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  Save Payment
-                </Button>
-              </DialogFooter>
-            </form>
+                <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t">
+                  <Button type="button" variant="outline" onClick={() => { setIsQuickRecordOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
+                  <Button type="submit" disabled={isActionPending}>
+                    {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    Save Payment
+                  </Button>
+                </DialogFooter>
+              </form>
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -213,12 +220,12 @@ export default function PaymentsPage() {
         <Table>
           <TableHeader className="bg-muted/30">
             <TableRow>
-              <TableHead className="font-semibold">Member</TableHead>
-              <TableHead className="font-semibold">Period</TableHead>
-              <TableHead className="font-semibold">Amount Paid</TableHead>
-              <TableHead className="font-semibold">Method</TableHead>
-              <TableHead className="font-semibold">Date</TableHead>
-              <TableHead className="font-semibold">Payment Status</TableHead>
+              <TableHead className="font-bold">Member</TableHead>
+              <TableHead className="font-bold">Period</TableHead>
+              <TableHead className="font-bold">Amount Paid</TableHead>
+              <TableHead className="font-bold">Method</TableHead>
+              <TableHead className="font-bold">Date</TableHead>
+              <TableHead className="font-bold">Payment Status</TableHead>
               <TableHead className="w-[100px]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -233,36 +240,36 @@ export default function PaymentsPage() {
               successfulPayments.map((payment) => (
                 <TableRow key={payment.id} className="hover:bg-muted/10 transition-colors">
                   <TableCell className="font-medium">{payment.memberName}</TableCell>
-                  <TableCell>{payment.month}</TableCell>
+                  <TableCell className="font-medium text-muted-foreground">{payment.month}</TableCell>
                   <TableCell className="font-bold text-emerald-600">₹{payment.amountPaid?.toLocaleString()}</TableCell>
                   <TableCell className="font-bold text-sm text-foreground">
                     {payment.method || "Cash"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
+                  <TableCell className="text-muted-foreground text-sm font-medium">
                     {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : "-"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50 gap-1.5">
+                    <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50 gap-1.5 shadow-none font-bold uppercase tracking-wider text-[10px]">
                       <CheckCircle2 className="size-3.5" /> Success
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10">
                           <MoreHorizontal className="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent align="end" className="w-48 shadow-xl border-border/50">
                         <DropdownMenuItem onSelect={(e) => {
                           e.preventDefault()
                           setHistoryMember(payment)
                           setIsHistoryOpen(true)
                         }}>
-                          <History className="mr-2 size-4" /> History
+                          <History className="mr-2 size-4" /> Member History
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                          <Download className="mr-2 size-4" /> Receipt
+                          <Download className="mr-2 size-4" /> Download Receipt
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -286,34 +293,39 @@ export default function PaymentsPage() {
         if (!open) setHistoryMember(null)
       }}>
         <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto focus:outline-none">
-          <DialogHeader>
-            <DialogTitle>Payment History: {historyMember?.memberName}</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Month</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead className="text-right">Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success')).map((entry, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="text-sm font-medium">{entry.month}</TableCell>
-                    <TableCell className="text-sm">₹{entry.amountPaid?.toLocaleString()}</TableCell>
-                    <TableCell className="text-sm text-right text-muted-foreground">
-                      {entry.paymentDate ? format(parseISO(entry.paymentDate), 'MMM dd, yyyy') : "-"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <DialogFooter className="sticky bottom-0 bg-background pt-2">
-            <Button onClick={() => { setIsHistoryOpen(false); restoreInteraction(false); }}>Close</Button>
-          </DialogFooter>
+          {isHistoryOpen && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Payment History: {historyMember?.memberName}</DialogTitle>
+                <DialogDescription>Viewing all historical contributions for this participant.</DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                <Table>
+                  <TableHeader className="bg-muted/10">
+                    <TableRow>
+                      <TableHead className="font-bold">Month</TableHead>
+                      <TableHead className="font-bold">Amount</TableHead>
+                      <TableHead className="text-right font-bold">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success')).map((entry, i) => (
+                      <TableRow key={i} className="hover:bg-muted/5">
+                        <TableCell className="text-sm font-medium">{entry.month}</TableCell>
+                        <TableCell className="text-sm font-bold text-emerald-600">₹{entry.amountPaid?.toLocaleString()}</TableCell>
+                        <TableCell className="text-sm text-right text-muted-foreground font-medium">
+                          {entry.paymentDate ? format(parseISO(entry.paymentDate), 'MMM dd, yyyy') : "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t mt-4">
+                <Button className="w-full sm:w-auto" onClick={() => { setIsHistoryOpen(false); restoreInteraction(false); }}>Close</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

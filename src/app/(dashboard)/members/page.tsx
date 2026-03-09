@@ -89,13 +89,20 @@ export default function MembersPage() {
     chitGroup: ""
   })
 
-  // Robust interaction restoration to fix cursor/scroll lock issues
+  // Robust interaction restoration to fix repeated UI freeze issues
   const restoreInteraction = (open: boolean) => {
     if (!open) {
+      // Small delay to allow Radix UI cleanup cycle to complete
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'
         document.body.style.overflow = 'auto'
-      }, 150)
+        // Extra safeguard: reset html style if needed
+        const html = document.documentElement;
+        if (html) {
+          html.style.pointerEvents = 'auto';
+          html.style.overflow = 'auto';
+        }
+      }, 200)
     }
   }
 
@@ -224,11 +231,11 @@ export default function MembersPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-headline font-bold tracking-tight">Members</h2>
-          <p className="text-muted-foreground">Manage your chit fund community members.</p>
+          <h2 className="text-3xl font-headline font-bold tracking-tight text-primary">Members</h2>
+          <p className="text-muted-foreground">Manage your chit fund community members and their contributions.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
@@ -242,91 +249,93 @@ export default function MembersPage() {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
-              <form 
-                onSubmit={handleAddMember}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.preventDefault();
-                }}
-              >
-                <DialogHeader>
-                  <DialogTitle>Register Member</DialogTitle>
-                  <DialogDescription>
-                    Enter the details for the new chit fund participant.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-6">
-                  <div className="grid gap-2">
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input 
-                      id="name" 
-                      placeholder="Enter name" 
-                      value={newMember.name}
-                      onChange={e => setNewMember({...newMember, name: e.target.value})}
-                      required 
-                      disabled={isActionPending}
-                    />
+              {isAddDialogOpen && (
+                <form 
+                  onSubmit={handleAddMember}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                >
+                  <DialogHeader>
+                    <DialogTitle>Register Member</DialogTitle>
+                    <DialogDescription>
+                      Enter the details for the new chit fund participant.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-6">
+                    <div className="grid gap-2">
+                      <Label htmlFor="name">Full Name</Label>
+                      <Input 
+                        id="name" 
+                        placeholder="Enter name" 
+                        value={newMember.name}
+                        onChange={e => setNewMember({...newMember, name: e.target.value})}
+                        required 
+                        disabled={isActionPending}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input 
+                        id="phone" 
+                        placeholder="+91 00000 00000" 
+                        value={newMember.phone}
+                        onChange={e => setNewMember({...newMember, phone: e.target.value})}
+                        required 
+                        disabled={isActionPending}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="chitGroup">Chit Group</Label>
+                      <Select 
+                        disabled={isActionPending}
+                        value={newMember.chitGroup} 
+                        onValueChange={v => setNewMember({...newMember, chitGroup: v})}
+                      >
+                        <SelectTrigger id="chitGroup">
+                          <SelectValue placeholder="Select a chit group" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {chitRounds?.map((round: any) => (
+                            <SelectItem key={round.id} value={round.name}>
+                              {round.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="amount">Monthly Contribution (₹)</Label>
+                      <Input 
+                        id="amount" 
+                        type="number" 
+                        value={newMember.monthlyAmount}
+                        onChange={e => setNewMember({...newMember, monthlyAmount: Number(e.target.value)})}
+                        required 
+                        disabled={isActionPending}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="joinDate">Join Date</Label>
+                      <Input 
+                        id="joinDate" 
+                        type="date" 
+                        value={newMember.joinDate}
+                        onChange={e => setNewMember({...newMember, joinDate: e.target.value})}
+                        required 
+                        disabled={isActionPending}
+                      />
+                    </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input 
-                      id="phone" 
-                      placeholder="+91 00000 00000" 
-                      value={newMember.phone}
-                      onChange={e => setNewMember({...newMember, phone: e.target.value})}
-                      required 
-                      disabled={isActionPending}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="chitGroup">Chit Group</Label>
-                    <Select 
-                      disabled={isActionPending}
-                      value={newMember.chitGroup} 
-                      onValueChange={v => setNewMember({...newMember, chitGroup: v})}
-                    >
-                      <SelectTrigger id="chitGroup">
-                        <SelectValue placeholder="Select a chit group" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {chitRounds?.map((round: any) => (
-                          <SelectItem key={round.id} value={round.name}>
-                            {round.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="amount">Monthly Contribution (₹)</Label>
-                    <Input 
-                      id="amount" 
-                      type="number" 
-                      value={newMember.monthlyAmount}
-                      onChange={e => setNewMember({...newMember, monthlyAmount: Number(e.target.value)})}
-                      required 
-                      disabled={isActionPending}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="joinDate">Join Date</Label>
-                    <Input 
-                      id="joinDate" 
-                      type="date" 
-                      value={newMember.joinDate}
-                      onChange={e => setNewMember({...newMember, joinDate: e.target.value})}
-                      required 
-                      disabled={isActionPending}
-                    />
-                  </div>
-                </div>
-                <DialogFooter className="sticky bottom-0 bg-background pt-2">
-                  <Button type="button" variant="outline" onClick={() => { setIsAddDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
-                  <Button type="submit" disabled={isActionPending}>
-                    {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                    Add Member
-                  </Button>
-                </DialogFooter>
-              </form>
+                  <DialogFooter className="sticky bottom-0 bg-background pt-2">
+                    <Button type="button" variant="outline" onClick={() => { setIsAddDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
+                    <Button type="submit" disabled={isActionPending}>
+                      {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                      Add Member
+                    </Button>
+                  </DialogFooter>
+                </form>
+              )}
             </DialogContent>
           </Dialog>
         </div>
@@ -441,11 +450,11 @@ export default function MembersPage() {
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10">
                             <MoreVertical className="size-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-48 shadow-xl border-border/50">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onSelect={(e) => {
@@ -457,7 +466,7 @@ export default function MembersPage() {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem 
-                            className="text-destructive" 
+                            className="text-destructive focus:bg-destructive/10 focus:text-destructive" 
                             onSelect={(e) => {
                               e.preventDefault()
                               setMemberToDelete(member)
@@ -490,105 +499,107 @@ export default function MembersPage() {
         if (!open) setMemberToEdit(null)
       }}>
         <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
-          <form 
-            onSubmit={handleUpdateMember}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.preventDefault();
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle>Edit Member Details</DialogTitle>
-              <DialogDescription>
-                Update the information for {memberToEdit?.name}.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-6">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-name">Full Name</Label>
-                <Input 
-                  id="edit-name" 
-                  value={memberToEdit?.name || ""}
-                  onChange={e => setMemberToEdit({...memberToEdit, name: e.target.value})}
-                  required 
-                  disabled={isActionPending}
-                />
+          {isEditMemberDialogOpen && (
+            <form 
+              onSubmit={handleUpdateMember}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.preventDefault();
+              }}
+            >
+              <DialogHeader>
+                <DialogTitle>Edit Member Details</DialogTitle>
+                <DialogDescription>
+                  Update the information for {memberToEdit?.name}.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-6">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-name">Full Name</Label>
+                  <Input 
+                    id="edit-name" 
+                    value={memberToEdit?.name || ""}
+                    onChange={e => setMemberToEdit({...memberToEdit, name: e.target.value})}
+                    required 
+                    disabled={isActionPending}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-phone">Phone Number</Label>
+                  <Input 
+                    id="edit-phone" 
+                    value={memberToEdit?.phone || ""}
+                    onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})}
+                    required 
+                    disabled={isActionPending}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-chitGroup">Chit Group</Label>
+                  <Select 
+                    disabled={isActionPending}
+                    value={memberToEdit?.chitGroup || ""} 
+                    onValueChange={v => setMemberToEdit({...memberToEdit, chitGroup: v})}
+                  >
+                    <SelectTrigger id="edit-chitGroup">
+                      <SelectValue placeholder="Select a chit group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {chitRounds?.map((round: any) => (
+                        <SelectItem key={round.id} value={round.name}>
+                          {round.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-amount">Monthly Contribution (₹)</Label>
+                  <Input 
+                    id="edit-amount" 
+                    type="number" 
+                    value={memberToEdit?.monthlyAmount || 0}
+                    onChange={e => setMemberToEdit({...memberToEdit, monthlyAmount: Number(e.target.value)})}
+                    required 
+                    disabled={isActionPending}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-joinDate">Join Date</Label>
+                  <Input 
+                    id="edit-joinDate" 
+                    type="date" 
+                    value={memberToEdit?.joinDate || ""}
+                    onChange={e => setMemberToEdit({...memberToEdit, joinDate: e.target.value})}
+                    required 
+                    disabled={isActionPending}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-status">Status</Label>
+                  <Select 
+                    disabled={isActionPending}
+                    value={memberToEdit?.status || "active"} 
+                    onValueChange={v => setMemberToEdit({...memberToEdit, status: v})}
+                  >
+                    <SelectTrigger id="edit-status">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-phone">Phone Number</Label>
-                <Input 
-                  id="edit-phone" 
-                  value={memberToEdit?.phone || ""}
-                  onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})}
-                  required 
-                  disabled={isActionPending}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-chitGroup">Chit Group</Label>
-                <Select 
-                  disabled={isActionPending}
-                  value={memberToEdit?.chitGroup || ""} 
-                  onValueChange={v => setMemberToEdit({...memberToEdit, chitGroup: v})}
-                >
-                  <SelectTrigger id="edit-chitGroup">
-                    <SelectValue placeholder="Select a chit group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {chitRounds?.map((round: any) => (
-                      <SelectItem key={round.id} value={round.name}>
-                        {round.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-amount">Monthly Contribution (₹)</Label>
-                <Input 
-                  id="edit-amount" 
-                  type="number" 
-                  value={memberToEdit?.monthlyAmount || 0}
-                  onChange={e => setMemberToEdit({...memberToEdit, monthlyAmount: Number(e.target.value)})}
-                  required 
-                  disabled={isActionPending}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-joinDate">Join Date</Label>
-                <Input 
-                  id="edit-joinDate" 
-                  type="date" 
-                  value={memberToEdit?.joinDate || ""}
-                  onChange={e => setMemberToEdit({...memberToEdit, joinDate: e.target.value})}
-                  required 
-                  disabled={isActionPending}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select 
-                  disabled={isActionPending}
-                  value={memberToEdit?.status || "active"} 
-                  onValueChange={v => setMemberToEdit({...memberToEdit, status: v})}
-                >
-                  <SelectTrigger id="edit-status">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter className="sticky bottom-0 bg-background pt-2">
-              <Button type="button" variant="outline" onClick={() => { setIsEditMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
-              <Button type="submit" disabled={isActionPending}>
-                {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t mt-4">
+                <Button type="button" variant="outline" onClick={() => { setIsEditMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
+                <Button type="submit" disabled={isActionPending}>
+                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -599,64 +610,68 @@ export default function MembersPage() {
         if (!open) setSelectedMember(null)
       }}>
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto focus:outline-none">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
-                {selectedMember?.name?.split(' ').map((n: string) => n[0]).join('')}
+          {isProfileDialogOpen && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
+                    {selectedMember?.name?.split(' ').map((n: string) => n[0]).join('')}
+                  </div>
+                  Member Profile
+                </DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-6 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Card className="bg-muted/30 border-none shadow-none">
+                    <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                      <Phone className="size-4 text-primary mb-1" />
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold">Phone</span>
+                      <span className="font-semibold text-sm">{selectedMember?.phone}</span>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-muted/30 border-none shadow-none">
+                    <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                      <Calendar className="size-4 text-primary mb-1" />
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold">Joined</span>
+                      <span className="font-semibold text-sm">
+                        {selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}
+                      </span>
+                    </CardContent>
+                  </Card>
+                </div>
+                <div className="space-y-3 bg-card p-4 rounded-xl border border-border/50">
+                  <div className="flex justify-between border-b border-border/50 pb-2 text-sm">
+                    <span className="text-muted-foreground">Chit Group</span>
+                    <span className="font-bold text-primary">{selectedMember?.chitGroup}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-border/50 pb-2 text-sm">
+                    <span className="text-muted-foreground">Total Paid</span>
+                    <span className="font-bold text-emerald-600">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-border/50 pb-2 text-sm">
+                    <span className="text-muted-foreground">Last Payment</span>
+                    <span className="font-bold text-emerald-600">
+                      {selectedMember && getRecentPayment(selectedMember.id) 
+                        ? format(parseISO(getRecentPayment(selectedMember.id).paymentDate), 'MMM dd, yyyy') 
+                        : 'No recent record'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              Member Profile
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-6 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <Card className="bg-muted/30 border-none">
-                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                  <Phone className="size-4 text-primary mb-1" />
-                  <span className="text-[10px] text-muted-foreground uppercase font-bold">Phone</span>
-                  <span className="font-semibold text-sm">{selectedMember?.phone}</span>
-                </CardContent>
-              </Card>
-              <Card className="bg-muted/30 border-none">
-                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                  <Calendar className="size-4 text-primary mb-1" />
-                  <span className="text-[10px] text-muted-foreground uppercase font-bold">Joined</span>
-                  <span className="font-semibold text-sm">
-                    {selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}
-                  </span>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between border-b pb-2 text-sm">
-                <span className="text-muted-foreground">Chit Group</span>
-                <span className="font-bold">{selectedMember?.chitGroup}</span>
-              </div>
-              <div className="flex justify-between border-b pb-2 text-sm">
-                <span className="text-muted-foreground">Total Paid</span>
-                <span className="font-bold text-emerald-600">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between border-b pb-2 text-sm">
-                <span className="text-muted-foreground">Last Payment</span>
-                <span className="font-bold text-emerald-600">
-                  {selectedMember && getRecentPayment(selectedMember.id) 
-                    ? format(parseISO(getRecentPayment(selectedMember.id).paymentDate), 'MMM dd, yyyy') 
-                    : 'No recent record'}
-                </span>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="sticky bottom-0 bg-background pt-2">
-            <Button variant="outline" onClick={() => {
-              setIsProfileDialogOpen(false)
-              restoreInteraction(false)
-              // Delay next dialog slightly for clean transition
-              setTimeout(() => {
-                setHistoryMember(selectedMember)
-                setIsHistoryDialogOpen(true)
-              }, 150)
-            }}>View History</Button>
-            <Button onClick={() => { setIsProfileDialogOpen(false); restoreInteraction(false); }}>Close</Button>
-          </DialogFooter>
+              <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t">
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => {
+                  setIsProfileDialogOpen(false)
+                  restoreInteraction(false)
+                  // Aggressive cleanup and fresh unmount/mount cycle
+                  setTimeout(() => {
+                    setHistoryMember(selectedMember)
+                    setIsHistoryDialogOpen(true)
+                  }, 250)
+                }}>View History</Button>
+                <Button className="w-full sm:w-auto" onClick={() => { setIsProfileDialogOpen(false); restoreInteraction(false); }}>Close</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -667,43 +682,47 @@ export default function MembersPage() {
         if (!open) setHistoryMember(null)
       }}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto focus:outline-none">
-          <DialogHeader>
-            <DialogTitle>Payment History: {historyMember?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Month</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((payment, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{payment.month}</TableCell>
-                    <TableCell>₹{payment.amountPaid?.toLocaleString()}</TableCell>
-                    <TableCell><Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Success</Badge></TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : '-'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(!historyMember || (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).length === 0) && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground italic py-8">
-                      No successful payments recorded.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-          <DialogFooter className="sticky bottom-0 bg-background pt-2">
-            <Button onClick={() => { setIsHistoryDialogOpen(false); restoreInteraction(false); }}>Close</Button>
-          </DialogFooter>
+          {isHistoryDialogOpen && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Payment History: {historyMember?.name}</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <Table>
+                  <TableHeader className="bg-muted/10">
+                    <TableRow>
+                      <TableHead className="font-bold">Month</TableHead>
+                      <TableHead className="font-bold">Amount</TableHead>
+                      <TableHead className="font-bold">Status</TableHead>
+                      <TableHead className="text-right font-bold">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((payment, i) => (
+                      <TableRow key={i} className="hover:bg-muted/5">
+                        <TableCell className="font-medium">{payment.month}</TableCell>
+                        <TableCell className="font-bold text-emerald-600">₹{payment.amountPaid?.toLocaleString()}</TableCell>
+                        <TableCell><Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-none border-emerald-200">Success</Badge></TableCell>
+                        <TableCell className="text-right text-muted-foreground font-medium">
+                          {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {(!historyMember || (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground italic py-8">
+                          No successful payments recorded.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+              <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t">
+                <Button className="w-full sm:w-auto" onClick={() => { setIsHistoryDialogOpen(false); restoreInteraction(false); }}>Close</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -713,27 +732,31 @@ export default function MembersPage() {
         restoreInteraction(open)
         if (!open) setMemberToDelete(null)
       }}>
-        <AlertDialogContent className="max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Member?</AlertDialogTitle>
-            <AlertDialogHeader>
-               <AlertDialogDescription>This will permanently remove {memberToDelete?.name} and all associated data.</AlertDialogDescription>
-            </AlertDialogHeader>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setIsDeleteMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              className="bg-destructive hover:bg-destructive/90" 
-              onClick={(e) => {
-                e.preventDefault()
-                confirmDeleteMember()
-              }}
-              disabled={isActionPending}
-            >
-              {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
+        <AlertDialogContent className="max-h-[90vh] overflow-y-auto focus:outline-none">
+          {isDeleteMemberDialogOpen && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-destructive">Delete Member?</AlertDialogTitle>
+                <AlertDialogDescription className="text-foreground/70">
+                  This will permanently remove <strong>{memberToDelete?.name}</strong> and all their associated payment records from the system. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="mt-6">
+                <AlertDialogCancel onClick={() => { setIsDeleteMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction 
+                  className="bg-destructive hover:bg-destructive/90 shadow-lg" 
+                  onClick={(e) => {
+                    e.preventDefault()
+                    confirmDeleteMember()
+                  }}
+                  disabled={isActionPending}
+                >
+                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Confirm Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
     </div>
