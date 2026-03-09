@@ -70,7 +70,7 @@ export default function LoginPage() {
               Admin Login
             </CardTitle>
             <CardDescription className="text-slate-500 font-medium px-4">
-              Access the ChitFund Pro management ecosystem
+              Enter your credentials to access the portal
             </CardDescription>
           </div>
         </CardHeader>
