@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock, Pencil, Loader2, Trash2, IndianRupee } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -241,7 +241,7 @@ export default function MembersPage() {
                 Add New Member
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
               <form 
                 onSubmit={handleAddMember}
                 onKeyDown={(e) => {
@@ -319,7 +319,7 @@ export default function MembersPage() {
                     />
                   </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="sticky bottom-0 bg-background pt-2">
                   <Button type="button" variant="outline" onClick={() => { setIsAddDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
                   <Button type="submit" disabled={isActionPending}>
                     {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
@@ -489,7 +489,7 @@ export default function MembersPage() {
         restoreInteraction(open)
         if (!open) setMemberToEdit(null)
       }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
           <form 
             onSubmit={handleUpdateMember}
             onKeyDown={(e) => {
@@ -581,7 +581,7 @@ export default function MembersPage() {
                 </Select>
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="sticky bottom-0 bg-background pt-2">
               <Button type="button" variant="outline" onClick={() => { setIsEditMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
               <Button type="submit" disabled={isActionPending}>
                 {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
@@ -598,7 +598,7 @@ export default function MembersPage() {
         restoreInteraction(open)
         if (!open) setSelectedMember(null)
       }}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto focus:outline-none">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
@@ -645,7 +645,7 @@ export default function MembersPage() {
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 bg-background pt-2">
             <Button variant="outline" onClick={() => {
               setIsProfileDialogOpen(false)
               restoreInteraction(false)
@@ -666,7 +666,7 @@ export default function MembersPage() {
         restoreInteraction(open)
         if (!open) setHistoryMember(null)
       }}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto focus:outline-none">
           <DialogHeader>
             <DialogTitle>Payment History: {historyMember?.name}</DialogTitle>
           </DialogHeader>
@@ -701,7 +701,7 @@ export default function MembersPage() {
               </TableBody>
             </Table>
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 bg-background pt-2">
             <Button onClick={() => { setIsHistoryDialogOpen(false); restoreInteraction(false); }}>Close</Button>
           </DialogFooter>
         </DialogContent>
@@ -713,7 +713,7 @@ export default function MembersPage() {
         restoreInteraction(open)
         if (!open) setMemberToDelete(null)
       }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Member?</AlertDialogTitle>
             <AlertDialogHeader>

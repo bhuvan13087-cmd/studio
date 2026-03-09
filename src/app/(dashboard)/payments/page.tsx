@@ -149,7 +149,7 @@ export default function PaymentsPage() {
               Quick Record
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
             <form onSubmit={handleQuickRecord}>
               <DialogHeader>
                 <DialogTitle>Record Payment</DialogTitle>
@@ -187,7 +187,7 @@ export default function PaymentsPage() {
                   </Select>
                 </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="sticky bottom-0 bg-background pt-2">
                 <Button type="button" variant="outline" onClick={() => { setIsQuickRecordOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
                 <Button type="submit" disabled={isActionPending}>
                   {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
@@ -285,7 +285,7 @@ export default function PaymentsPage() {
         restoreInteraction(open)
         if (!open) setHistoryMember(null)
       }}>
-        <DialogContent className="sm:max-w-[550px]">
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto focus:outline-none">
           <DialogHeader>
             <DialogTitle>Payment History: {historyMember?.memberName}</DialogTitle>
           </DialogHeader>
@@ -311,7 +311,7 @@ export default function PaymentsPage() {
               </TableBody>
             </Table>
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 bg-background pt-2">
             <Button onClick={() => { setIsHistoryOpen(false); restoreInteraction(false); }}>Close</Button>
           </DialogFooter>
         </DialogContent>
