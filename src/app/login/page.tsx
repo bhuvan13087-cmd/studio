@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ShieldCheck, Loader2 } from "lucide-react"
+import { Loader2, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -26,8 +26,8 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password)
       toast({
-        title: "Welcome back!",
-        description: "Successfully signed in to ChitFund Pro.",
+        title: "Authenticated",
+        description: "Access granted to dashboard.",
       })
       router.push("/dashboard")
     } catch (error: any) {
@@ -44,67 +44,64 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6 font-body">
-      <div className="w-full max-w-md space-y-8">
-        <div className="flex flex-col items-center text-center space-y-2">
-          <div className="flex aspect-square size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg mb-4">
-            <ShieldCheck className="size-8" />
+      <Card className="w-full max-w-sm border-none shadow-2xl bg-card/80 backdrop-blur-sm">
+        <CardHeader className="space-y-1 pt-8 pb-6 text-center border-b border-border/50">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 transition-transform hover:scale-105 duration-300">
+            <Lock className="h-6 w-6 text-primary" />
           </div>
-          <h1 className="font-headline text-3xl font-bold tracking-tight text-foreground">ChitFund Pro</h1>
-          <p className="text-muted-foreground text-lg">Secure Administrator Access</p>
-        </div>
-
-        <Card className="border-border/50 shadow-xl overflow-hidden bg-card/50 backdrop-blur-sm">
-          <CardHeader className="space-y-1 pb-6">
-            <CardTitle className="text-2xl text-center">Login</CardTitle>
-            <CardDescription className="text-center">
-              Enter your credentials to manage your chit funds
-            </CardDescription>
-          </CardHeader>
-          <form onSubmit={handleLogin}>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@chitfund.pro"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="bg-background"
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="bg-background"
-                />
-              </div>
-            </CardContent>
-            <CardFooter className="pt-4">
-              <Button type="submit" className="w-full text-lg h-12" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 size-5 animate-spin" />
-                    Authenticating...
-                  </>
-                ) : (
-                  "Sign In"
-                )}
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
-        
-        <p className="text-center text-sm text-muted-foreground">
-          Authorized personnel only. All access is logged.
+          <CardTitle className="text-2xl font-bold tracking-tight text-primary">Admin Login</CardTitle>
+          <CardDescription className="text-muted-foreground/80">
+            Enter your credentials to access the portal
+          </CardDescription>
+        </CardHeader>
+        <form onSubmit={handleLogin}>
+          <CardContent className="space-y-5 pt-8">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70">
+                Email Address
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="admin@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="h-11 bg-muted/20 border-border/50 focus:bg-background transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" title="Password" className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="h-11 bg-muted/20 border-border/50 focus:bg-background transition-all"
+              />
+            </div>
+          </CardContent>
+          <CardFooter className="pb-10 pt-6">
+            <Button type="submit" className="w-full h-11 text-base font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Sign In"
+              )}
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
+      
+      <div className="fixed bottom-6 text-center w-full left-0 pointer-events-none">
+        <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground/40">
+          ChitFund Pro &copy; {new Date().getFullYear()}
         </p>
       </div>
     </div>
