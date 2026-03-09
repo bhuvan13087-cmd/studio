@@ -91,7 +91,7 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="name@company.com"
+                  placeholder="admin@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -136,7 +136,7 @@ export default function LoginPage() {
                   Authenticating...
                 </>
               ) : (
-                "Secure Sign In"
+                "Sign In"
               )}
             </Button>
             <p className="text-center text-[10px] text-slate-400 font-medium uppercase tracking-tighter">
