@@ -241,7 +241,12 @@ export default function MembersPage() {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-              <form onSubmit={handleAddMember}>
+              <form 
+                onSubmit={handleAddMember}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.preventDefault();
+                }}
+              >
                 <DialogHeader>
                   <DialogTitle>Register Member</DialogTitle>
                   <DialogDescription>
@@ -484,7 +489,12 @@ export default function MembersPage() {
         if (!open) setMemberToEdit(null)
       }}>
         <DialogContent className="sm:max-w-[425px]">
-          <form onSubmit={handleUpdateMember}>
+          <form 
+            onSubmit={handleUpdateMember}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.preventDefault();
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Edit Member Details</DialogTitle>
               <DialogDescription>
@@ -705,7 +715,9 @@ export default function MembersPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Member?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently remove {memberToDelete?.name} and all associated data.</AlertDialogDescription>
+            <AlertDialogHeader>
+               <AlertDialogDescription>This will permanently remove {memberToDelete?.name} and all associated data.</AlertDialogDescription>
+            </AlertDialogHeader>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => { setIsDeleteMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
