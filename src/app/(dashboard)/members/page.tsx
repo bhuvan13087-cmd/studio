@@ -57,11 +57,13 @@ import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isEditMemberDialogOpen, setIsEditMemberDialogOpen] = useState(false)
   const [selectedMember, setSelectedMember] = useState<any>(null)
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isDeleteMemberDialogOpen, setIsDeleteMemberDialogOpen] = useState(false)
   const [memberToDelete, setMemberToDelete] = useState<any>(null)
+  const [memberToEdit, setMemberToEdit] = useState<any>(null)
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [isActionPending, setIsActionPending] = useState(false)
   const { toast } = useToast()
@@ -84,9 +86,6 @@ export default function MembersPage() {
     monthlyAmount: 5000,
     joinDate: new Date().toISOString().split('T')[0],
     status: "active",
-    paymentStatus: "pending",
-    totalPaid: 0,
-    pendingAmount: 0,
     chitGroup: ""
   })
 
@@ -108,7 +107,10 @@ export default function MembersPage() {
     try {
       await addDoc(collection(db, 'members'), {
         ...newMember,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        paymentStatus: "pending",
+        totalPaid: 0,
+        pendingAmount: 0
       })
 
       setIsAddDialogOpen(false)
@@ -119,9 +121,6 @@ export default function MembersPage() {
         monthlyAmount: 5000,
         joinDate: new Date().toISOString().split('T')[0],
         status: "active",
-        paymentStatus: "pending",
-        totalPaid: 0,
-        pendingAmount: 0,
         chitGroup: ""
       })
       toast({
@@ -133,6 +132,39 @@ export default function MembersPage() {
         variant: "destructive",
         title: "Error",
         description: error.message || "Failed to add member.",
+      })
+    } finally {
+      setIsActionPending(false)
+    }
+  }
+
+  const handleUpdateMember = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!db || !memberToEdit || isActionPending) return;
+
+    setIsActionPending(true)
+    try {
+      const memberRef = doc(db, 'members', memberToEdit.id);
+      await updateDoc(memberRef, {
+        name: memberToEdit.name,
+        phone: memberToEdit.phone,
+        monthlyAmount: Number(memberToEdit.monthlyAmount),
+        joinDate: memberToEdit.joinDate,
+        status: memberToEdit.status,
+        chitGroup: memberToEdit.chitGroup
+      });
+
+      setIsEditMemberDialogOpen(false)
+      restoreInteraction(false)
+      toast({
+        title: "Member Updated",
+        description: `${memberToEdit.name}'s details have been saved.`,
+      })
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to update member.",
       })
     } finally {
       setIsActionPending(false)
@@ -412,7 +444,8 @@ export default function MembersPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onSelect={(e) => {
                             e.preventDefault()
-                            toast({ title: "Edit Member", description: "Editing enabled in next update." })
+                            setMemberToEdit({...member})
+                            setIsEditMemberDialogOpen(true)
                           }}>
                              <Pencil className="mr-2 size-4" /> Edit Details
                           </DropdownMenuItem>
@@ -443,6 +476,110 @@ export default function MembersPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={isEditMemberDialogOpen} onOpenChange={(open) => {
+        setIsEditMemberDialogOpen(open)
+        restoreInteraction(open)
+        if (!open) setMemberToEdit(null)
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <form onSubmit={handleUpdateMember}>
+            <DialogHeader>
+              <DialogTitle>Edit Member Details</DialogTitle>
+              <DialogDescription>
+                Update the information for {memberToEdit?.name}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-6">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-name">Full Name</Label>
+                <Input 
+                  id="edit-name" 
+                  value={memberToEdit?.name || ""}
+                  onChange={e => setMemberToEdit({...memberToEdit, name: e.target.value})}
+                  required 
+                  disabled={isActionPending}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-phone">Phone Number</Label>
+                <Input 
+                  id="edit-phone" 
+                  value={memberToEdit?.phone || ""}
+                  onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})}
+                  required 
+                  disabled={isActionPending}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-chitGroup">Chit Group</Label>
+                <Select 
+                  disabled={isActionPending}
+                  value={memberToEdit?.chitGroup || ""} 
+                  onValueChange={v => setMemberToEdit({...memberToEdit, chitGroup: v})}
+                >
+                  <SelectTrigger id="edit-chitGroup">
+                    <SelectValue placeholder="Select a chit group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {chitRounds?.map((round: any) => (
+                      <SelectItem key={round.id} value={round.name}>
+                        {round.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-amount">Monthly Contribution (₹)</Label>
+                <Input 
+                  id="edit-amount" 
+                  type="number" 
+                  value={memberToEdit?.monthlyAmount || 0}
+                  onChange={e => setMemberToEdit({...memberToEdit, monthlyAmount: Number(e.target.value)})}
+                  required 
+                  disabled={isActionPending}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-joinDate">Join Date</Label>
+                <Input 
+                  id="edit-joinDate" 
+                  type="date" 
+                  value={memberToEdit?.joinDate || ""}
+                  onChange={e => setMemberToEdit({...memberToEdit, joinDate: e.target.value})}
+                  required 
+                  disabled={isActionPending}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-status">Status</Label>
+                <Select 
+                  disabled={isActionPending}
+                  value={memberToEdit?.status || "active"} 
+                  onValueChange={v => setMemberToEdit({...memberToEdit, status: v})}
+                >
+                  <SelectTrigger id="edit-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => { setIsEditMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
+              <Button type="submit" disabled={isActionPending}>
+                {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Member Profile Dialog */}
       <Dialog open={isProfileDialogOpen} onOpenChange={(open) => {
