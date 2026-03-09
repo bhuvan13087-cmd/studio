@@ -155,6 +155,7 @@ export default function MembersPage() {
       });
 
       setIsEditMemberDialogOpen(false)
+      setMemberToEdit(null)
       restoreInteraction(false)
       toast({
         title: "Member Updated",
@@ -182,8 +183,8 @@ export default function MembersPage() {
         description: `${memberToDelete.name} has been removed from the system.`,
       })
       setIsDeleteMemberDialogOpen(false)
-      restoreInteraction(false)
       setMemberToDelete(null)
+      restoreInteraction(false)
     } catch (error: any) {
       toast({
         variant: "destructive",
