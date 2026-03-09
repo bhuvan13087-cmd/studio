@@ -44,20 +44,20 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6 font-body">
-      <Card className="w-full max-w-sm border-none shadow-2xl bg-card/80 backdrop-blur-sm">
-        <CardHeader className="space-y-1 pt-8 pb-6 text-center border-b border-border/50">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 transition-transform hover:scale-105 duration-300">
-            <Lock className="h-6 w-6 text-primary" />
+      <Card className="w-full max-w-sm border-none shadow-2xl bg-card">
+        <CardHeader className="space-y-2 pt-10 pb-6 text-center border-b border-border">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+            <Lock className="h-7 w-7 text-primary" />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-primary">Admin Login</CardTitle>
-          <CardDescription className="text-muted-foreground/80">
+          <CardDescription className="text-foreground font-medium">
             Enter your credentials to access the portal
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
-          <CardContent className="space-y-5 pt-8">
+          <CardContent className="space-y-6 pt-10 pb-8">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70">
+              <Label htmlFor="email" className="text-sm font-bold uppercase tracking-wider text-primary">
                 Email Address
               </Label>
               <Input
@@ -67,11 +67,11 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-11 bg-muted/20 border-border/50 focus:bg-background transition-all"
+                className="h-12 bg-muted/30 border-border focus:bg-background transition-all text-foreground font-medium"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password" title="Password" className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70">
+              <Label htmlFor="password" title="Password" className="text-sm font-bold uppercase tracking-wider text-primary">
                 Password
               </Label>
               <Input
@@ -80,15 +80,15 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="h-11 bg-muted/20 border-border/50 focus:bg-background transition-all"
+                className="h-12 bg-muted/30 border-border focus:bg-background transition-all text-foreground font-medium"
               />
             </div>
           </CardContent>
-          <CardFooter className="pb-10 pt-6">
-            <Button type="submit" className="w-full h-11 text-base font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" disabled={loading}>
+          <CardFooter className="pb-12 pt-4">
+            <Button type="submit" className="w-full h-12 text-base font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" disabled={loading}>
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Verifying...
                 </>
               ) : (
@@ -99,8 +99,8 @@ export default function LoginPage() {
         </form>
       </Card>
       
-      <div className="fixed bottom-6 text-center w-full left-0 pointer-events-none">
-        <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground/40">
+      <div className="fixed bottom-8 text-center w-full left-0 pointer-events-none">
+        <p className="text-xs uppercase tracking-[0.2em] font-bold text-primary">
           ChitFund Pro &copy; {new Date().getFullYear()}
         </p>
       </div>
