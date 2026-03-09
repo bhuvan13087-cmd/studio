@@ -50,9 +50,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, deleteDoc } from "firebase/firestore"
+import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, deleteDoc, where } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO } from "date-fns"
+import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
 
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -168,16 +168,18 @@ export default function MembersPage() {
     member.phone.includes(searchTerm)
   )
 
-  const getLastPayment = (memberId: string) => {
+  const getRecentPayment = (memberId: string) => {
     if (!payments) return null;
-    const memberPaidPayments = payments
-      .filter(p => p.memberId === memberId && (p.status === 'paid' || p.status === 'success'))
-      .sort((a, b) => {
-        const dateA = a.paymentDate ? new Date(a.paymentDate).getTime() : 0;
-        const dateB = b.paymentDate ? new Date(b.paymentDate).getTime() : 0;
-        return dateB - dateA;
-      });
-    return memberPaidPayments.length > 0 ? memberPaidPayments[0] : null;
+    const now = new Date();
+    const start = startOfMonth(now);
+    const end = endOfMonth(now);
+
+    return payments.find(p => 
+      p.memberId === memberId && 
+      (p.status === 'paid' || p.status === 'success') &&
+      parseISO(p.paymentDate) >= start &&
+      parseISO(p.paymentDate) <= end
+    );
   }
 
   if (isRoleLoading) {
@@ -324,8 +326,8 @@ export default function MembersPage() {
               </TableRow>
             ) : filteredMembers.length > 0 ? (
               filteredMembers.map((member) => {
-                const lastPayment = getLastPayment(member.id);
-                const isPaid = member.paymentStatus === 'paid' || member.paymentStatus === 'success' || !!lastPayment;
+                const currentMonthPayment = getRecentPayment(member.id);
+                const isPaid = !!currentMonthPayment;
                 
                 return (
                   <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
@@ -365,13 +367,13 @@ export default function MembersPage() {
                             <div className="space-y-2">
                                <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm">
                                 <CheckCircle2 className="size-4" />
-                                <span>Amount: ₹{lastPayment?.amountPaid?.toLocaleString() || 'Record Found'}</span>
+                                <span>Amount: ₹{currentMonthPayment?.amountPaid?.toLocaleString()}</span>
                               </div>
                               <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                                Date: {lastPayment ? format(parseISO(lastPayment.paymentDate), 'MMM dd, yyyy') : 'Recently recorded'}
+                                Date: {format(parseISO(currentMonthPayment.paymentDate), 'MMM dd, yyyy')}
                               </div>
                               <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                                Period: {lastPayment?.month || 'Current Cycle'}
+                                Period: {currentMonthPayment.month}
                               </div>
                             </div>
                           </PopoverContent>
@@ -408,13 +410,6 @@ export default function MembersPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onSelect={(e) => {
-                            e.preventDefault() // Prevents focus trap issues
-                            setHistoryMember(member)
-                            setIsHistoryDialogOpen(true)
-                          }}>
-                             <History className="mr-2 size-4" /> Payment History
-                          </DropdownMenuItem>
                           <DropdownMenuItem onSelect={(e) => {
                             e.preventDefault()
                             toast({ title: "Edit Member", description: "Editing enabled in next update." })
@@ -495,9 +490,9 @@ export default function MembersPage() {
               <div className="flex justify-between border-b pb-2 text-sm">
                 <span className="text-muted-foreground">Last Payment</span>
                 <span className="font-bold text-emerald-600">
-                  {selectedMember && getLastPayment(selectedMember.id) 
-                    ? format(parseISO(getLastPayment(selectedMember.id).paymentDate), 'MMM dd, yyyy') 
-                    : 'No record'}
+                  {selectedMember && getRecentPayment(selectedMember.id) 
+                    ? format(parseISO(getRecentPayment(selectedMember.id).paymentDate), 'MMM dd, yyyy') 
+                    : 'No recent record'}
                 </span>
               </div>
             </div>
