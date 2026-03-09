@@ -71,7 +71,7 @@ export default function PaymentsPage() {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'
         document.body.style.overflow = 'auto'
-      }, 200)
+      }, 150)
     }
   }
 

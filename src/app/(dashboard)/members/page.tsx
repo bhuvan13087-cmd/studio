@@ -95,7 +95,7 @@ export default function MembersPage() {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'
         document.body.style.overflow = 'auto'
-      }, 200)
+      }, 150)
     }
   }
 

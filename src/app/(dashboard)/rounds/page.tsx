@@ -92,7 +92,7 @@ export default function RoundsPage() {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'
         document.body.style.overflow = 'auto'
-      }, 200)
+      }, 150)
     }
   }
 
@@ -214,7 +214,7 @@ export default function RoundsPage() {
             <DialogTrigger asChild>
               <Button className="h-11 shadow-lg"><Plus className="mr-2 size-5" /> Add Chit Round</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
               <form onSubmit={handleAddChit}>
                 <DialogHeader><DialogTitle>Add Chit Round</DialogTitle></DialogHeader>
                 <div className="grid gap-4 py-6">
@@ -233,7 +233,7 @@ export default function RoundsPage() {
                     </div>
                   </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="sticky bottom-0 bg-background pt-2">
                   <Button type="button" variant="outline" onClick={() => { setIsAddChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
                   <Button type="submit" disabled={isActionPending}>
                     {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
@@ -292,7 +292,7 @@ export default function RoundsPage() {
           restoreInteraction(open)
           if (!open) setEditingChit(null)
         }}>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleEditChit}>
               <DialogHeader><DialogTitle>Edit Scheme</DialogTitle></DialogHeader>
               {editingChit && (
@@ -301,9 +301,19 @@ export default function RoundsPage() {
                     <Label>Name</Label>
                     <Input disabled={isActionPending} value={editingChit.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required />
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>Monthly Amount (₹)</Label>
+                      <Input disabled={isActionPending} type="number" value={editingChit.monthlyAmount} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Total Members</Label>
+                      <Input disabled={isActionPending} type="number" value={editingChit.totalMembers} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required />
+                    </div>
+                  </div>
                 </div>
               )}
-              <DialogFooter>
+              <DialogFooter className="sticky bottom-0 bg-background pt-2">
                 <Button type="button" variant="outline" onClick={() => { setIsEditChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
                 <Button type="submit" disabled={isActionPending}>
                   {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
@@ -449,7 +459,7 @@ export default function RoundsPage() {
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={(e) => { 
                           e.preventDefault(); 
-                          toast({ title: "Edit Member", description: "Edit details enabled in next update." }) 
+                          toast({ title: "Edit Member", description: "Use the main Members list to edit details." }) 
                         }}>
                           <Pencil className="mr-2 size-4" /> Edit Details
                         </DropdownMenuItem>
@@ -483,7 +493,7 @@ export default function RoundsPage() {
         restoreInteraction(open)
         if (!open) setHistoryMember(null)
       }}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
           <div className="py-4">
             <Table>
@@ -505,7 +515,7 @@ export default function RoundsPage() {
               </TableBody>
             </Table>
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 bg-background pt-2">
             <Button onClick={() => { setIsHistoryDialogOpen(false); restoreInteraction(false); }}>Close</Button>
           </DialogFooter>
         </DialogContent>
