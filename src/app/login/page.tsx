@@ -98,12 +98,6 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
-      
-      <div className="fixed bottom-8 text-center w-full left-0 pointer-events-none">
-        <p className="text-xs uppercase tracking-[0.2em] font-bold text-primary">
-          ChitFund Pro &copy; {new Date().getFullYear()}
-        </p>
-      </div>
     </div>
   )
 }
