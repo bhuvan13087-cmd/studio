@@ -72,10 +72,14 @@ export default function PaymentsPage() {
   const [paymentToDelete, setPaymentToDelete] = useState<any>(null)
   const [isActionPending, setIsActionPending] = useState(false)
   
-  // Searchable Member Selection State
+  // Searchable Member Selection State (Inside Modal)
   const [memberSearch, setMemberSearch] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
   const suggestionsRef = useRef<HTMLDivElement>(null)
+
+  // Main Search Bar Autocomplete State
+  const [showMainSuggestions, setShowMainSuggestions] = useState(false)
+  const mainSuggestionsRef = useRef<HTMLDivElement>(null)
 
   const { toast } = useToast()
   const db = useFirestore()
@@ -106,16 +110,24 @@ export default function PaymentsPage() {
       if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
       }
+      if (mainSuggestionsRef.current && !mainSuggestionsRef.current.contains(event.target as Node)) {
+        setShowMainSuggestions(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Filter members for the searchable selection
+  // Filter members for the searchable selections
   const filteredMembersForSelection = useMemo(() => {
     if (!memberSearch) return [];
     return members.filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()));
   }, [members, memberSearch]);
+
+  const filteredMembersForMainSearch = useMemo(() => {
+    if (!searchTerm) return [];
+    return members.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [members, searchTerm]);
 
   const selectedMemberName = members.find(m => m.id === recordData.memberId)?.name || "";
 
@@ -432,14 +444,58 @@ export default function PaymentsPage() {
       </div>
 
       <div className="flex flex-col md:flex-row items-center gap-4 bg-card p-4 rounded-xl shadow-sm border border-border/50">
-        <div className="flex items-center flex-1 w-full gap-2">
+        <div className="flex items-center flex-1 w-full gap-2 relative" ref={mainSuggestionsRef}>
           <Search className="size-5 text-muted-foreground" />
           <Input
             placeholder="Search by member name..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setShowMainSuggestions(true);
+            }}
+            onFocus={() => setShowMainSuggestions(true)}
             className="border-none focus-visible:ring-0 shadow-none bg-transparent"
           />
+          {searchTerm && (
+            <button
+              onClick={() => {
+                setSearchTerm("");
+                setShowMainSuggestions(false);
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+
+          {showMainSuggestions && searchTerm.length > 0 && (
+            <div className="absolute top-full left-0 z-50 w-full mt-2 bg-popover border rounded-md shadow-lg overflow-hidden">
+              <ScrollArea className="h-auto max-h-[250px]">
+                <div className="p-1">
+                  {filteredMembersForMainSearch.length > 0 ? (
+                    filteredMembersForMainSearch.map((m) => (
+                      <Button
+                        key={m.id}
+                        variant="ghost"
+                        className="w-full justify-start font-normal h-10 px-3 text-sm"
+                        onClick={() => {
+                          setSearchTerm(m.name);
+                          setShowMainSuggestions(false);
+                        }}
+                      >
+                        <div className="flex flex-col items-start">
+                          <span>{m.name}</span>
+                          <span className="text-[10px] text-muted-foreground">{m.chitGroup}</span>
+                        </div>
+                      </Button>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-sm text-muted-foreground">No member found.</div>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-4">
           <Select value={typeFilter} onValueChange={setTypeFilter}>
