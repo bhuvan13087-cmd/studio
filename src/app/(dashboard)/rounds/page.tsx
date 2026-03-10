@@ -94,6 +94,11 @@ export default function RoundsPage() {
     if (!open) {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'; document.body.style.overflow = 'auto';
+        const html = document.documentElement;
+        if (html) {
+          html.style.pointerEvents = 'auto'
+          html.style.overflow = 'auto'
+        }
         document.querySelectorAll('.modal-backdrop, .overlay, .dropdown-backdrop, [data-radix-portal]').forEach(el => { if (el.innerHTML === '') el.remove(); });
       }, 300)
     }
@@ -196,9 +201,13 @@ export default function RoundsPage() {
           if (!o) setNewChit(INITIAL_CHIT_STATE);
           restoreInteraction(o); 
         }}>
-          <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+          <DialogContent 
+            className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto"
+            onInteractOutside={(e) => e.preventDefault()}
+            onPointerDownOutside={(e) => e.preventDefault()}
+          >
             <form onSubmit={handleAddChit}>
-              <DialogHeader><DialogTitle>New Scheme</DialogTitle><DialogDescription>Define a new scheme collection cycle.</DialogDescription></DialogHeader>
+              <DialogHeader><DialogTitle>New Scheme</DialogTitle><DialogDescription>Define a new chit fund collection cycle.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2">
                   <Label htmlFor="schemeName">Name</Label>
@@ -255,7 +264,11 @@ export default function RoundsPage() {
 
         {/* Edit Scheme Dialog */}
         <Dialog open={isEditChitDialogOpen} onOpenChange={(o) => { setIsEditChitDialogOpen(o); restoreInteraction(o); if(!o) setEditingChit(null); }}>
-          <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+          <DialogContent 
+            className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto"
+            onInteractOutside={(e) => e.preventDefault()}
+            onPointerDownOutside={(e) => e.preventDefault()}
+          >
             {editingChit && (
               <form onSubmit={handleEditChit}>
                 <DialogHeader><DialogTitle>Edit Scheme</DialogTitle></DialogHeader>
