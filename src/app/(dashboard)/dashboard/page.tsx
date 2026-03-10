@@ -150,16 +150,16 @@ export default function DashboardPage() {
             <div className="space-y-1">
                <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Revenue</CardTitle>
                <Select value={revenueView} onValueChange={(v: any) => setRevenueView(v)}>
-                 <SelectTrigger className="h-7 w-[110px] text-[10px] font-bold border-none bg-muted/50 focus:ring-0 shadow-none">
+                 <SelectTrigger className="h-9 w-[130px] text-xs font-bold border-none bg-muted/50 focus:ring-0 shadow-none">
                     <SelectValue placeholder="Period" />
                  </SelectTrigger>
                  <SelectContent>
-                   <SelectItem value="month" className="text-[10px] font-bold">This Month</SelectItem>
-                   <SelectItem value="today" className="text-[10px] font-bold">Today</SelectItem>
+                   <SelectItem value="month" className="text-xs font-bold">This Month</SelectItem>
+                   <SelectItem value="today" className="text-xs font-bold">Today</SelectItem>
                  </SelectContent>
                </Select>
             </div>
-            <IndianRupee className="size-4 text-accent mt-1" />
+            <IndianRupee className="size-5 text-accent mt-1" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-primary">
