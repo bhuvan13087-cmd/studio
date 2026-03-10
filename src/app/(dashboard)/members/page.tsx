@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, UserPlus, MoreVertical, Phone, Calendar, UserCheck, UserMinus, Download, FileText, CheckCircle2, AlertCircle, Info, History, Clock, Pencil, Loader2, Trash2, IndianRupee } from "lucide-react"
+import { Search, UserPlus, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -50,7 +50,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, deleteDoc, where, getDocs, writeBatch } from "firebase/firestore"
+import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, getDocs, where, writeBatch } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
 
@@ -89,15 +89,9 @@ export default function MembersPage() {
     chitGroup: ""
   })
 
-  /**
-   * Permanent Fix for UI Freeze Bug
-   * Aggressively restores document interaction and cleans up lingering overlays.
-   */
   const restoreInteraction = (open: boolean) => {
     if (!open) {
-      // Safety delay to let React and Radix complete their unmount/close cycles
       setTimeout(() => {
-        // 1. Restore pointer events and overflow to body and html
         document.body.style.pointerEvents = 'auto'
         document.body.style.overflow = 'auto'
         const html = document.documentElement;
@@ -105,24 +99,15 @@ export default function MembersPage() {
           html.style.pointerEvents = 'auto'
           html.style.overflow = 'auto'
         }
-
-        // 2. Remove lingering backdrop or overlay elements manually
         const selectors = ['.modal-backdrop', '.overlay', '.dropdown-backdrop', '[data-radix-portal]'];
         selectors.forEach(selector => {
           document.querySelectorAll(selector).forEach(el => {
-            // Only remove portal if it's empty/stuck
             if (selector === '[data-radix-portal]') {
                if (el.innerHTML === '') el.remove();
-            } else {
-               el.remove();
-            }
+            } else { el.remove(); }
           });
         });
-
-        // 3. Clear focus from potentially stuck elements
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
+        if (document.activeElement instanceof HTMLElement) { document.activeElement.blur(); }
       }, 300)
     }
   }
@@ -130,7 +115,6 @@ export default function MembersPage() {
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!db || isActionPending) return;
-
     setIsActionPending(true)
     try {
       await addDoc(collection(db, 'members'), {
@@ -140,36 +124,18 @@ export default function MembersPage() {
         totalPaid: 0,
         pendingAmount: 0
       })
-
       setIsAddDialogOpen(false)
       restoreInteraction(false)
-      setNewMember({
-        name: "",
-        phone: "",
-        monthlyAmount: 5000,
-        joinDate: new Date().toISOString().split('T')[0],
-        status: "active",
-        chitGroup: ""
-      })
-      toast({
-        title: "Member Added",
-        description: `${newMember.name} has been successfully registered.`,
-      })
+      setNewMember({ name: "", phone: "", monthlyAmount: 5000, joinDate: new Date().toISOString().split('T')[0], status: "active", chitGroup: "" })
+      toast({ title: "Member Added", description: `${newMember.name} registered.` })
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || "Failed to add member.",
-      })
-    } finally {
-      setIsActionPending(false)
-    }
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to add member." })
+    } finally { setIsActionPending(false) }
   }
 
   const handleUpdateMember = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!db || !memberToEdit || isActionPending) return;
-
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToEdit.id);
@@ -181,62 +147,31 @@ export default function MembersPage() {
         status: memberToEdit.status,
         chitGroup: memberToEdit.chitGroup
       });
-
       setIsEditMemberDialogOpen(false)
       setMemberToEdit(null)
       restoreInteraction(false)
-      toast({
-        title: "Member Updated",
-        description: `${memberToEdit.name}'s details have been saved.`,
-      })
+      toast({ title: "Member Updated", description: "Details saved." })
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || "Failed to update member.",
-      })
-    } finally {
-      setIsActionPending(false)
-    }
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update member." })
+    } finally { setIsActionPending(false) }
   }
 
   const confirmDeleteMember = async () => {
     if (!db || !memberToDelete || isActionPending) return
-    
     setIsActionPending(true)
     try {
       const batch = writeBatch(db);
-      
-      // 1. Delete all payments associated with this member
-      const paymentsRef = collection(db, 'payments');
-      const paymentsSnapshot = await getDocs(query(paymentsRef, where('memberId', '==', memberToDelete.id)));
-      paymentsSnapshot.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
-
-      // 2. Delete the member document
-      const memberRef = doc(db, 'members', memberToDelete.id);
-      batch.delete(memberRef);
-
-      // 3. Commit the batch
+      const paymentsSnapshot = await getDocs(query(collection(db, 'payments'), where('memberId', '==', memberToDelete.id)));
+      paymentsSnapshot.forEach((doc) => batch.delete(doc.ref));
+      batch.delete(doc(db, 'members', memberToDelete.id));
       await batch.commit();
-
-      toast({
-        title: "Member Deleted",
-        description: `${memberToDelete.name} and all their payment records have been removed.`,
-      })
+      toast({ title: "Member Deleted", description: "Records removed." })
       setIsDeleteMemberDialogOpen(false)
       setMemberToDelete(null)
       restoreInteraction(false)
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || "Failed to delete member.",
-      })
-    } finally {
-      setIsActionPending(false)
-    }
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to delete member." })
+    } finally { setIsActionPending(false) }
   }
 
   const filteredMembers = (members || []).filter(member => 
@@ -249,13 +184,7 @@ export default function MembersPage() {
     const now = new Date();
     const start = startOfMonth(now);
     const end = endOfMonth(now);
-
-    return payments.find(p => 
-      p.memberId === memberId && 
-      (p.status === 'paid' || p.status === 'success') &&
-      parseISO(p.paymentDate) >= start &&
-      parseISO(p.paymentDate) <= end
-    );
+    return payments.find(p => p.memberId === memberId && (p.status === 'paid' || p.status === 'success') && parseISO(p.paymentDate) >= start && parseISO(p.paymentDate) <= end);
   }
 
   if (isRoleLoading) {
@@ -267,444 +196,173 @@ export default function MembersPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-headline font-bold tracking-tight text-primary">Members</h2>
-          <p className="text-muted-foreground">Manage your chit fund community members and their contributions.</p>
+        <div className="space-y-1">
+          <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Member Directory</h2>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage participants and group assignments.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
-            setIsAddDialogOpen(open)
-            restoreInteraction(open)
-          }}>
-            <DialogTrigger asChild>
-              <Button className="h-11 px-6 shadow-lg hover:shadow-xl transition-all">
-                <UserPlus className="mr-2 size-5" />
-                Add New Member
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
-              {isAddDialogOpen && (
-                <form 
-                  onSubmit={handleAddMember}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") e.preventDefault();
-                  }}
-                >
-                  <DialogHeader>
-                    <DialogTitle>Register Member</DialogTitle>
-                    <DialogDescription>
-                      Enter the details for the new chit fund participant.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-6">
-                    <div className="grid gap-2">
-                      <Label htmlFor="name">Full Name</Label>
-                      <Input 
-                        id="name" 
-                        placeholder="Enter name" 
-                        value={newMember.name}
-                        onChange={e => setNewMember({...newMember, name: e.target.value})}
-                        required 
-                        disabled={isActionPending}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="phone">Phone Number</Label>
-                      <Input 
-                        id="phone" 
-                        placeholder="+91 00000 00000" 
-                        value={newMember.phone}
-                        onChange={e => setNewMember({...newMember, phone: e.target.value})}
-                        required 
-                        disabled={isActionPending}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="chitGroup">Chit Group</Label>
-                      <Select 
-                        disabled={isActionPending}
-                        value={newMember.chitGroup} 
-                        onValueChange={v => setNewMember({...newMember, chitGroup: v})}
-                      >
-                        <SelectTrigger id="chitGroup">
-                          <SelectValue placeholder="Select a chit group" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {chitRounds?.map((round: any) => (
-                            <SelectItem key={round.id} value={round.name}>
-                              {round.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="amount">Monthly Contribution (₹)</Label>
-                      <Input 
-                        id="amount" 
-                        type="number" 
-                        value={newMember.monthlyAmount}
-                        onChange={e => setNewMember({...newMember, monthlyAmount: Number(e.target.value)})}
-                        required 
-                        disabled={isActionPending}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="joinDate">Join Date</Label>
-                      <Input 
-                        id="joinDate" 
-                        type="date" 
-                        value={newMember.joinDate}
-                        onChange={e => setNewMember({...newMember, joinDate: e.target.value})}
-                        required 
-                        disabled={isActionPending}
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t">
-                    <Button type="button" variant="outline" onClick={() => { setIsAddDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
-                    <Button type="submit" disabled={isActionPending}>
-                      {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                      Add Member
-                    </Button>
-                  </DialogFooter>
-                </form>
-              )}
-            </DialogContent>
-          </Dialog>
-        </div>
+        <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); restoreInteraction(open); }}>
+          <DialogTrigger asChild>
+            <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg hover:shadow-xl transition-all font-bold">
+              <UserPlus className="mr-2 size-4 sm:size-5" />
+              Add Member
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+            <form onSubmit={handleAddMember}>
+              <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Enter participant details for the fund.</DialogDescription></DialogHeader>
+              <div className="grid gap-4 py-6">
+                <div className="grid gap-2"><Label htmlFor="name">Full Name</Label><Input id="name" value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required disabled={isActionPending} /></div>
+                <div className="grid gap-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required disabled={isActionPending} /></div>
+                <div className="grid gap-2">
+                  <Label htmlFor="chitGroup">Chit Group</Label>
+                  <Select disabled={isActionPending} value={newMember.chitGroup} onValueChange={v => setNewMember({...newMember, chitGroup: v})}>
+                    <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
+                    <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2"><Label htmlFor="amount">Monthly Amount (₹)</Label><Input id="amount" type="number" value={newMember.monthlyAmount} onChange={e => setNewMember({...newMember, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                <div className="grid gap-2"><Label htmlFor="joinDate">Join Date</Label><Input id="joinDate" type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required disabled={isActionPending} /></div>
+              </div>
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <Button type="button" variant="outline" onClick={() => { setIsAddDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto">{isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Register</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="flex items-center space-x-2 bg-card p-4 rounded-xl shadow-sm border border-border/50">
-        <Search className="size-5 text-muted-foreground" />
+      <div className="flex items-center space-x-2 bg-card p-3 sm:p-4 rounded-xl shadow-sm border border-border/50">
+        <Search className="size-4 sm:size-5 text-muted-foreground shrink-0" />
         <Input
           placeholder="Search by name or phone..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="border-none focus-visible:ring-0 shadow-none bg-transparent"
+          className="border-none focus-visible:ring-0 shadow-none bg-transparent h-8 text-sm"
         />
       </div>
 
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader className="bg-muted/30">
-            <TableRow>
-              <TableHead className="font-semibold">Member</TableHead>
-              <TableHead className="font-semibold">Phone</TableHead>
-              <TableHead className="font-semibold">Payment Status</TableHead>
-              <TableHead className="font-semibold">Monthly Amount</TableHead>
-              <TableHead className="font-semibold">Balance Summary</TableHead>
-              <TableHead className="font-semibold">Status</TableHead>
-              <TableHead className="w-[100px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isMembersLoading ? (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground animate-pulse">
-                  Loading members...
-                </TableCell>
+                <TableHead className="font-bold text-xs uppercase tracking-wider min-w-[200px]">Member</TableHead>
+                <TableHead className="font-bold text-xs uppercase tracking-wider hidden md:table-cell">Phone</TableHead>
+                <TableHead className="font-bold text-xs uppercase tracking-wider">Status</TableHead>
+                <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Ledger (₹)</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
-            ) : filteredMembers.length > 0 ? (
-              filteredMembers.map((member) => {
-                const currentMonthPayment = getRecentPayment(member.id);
-                const isPaid = !!currentMonthPayment;
-                
-                return (
-                  <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
-                    <TableCell>
-                      <div 
-                        className="flex items-center gap-3 cursor-pointer group"
-                        onClick={() => {
-                          setSelectedMember(member)
-                          setIsProfileDialogOpen(true)
-                        }}
-                      >
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary font-bold group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                          {member.name.split(' ').map((n: string) => n[0]).join('')}
+            </TableHeader>
+            <TableBody>
+              {isMembersLoading ? (
+                <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Loading members...</TableCell></TableRow>
+              ) : filteredMembers.length > 0 ? (
+                filteredMembers.map((member) => {
+                  const currentMonthPayment = getRecentPayment(member.id);
+                  const isPaid = !!currentMonthPayment;
+                  return (
+                    <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
+                      <TableCell>
+                        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => { setSelectedMember(member); setIsProfileDialogOpen(true); }}>
+                          <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-primary font-bold text-xs transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                            {member.name.split(' ').map((n: string) => n[0]).join('')}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-semibold text-xs sm:text-sm truncate group-hover:text-primary transition-colors">{member.name}</span>
+                            <span className="text-[9px] sm:text-[10px] text-primary font-bold uppercase tracking-tight truncate">{member.chitGroup}</span>
+                          </div>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="font-medium group-hover:text-primary transition-colors">{member.name}</span>
-                          <span className="text-[10px] text-primary font-bold tracking-wider">{member.chitGroup}</span>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground tabular-nums">{member.phone}</TableCell>
+                      <TableCell>
+                        {isPaid ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[9px] font-bold border border-emerald-200 uppercase tracking-tight shadow-sm">
+                                <CheckCircle2 className="size-2.5" />
+                                Success
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-3 shadow-xl text-xs" align="start">
+                               <div className="font-bold text-emerald-600 mb-1">Paid: ₹{currentMonthPayment?.amountPaid?.toLocaleString()}</div>
+                               <div className="text-[10px] text-muted-foreground uppercase font-semibold">Date: {format(parseISO(currentMonthPayment.paymentDate), 'MMM dd, yyyy')}</div>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[9px] font-bold border border-amber-200 uppercase tracking-tight shadow-sm w-fit">
+                            <Clock className="size-2.5" />
+                            Pending
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-[10px] sm:text-xs font-bold text-emerald-600">₹{(member.totalPaid || 0).toLocaleString()}</span>
+                          <span className="text-[8px] sm:text-[9px] font-bold text-muted-foreground uppercase">Total Paid</span>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="size-3.5" />
-                        {member.phone}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {isPaid ? (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[10px] font-bold border border-emerald-200 uppercase tracking-wider shadow-sm">
-                              <CheckCircle2 className="size-3" />
-                              Success
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-4 shadow-xl border-border/50" align="start">
-                            <div className="space-y-2">
-                               <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm">
-                                <CheckCircle2 className="size-4" />
-                                <span>Amount: ₹{currentMonthPayment?.amountPaid?.toLocaleString()}</span>
-                              </div>
-                              <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                                Date: {format(parseISO(currentMonthPayment.paymentDate), 'MMM dd, yyyy')}
-                              </div>
-                              <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                                Period: {currentMonthPayment.month}
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      ) : (
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 uppercase tracking-wider shadow-sm w-fit">
-                          <Clock className="size-3" />
-                          Pending
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium">₹{member.monthlyAmount.toLocaleString()}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-semibold text-emerald-600">Paid: ₹{(member.totalPaid || 0).toLocaleString()}</span>
-                        <span className="text-xs font-semibold text-amber-600">Due: ₹{(member.pendingAmount || 0).toLocaleString()}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={member.status === 'active' ? 'default' : 'secondary'}
-                        className={member.status === 'active' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-muted text-muted-foreground'}
-                      >
-                        {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10">
-                            <MoreVertical className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 shadow-xl border-border/50">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onSelect={(e) => {
-                            e.preventDefault()
-                            setMemberToEdit({...member})
-                            setIsEditMemberDialogOpen(true)
-                          }}>
-                             <Pencil className="mr-2 size-4" /> Edit Details
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            className="text-destructive focus:bg-destructive/10 focus:text-destructive" 
-                            onSelect={(e) => {
-                              e.preventDefault()
-                              setMemberToDelete(member)
-                              setIsDeleteMemberDialogOpen(true)
-                            }}
-                          >
-                            <Trash2 className="mr-2 size-4" /> Delete Member
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              })
-            ) : (
-              <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                  No members found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onSelect={() => { setMemberToEdit({...member}); setIsEditMemberDialogOpen(true); }}><Pencil className="mr-2 size-4" /> Edit Details</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => { setMemberToDelete(member); setIsDeleteMemberDialogOpen(true); }}><Trash2 className="mr-2 size-4" /> Delete Member</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              ) : (
+                <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic text-sm">No members found.</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
-      {/* Edit Member Dialog */}
-      <Dialog open={isEditMemberDialogOpen} onOpenChange={(open) => {
-        setIsEditMemberDialogOpen(open)
-        restoreInteraction(open)
-        if (!open) setMemberToEdit(null)
-      }}>
-        <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
+      {/* Edit Dialog */}
+      <Dialog open={isEditMemberDialogOpen} onOpenChange={(open) => { setIsEditMemberDialogOpen(open); restoreInteraction(open); if (!open) setMemberToEdit(null) }}>
+        <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
           {isEditMemberDialogOpen && (
-            <form 
-              onSubmit={handleUpdateMember}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.preventDefault();
-              }}
-            >
-              <DialogHeader>
-                <DialogTitle>Edit Member Details</DialogTitle>
-                <DialogDescription>
-                  Update the information for {memberToEdit?.name}.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-6">
+            <form onSubmit={handleUpdateMember}>
+              <DialogHeader><DialogTitle>Edit Member</DialogTitle><DialogDescription>Update details for {memberToEdit?.name}.</DialogDescription></DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2"><Label>Name</Label><Input value={memberToEdit?.name || ""} onChange={e => setMemberToEdit({...memberToEdit, name: e.target.value})} required disabled={isActionPending} /></div>
+                <div className="grid gap-2"><Label>Phone</Label><Input value={memberToEdit?.phone || ""} onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-name">Full Name</Label>
-                  <Input 
-                    id="edit-name" 
-                    value={memberToEdit?.name || ""}
-                    onChange={e => setMemberToEdit({...memberToEdit, name: e.target.value})}
-                    required 
-                    disabled={isActionPending}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-phone">Phone Number</Label>
-                  <Input 
-                    id="edit-phone" 
-                    value={memberToEdit?.phone || ""}
-                    onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})}
-                    required 
-                    disabled={isActionPending}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-chitGroup">Chit Group</Label>
-                  <Select 
-                    disabled={isActionPending}
-                    value={memberToEdit?.chitGroup || ""} 
-                    onValueChange={v => setMemberToEdit({...memberToEdit, chitGroup: v})}
-                  >
-                    <SelectTrigger id="edit-chitGroup">
-                      <SelectValue placeholder="Select a chit group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {chitRounds?.map((round: any) => (
-                        <SelectItem key={round.id} value={round.name}>
-                          {round.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-amount">Monthly Contribution (₹)</Label>
-                  <Input 
-                    id="edit-amount" 
-                    type="number" 
-                    value={memberToEdit?.monthlyAmount || 0}
-                    onChange={e => setMemberToEdit({...memberToEdit, monthlyAmount: Number(e.target.value)})}
-                    required 
-                    disabled={isActionPending}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-joinDate">Join Date</Label>
-                  <Input 
-                    id="edit-joinDate" 
-                    type="date" 
-                    value={memberToEdit?.joinDate || ""}
-                    onChange={e => setMemberToEdit({...memberToEdit, joinDate: e.target.value})}
-                    required 
-                    disabled={isActionPending}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-status">Status</Label>
-                  <Select 
-                    disabled={isActionPending}
-                    value={memberToEdit?.status || "active"} 
-                    onValueChange={v => setMemberToEdit({...memberToEdit, status: v})}
-                  >
-                    <SelectTrigger id="edit-status">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
+                  <Label>Status</Label>
+                  <Select disabled={isActionPending} value={memberToEdit?.status || "active"} onValueChange={v => setMemberToEdit({...memberToEdit, status: v})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
                   </Select>
                 </div>
               </div>
-              <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t mt-4">
-                <Button type="button" variant="outline" onClick={() => { setIsEditMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
-                <Button type="submit" disabled={isActionPending}>
-                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  Save Changes
-                </Button>
-              </DialogFooter>
+              <DialogFooter className="gap-2"><Button type="button" variant="outline" onClick={() => setIsEditMemberDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button><Button type="submit" disabled={isActionPending} className="w-full sm:w-auto">Save</Button></DialogFooter>
             </form>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Member Profile Dialog */}
-      <Dialog open={isProfileDialogOpen} onOpenChange={(open) => {
-        setIsProfileDialogOpen(open)
-        restoreInteraction(open)
-        if (!open) setSelectedMember(null)
-      }}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto focus:outline-none">
+      {/* Profile Dialog */}
+      <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { setIsProfileDialogOpen(open); restoreInteraction(open); if (!open) setSelectedMember(null) }}>
+        <DialogContent className="sm:max-w-[450px] max-h-[90vh] overflow-y-auto">
           {isProfileDialogOpen && (
             <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
-                    {selectedMember?.name?.split(' ').map((n: string) => n[0]).join('')}
-                  </div>
-                  Member Profile
-                </DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-6 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <Card className="bg-muted/30 border-none shadow-none">
-                    <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                      <Phone className="size-4 text-primary mb-1" />
-                      <span className="text-[10px] text-muted-foreground uppercase font-bold">Phone</span>
-                      <span className="font-semibold text-sm">{selectedMember?.phone}</span>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-muted/30 border-none shadow-none">
-                    <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                      <Calendar className="size-4 text-primary mb-1" />
-                      <span className="text-[10px] text-muted-foreground uppercase font-bold">Joined</span>
-                      <span className="font-semibold text-sm">
-                        {selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}
-                      </span>
-                    </CardContent>
-                  </Card>
-                </div>
-                <div className="space-y-3 bg-card p-4 rounded-xl border border-border/50">
-                  <div className="flex justify-between border-b border-border/50 pb-2 text-sm">
-                    <span className="text-muted-foreground">Chit Group</span>
-                    <span className="font-bold text-primary">{selectedMember?.chitGroup}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-border/50 pb-2 text-sm">
-                    <span className="text-muted-foreground">Total Paid</span>
-                    <span className="font-bold text-emerald-600">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-border/50 pb-2 text-sm">
-                    <span className="text-muted-foreground">Last Payment</span>
-                    <span className="font-bold text-emerald-600">
-                      {selectedMember && getRecentPayment(selectedMember.id) 
-                        ? format(parseISO(getRecentPayment(selectedMember.id).paymentDate), 'MMM dd, yyyy') 
-                        : 'No recent record'}
-                    </span>
-                  </div>
-                </div>
+              <DialogHeader><DialogTitle className="flex items-center gap-2"><div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">{selectedMember?.name?.split(' ').map((n: string) => n[0]).join('')}</div>Profile View</DialogTitle></DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Phone</span><span className="font-bold">{selectedMember?.phone}</span></div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Joined</span><span className="font-bold">{selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Monthly Amount</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
+                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg text-sm"><span className="text-emerald-600 font-bold uppercase text-[10px]">Total Paid</span><span className="font-bold text-emerald-600 text-base">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span></div>
               </div>
-              <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t">
-                <Button variant="outline" className="w-full sm:w-auto" onClick={() => {
-                  setIsProfileDialogOpen(false)
-                  restoreInteraction(false)
-                  // Aggressive cleanup and fresh unmount/mount cycle
-                  setTimeout(() => {
-                    setHistoryMember(selectedMember)
-                    setIsHistoryDialogOpen(true)
-                  }, 350)
-                }}>View History</Button>
-                <Button className="w-full sm:w-auto" onClick={() => { setIsProfileDialogOpen(false); restoreInteraction(false); }}>Close</Button>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => { setIsProfileDialogOpen(false); setTimeout(() => { setHistoryMember(selectedMember); setIsHistoryDialogOpen(true); }, 300) }}>History</Button>
+                <Button className="w-full sm:w-auto" onClick={() => setIsProfileDialogOpen(false)}>Close</Button>
               </DialogFooter>
             </>
           )}
@@ -712,87 +370,32 @@ export default function MembersPage() {
       </Dialog>
 
       {/* History Dialog */}
-      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => {
-        setIsHistoryDialogOpen(open)
-        restoreInteraction(open)
-        if (!open) setHistoryMember(null)
-      }}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto focus:outline-none">
+      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { setIsHistoryDialogOpen(open); restoreInteraction(open); if (!open) setHistoryMember(null) }}>
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
           {isHistoryDialogOpen && (
             <>
-              <DialogHeader>
-                <DialogTitle>Payment History: {historyMember?.name}</DialogTitle>
-              </DialogHeader>
-              <div className="py-4">
+              <DialogHeader><DialogTitle>Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
+              <div className="py-2 overflow-x-auto">
                 <Table>
-                  <TableHeader className="bg-muted/10">
-                    <TableRow>
-                      <TableHead className="font-bold">Month</TableHead>
-                      <TableHead className="font-bold">Amount</TableHead>
-                      <TableHead className="font-bold">Status</TableHead>
-                      <TableHead className="text-right font-bold">Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <TableHeader><TableRow><TableHead className="text-[10px] uppercase font-bold">Month</TableHead><TableHead className="text-[10px] uppercase font-bold">Amount</TableHead><TableHead className="text-right text-[10px] uppercase font-bold">Date</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((payment, i) => (
-                      <TableRow key={i} className="hover:bg-muted/5">
-                        <TableCell className="font-medium">{payment.month}</TableCell>
-                        <TableCell className="font-bold text-emerald-600">₹{payment.amountPaid?.toLocaleString()}</TableCell>
-                        <TableCell><Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-none border-emerald-200">Success</Badge></TableCell>
-                        <TableCell className="text-right text-muted-foreground font-medium">
-                          {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : '-'}
-                        </TableCell>
-                      </TableRow>
+                    {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (
+                      <TableRow key={i}><TableCell className="text-xs font-medium">{p.month}</TableCell><TableCell className="text-xs font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell><TableCell className="text-right text-[10px] text-muted-foreground font-medium">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : '-'}</TableCell></TableRow>
                     ))}
-                    {(!historyMember || (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).length === 0) && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground italic py-8">
-                          No successful payments recorded.
-                        </TableCell>
-                      </TableRow>
-                    )}
                   </TableBody>
                 </Table>
               </div>
-              <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t">
-                <Button className="w-full sm:w-auto" onClick={() => { setIsHistoryDialogOpen(false); restoreInteraction(false); }}>Close</Button>
-              </DialogFooter>
+              <DialogFooter><Button className="w-full sm:w-auto" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button></DialogFooter>
             </>
           )}
         </DialogContent>
       </Dialog>
 
       {/* Delete Dialog */}
-      <AlertDialog open={isDeleteMemberDialogOpen} onOpenChange={(open) => {
-        setIsDeleteMemberDialogOpen(open)
-        restoreInteraction(open)
-        if (!open) setMemberToDelete(null)
-      }}>
-        <AlertDialogContent className="max-h-[90vh] overflow-y-auto focus:outline-none">
-          {isDeleteMemberDialogOpen && (
-            <>
-              <AlertDialogHeader>
-                <AlertDialogTitle className="text-destructive">Delete Member?</AlertDialogTitle>
-                <AlertDialogDescription className="text-foreground/70">
-                  This will permanently remove <strong>{memberToDelete?.name}</strong> and all their associated payment records from the system. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter className="mt-6">
-                <AlertDialogCancel onClick={() => { setIsDeleteMemberDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
-                <AlertDialogAction 
-                  className="bg-destructive hover:bg-destructive/90 shadow-lg" 
-                  onClick={(e) => {
-                    e.preventDefault()
-                    confirmDeleteMember()
-                  }}
-                  disabled={isActionPending}
-                >
-                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  Confirm Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </>
-          )}
+      <AlertDialog open={isDeleteMemberDialogOpen} onOpenChange={(open) => { setIsDeleteMemberDialogOpen(open); restoreInteraction(open); if (!open) setMemberToDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle className="text-destructive">Confirm Deletion</AlertDialogTitle><AlertDialogDescription>Permanently remove <strong>{memberToDelete?.name}</strong> and all payment history? This is irreversible.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={confirmDeleteMember} disabled={isActionPending}>Confirm Delete</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
