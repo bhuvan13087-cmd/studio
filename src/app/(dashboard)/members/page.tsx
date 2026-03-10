@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Search, UserPlus, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,11 +47,19 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
-import { Card, CardContent } from "@/components/ui/card"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, getDocs, where, writeBatch } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
+
+const INITIAL_MEMBER_STATE = {
+  name: "",
+  phone: "",
+  monthlyAmount: 0,
+  joinDate: new Date().toISOString().split('T')[0],
+  status: "active",
+  chitGroup: ""
+}
 
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -79,14 +87,17 @@ export default function MembersPage() {
   const chitRoundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: chitRounds } = useCollection(chitRoundsQuery);
 
-  const [newMember, setNewMember] = useState({
-    name: "",
-    phone: "",
-    monthlyAmount: 0,
-    joinDate: new Date().toISOString().split('T')[0],
-    status: "active",
-    chitGroup: ""
-  })
+  const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
+
+  const selectedSchemeType = useMemo(() => {
+    if (!newMember.chitGroup || !chitRounds) return null
+    return chitRounds.find((r: any) => r.name === newMember.chitGroup)?.collectionType
+  }, [newMember.chitGroup, chitRounds])
+
+  const editSelectedSchemeType = useMemo(() => {
+    if (!memberToEdit?.chitGroup || !chitRounds) return null
+    return chitRounds.find((r: any) => r.name === memberToEdit.chitGroup)?.collectionType
+  }, [memberToEdit?.chitGroup, chitRounds])
 
   const restoreInteraction = (open: boolean) => {
     if (!open) {
@@ -103,24 +114,6 @@ export default function MembersPage() {
     }
   }
 
-  const handleGroupChange = (groupName: string) => {
-    const selectedRound = chitRounds?.find((r: any) => r.name === groupName);
-    if (selectedRound) {
-      setNewMember({ ...newMember, chitGroup: groupName, monthlyAmount: selectedRound.monthlyAmount });
-    } else {
-      setNewMember({ ...newMember, chitGroup: groupName });
-    }
-  }
-
-  const handleEditGroupChange = (groupName: string) => {
-    const selectedRound = chitRounds?.find((r: any) => r.name === groupName);
-    if (selectedRound && memberToEdit) {
-      setMemberToEdit({ ...memberToEdit, chitGroup: groupName, monthlyAmount: selectedRound.monthlyAmount });
-    } else if (memberToEdit) {
-      setMemberToEdit({ ...memberToEdit, chitGroup: groupName });
-    }
-  }
-
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!db || isActionPending) return;
@@ -128,14 +121,15 @@ export default function MembersPage() {
     try {
       await addDoc(collection(db, 'members'), {
         ...newMember,
+        monthlyAmount: Number(newMember.monthlyAmount),
         createdAt: serverTimestamp(),
         paymentStatus: "pending",
         totalPaid: 0,
         pendingAmount: 0
       })
       setIsAddDialogOpen(false)
+      setNewMember(INITIAL_MEMBER_STATE)
       restoreInteraction(false)
-      setNewMember({ name: "", phone: "", monthlyAmount: 0, joinDate: new Date().toISOString().split('T')[0], status: "active", chitGroup: "" })
       toast({ title: "Member Added", description: `${newMember.name} registered.` })
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to add member." })
@@ -211,7 +205,11 @@ export default function MembersPage() {
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Member Directory</h2>
           <p className="text-sm sm:text-base text-muted-foreground">Manage participants and scheme assignments.</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); restoreInteraction(open); }}>
+        <Dialog open={isAddDialogOpen} onOpenChange={(open) => { 
+          setIsAddDialogOpen(open); 
+          if (!open) setNewMember(INITIAL_MEMBER_STATE);
+          restoreInteraction(open); 
+        }}>
           <DialogTrigger asChild>
             <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg hover:shadow-xl transition-all font-bold">
               <UserPlus className="mr-2 size-4 sm:size-5" />
@@ -220,31 +218,39 @@ export default function MembersPage() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleAddMember}>
-              <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Select a scheme to auto-fill the amount.</DialogDescription></DialogHeader>
+              <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Enter member details and assign to a scheme.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2"><Label htmlFor="name">Full Name</Label><Input id="name" value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2">
-                  <Label htmlFor="chitGroup">Scheme</Label>
-                  <Select disabled={isActionPending} value={newMember.chitGroup} onValueChange={handleGroupChange}>
+                  <Label htmlFor="chitGroup">Assigned Scheme</Label>
+                  <Select disabled={isActionPending} value={newMember.chitGroup} onValueChange={(v) => setNewMember({...newMember, chitGroup: v})}>
                     <SelectTrigger><SelectValue placeholder="Select scheme" /></SelectTrigger>
-                    <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name} ({round.collectionType})</SelectItem>))}</SelectContent>
+                    <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
+                  {selectedSchemeType && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Type:</span>
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5">{selectedSchemeType}</Badge>
+                    </div>
+                  )}
                 </div>
                 <div className="grid gap-2">
-                  <Label>Amount (₹)</Label>
+                  <Label>Contribution Amount (₹)</Label>
                   <Input 
-                    value={newMember.monthlyAmount || 0} 
-                    readOnly 
-                    className="bg-muted font-bold text-primary"
+                    type="number"
+                    value={newMember.monthlyAmount || ""} 
+                    onChange={e => setNewMember({...newMember, monthlyAmount: Number(e.target.value)})}
+                    placeholder="Enter amount"
+                    required
+                    disabled={isActionPending}
                   />
-                  <p className="text-[10px] text-muted-foreground italic font-semibold">Read-only: Matches selected scheme's amount.</p>
                 </div>
                 <div className="grid gap-2"><Label htmlFor="joinDate">Join Date</Label><Input id="joinDate" type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required disabled={isActionPending} /></div>
               </div>
               <DialogFooter className="flex-col sm:flex-row gap-2">
                 <Button type="button" variant="outline" onClick={() => { setIsAddDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
-                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto">{isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Register</Button>
+                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto">{isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Register Member</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -343,7 +349,11 @@ export default function MembersPage() {
       </div>
 
       {/* Edit Dialog */}
-      <Dialog open={isEditMemberDialogOpen} onOpenChange={(open) => { setIsEditMemberDialogOpen(open); restoreInteraction(open); if (!open) setMemberToEdit(null) }}>
+      <Dialog open={isEditMemberDialogOpen} onOpenChange={(open) => { 
+        setIsEditMemberDialogOpen(open); 
+        if (!open) setMemberToEdit(null);
+        restoreInteraction(open); 
+      }}>
         <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
           {isEditMemberDialogOpen && (
             <form onSubmit={handleUpdateMember}>
@@ -353,17 +363,25 @@ export default function MembersPage() {
                 <div className="grid gap-2"><Label>Phone</Label><Input value={memberToEdit?.phone || ""} onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2">
                   <Label>Scheme</Label>
-                  <Select disabled={isActionPending} value={memberToEdit?.chitGroup || ""} onValueChange={handleEditGroupChange}>
+                  <Select disabled={isActionPending} value={memberToEdit?.chitGroup || ""} onValueChange={v => setMemberToEdit({...memberToEdit, chitGroup: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name} ({round.collectionType})</SelectItem>))}</SelectContent>
+                    <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
+                  {editSelectedSchemeType && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Type:</span>
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5">{editSelectedSchemeType}</Badge>
+                    </div>
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>
                   <Input 
-                    value={memberToEdit?.monthlyAmount || 0} 
-                    readOnly 
-                    className="bg-muted font-bold text-primary"
+                    type="number"
+                    value={memberToEdit?.monthlyAmount || ""} 
+                    onChange={e => setMemberToEdit({...memberToEdit, monthlyAmount: Number(e.target.value)})}
+                    required
+                    disabled={isActionPending}
                   />
                 </div>
                 <div className="grid gap-2">

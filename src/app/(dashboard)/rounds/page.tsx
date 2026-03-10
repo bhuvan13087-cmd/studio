@@ -54,6 +54,14 @@ import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
 import { cn } from "@/lib/utils"
 
+const INITIAL_CHIT_STATE = { 
+  name: "", 
+  monthlyAmount: 0, 
+  totalMembers: 20, 
+  startDate: new Date().toISOString().split('T')[0], 
+  collectionType: "" 
+}
+
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
@@ -80,13 +88,7 @@ export default function RoundsPage() {
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: payments } = useCollection(paymentsQuery);
 
-  const [newChit, setNewChit] = useState({ 
-    name: "", 
-    monthlyAmount: 0, 
-    totalMembers: 20, 
-    startDate: new Date().toISOString().split('T')[0], 
-    collectionType: "" 
-  })
+  const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
 
   const restoreInteraction = (open: boolean) => {
     if (!open) {
@@ -112,8 +114,9 @@ export default function RoundsPage() {
         monthlyAmount: Number(newChit.monthlyAmount),
         createdAt: serverTimestamp()
       });
-      setIsAddChitDialogOpen(false); restoreInteraction(false);
-      setNewChit({ name: "", monthlyAmount: 0, totalMembers: 20, startDate: new Date().toISOString().split('T')[0], collectionType: "" });
+      setIsAddChitDialogOpen(false); 
+      setNewChit(INITIAL_CHIT_STATE);
+      restoreInteraction(false);
       toast({ title: "Scheme Created" });
     } catch (e: any) { toast({ variant: "destructive", title: "Error" }); } finally { setIsActionPending(false); }
   }
@@ -187,13 +190,17 @@ export default function RoundsPage() {
         </div>
 
         {/* Add Scheme Dialog */}
-        <Dialog open={isAddChitDialogOpen} onOpenChange={(o) => { setIsAddChitDialogOpen(o); restoreInteraction(o); }}>
+        <Dialog open={isAddChitDialogOpen} onOpenChange={(o) => { 
+          setIsAddChitDialogOpen(o); 
+          if (!o) setNewChit(INITIAL_CHIT_STATE);
+          restoreInteraction(o); 
+        }}>
           <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleAddChit}>
-              <DialogHeader><DialogTitle>New Scheme</DialogTitle><DialogDescription>Define a new scheme with a manually set amount.</DialogDescription></DialogHeader>
+              <DialogHeader><DialogTitle>New Scheme</DialogTitle><DialogDescription>Define a new scheme collection cycle.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2">
-                  <Label htmlFor="schemeName">Scheme Name</Label>
+                  <Label htmlFor="schemeName">Name</Label>
                   <Input id="schemeName" value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required disabled={isActionPending} placeholder="e.g. Daily Silver" />
                 </div>
                 <div className="grid gap-2">
@@ -213,7 +220,7 @@ export default function RoundsPage() {
                       <Label>Amount (₹)</Label>
                       <Input 
                         type="number"
-                        value={newChit.monthlyAmount} 
+                        value={newChit.monthlyAmount || ""} 
                         onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})}
                         required
                         disabled={isActionPending}
@@ -221,7 +228,7 @@ export default function RoundsPage() {
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="totalMembers">Max Members</Label>
+                      <Label htmlFor="totalMembers">Members</Label>
                       <Input id="totalMembers" type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} />
                     </div>
                   </div>
@@ -257,19 +264,21 @@ export default function RoundsPage() {
                     </Select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label>Amount (₹)</Label>
-                      <Input 
-                        type="number"
-                        value={editingChit.monthlyAmount} 
-                        onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})}
-                        required
-                        disabled={isActionPending}
-                      />
+                  {editingChit.collectionType && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Amount (₹)</Label>
+                        <Input 
+                          type="number"
+                          value={editingChit.monthlyAmount || ""} 
+                          onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})}
+                          required
+                          disabled={isActionPending}
+                        />
+                      </div>
+                      <div className="grid gap-2"><Label>Members</Label><Input type="number" value={editingChit.totalMembers} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
                     </div>
-                    <div className="grid gap-2"><Label>Members</Label><Input type="number" value={editingChit.totalMembers} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
-                  </div>
+                  )}
                 </div>
                 <DialogFooter className="gap-2">
                   <Button variant="outline" type="button" onClick={() => { setIsEditChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
