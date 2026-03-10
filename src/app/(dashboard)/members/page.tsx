@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -229,15 +230,19 @@ export default function MembersPage() {
                     <SelectTrigger><SelectValue placeholder="Select scheme" /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
-                  {selectedSchemeType && (
-                    <div className="flex items-center gap-2 mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Type:</span>
-                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5 border-primary/30 text-primary">{selectedSchemeType}</Badge>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Indication:</span>
+                    {selectedSchemeType ? (
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5 border-primary/30 text-primary animate-in fade-in duration-300">
+                        {selectedSchemeType}
+                      </Badge>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground italic">None Selected</span>
+                    )}
+                  </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label>Contribution Amount (₹)</Label>
+                  <Label>Amount (₹)</Label>
                   <Input 
                     type="number"
                     value={newMember.monthlyAmount || ""} 
@@ -368,12 +373,16 @@ export default function MembersPage() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
-                  {editSelectedSchemeType && (
-                    <div className="flex items-center gap-2 mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Type:</span>
-                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5 border-primary/30 text-primary">{editSelectedSchemeType}</Badge>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Indication:</span>
+                    {editSelectedSchemeType ? (
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5 border-primary/30 text-primary animate-in fade-in duration-300">
+                        {editSelectedSchemeType}
+                      </Badge>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground italic">None Selected</span>
+                    )}
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>

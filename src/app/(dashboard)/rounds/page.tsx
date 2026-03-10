@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -212,6 +213,16 @@ export default function RoundsPage() {
                       <SelectItem value="Daily">Daily</SelectItem>
                     </SelectContent>
                   </Select>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Indication:</span>
+                    {newChit.collectionType ? (
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5 border-primary/30 text-primary animate-in fade-in duration-300">
+                        {newChit.collectionType}
+                      </Badge>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground italic">None Selected</span>
+                    )}
+                  </div>
                 </div>
                 
                 {newChit.collectionType && (
@@ -262,6 +273,16 @@ export default function RoundsPage() {
                         <SelectItem value="Daily">Daily</SelectItem>
                       </SelectContent>
                     </Select>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Indication:</span>
+                      {editingChit.collectionType ? (
+                        <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5 border-primary/30 text-primary animate-in fade-in duration-300">
+                          {editingChit.collectionType}
+                        </Badge>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground italic">None Selected</span>
+                      )}
+                    </div>
                   </div>
 
                   {editingChit.collectionType && (
