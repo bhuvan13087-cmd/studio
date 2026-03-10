@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -221,7 +220,7 @@ export default function MembersPage() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleAddMember}>
-              <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Select a scheme to auto-fill the fixed amount.</DialogDescription></DialogHeader>
+              <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Select a scheme to auto-fill the amount.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2"><Label htmlFor="name">Full Name</Label><Input id="name" value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required disabled={isActionPending} /></div>
@@ -233,7 +232,7 @@ export default function MembersPage() {
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label>Fixed Amount (₹)</Label>
+                  <Label>Amount (₹)</Label>
                   <Input 
                     value={newMember.monthlyAmount || 0} 
                     readOnly 
@@ -360,7 +359,7 @@ export default function MembersPage() {
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label>Fixed Amount (₹)</Label>
+                  <Label>Amount (₹)</Label>
                   <Input 
                     value={memberToEdit?.monthlyAmount || 0} 
                     readOnly 
@@ -390,7 +389,7 @@ export default function MembersPage() {
               <div className="grid gap-4 py-4">
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Phone</span><span className="font-bold">{selectedMember?.phone}</span></div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Joined</span><span className="font-bold">{selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
-                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Fixed Amount</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Amount</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
                 <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg text-sm"><span className="text-emerald-600 font-bold uppercase text-[10px]">Total Paid</span><span className="font-bold text-emerald-600 text-base">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span></div>
               </div>
               <DialogFooter className="gap-2">

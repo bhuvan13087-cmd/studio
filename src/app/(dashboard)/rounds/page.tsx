@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from "react"
@@ -211,7 +210,7 @@ export default function RoundsPage() {
                 {newChit.collectionType && (
                   <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div className="grid gap-2">
-                      <Label>Fixed Amount (₹)</Label>
+                      <Label>Amount (₹)</Label>
                       <Input 
                         type="number"
                         value={newChit.monthlyAmount} 
@@ -260,7 +259,7 @@ export default function RoundsPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label>Fixed Amount (₹)</Label>
+                      <Label>Amount (₹)</Label>
                       <Input 
                         type="number"
                         value={editingChit.monthlyAmount} 

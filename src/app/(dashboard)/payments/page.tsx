@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
@@ -257,7 +256,7 @@ export default function PaymentsPage() {
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label>Contribution Amount (Fixed ₹)</Label>
+                  <Label>Contribution Amount (₹)</Label>
                   <Input 
                     value={recordData.amount} 
                     readOnly 
