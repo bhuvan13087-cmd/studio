@@ -148,15 +148,9 @@ export default function DashboardPage() {
         <Card className="hover:shadow-md transition-shadow duration-200 overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Revenue</CardTitle>
-            <IndianRupee className="size-5 text-accent" />
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between gap-4">
-              <div className="text-2xl font-bold text-primary">
-                ₹{(revenueView === 'month' ? collectedThisMonth : collectedToday).toLocaleString()}
-              </div>
+            <div className="flex items-center gap-2">
               <Select value={revenueView} onValueChange={(v: any) => setRevenueView(v)}>
-                <SelectTrigger className="h-8 w-[110px] text-[10px] font-bold border-none bg-muted/50 focus:ring-0 shadow-none">
+                <SelectTrigger className="h-7 w-[90px] text-[10px] font-bold border-none bg-muted/50 focus:ring-0 shadow-none px-2">
                   <SelectValue placeholder="Period" />
                 </SelectTrigger>
                 <SelectContent>
@@ -164,6 +158,12 @@ export default function DashboardPage() {
                   <SelectItem value="today" className="text-[10px] font-bold">Today</SelectItem>
                 </SelectContent>
               </Select>
+              <IndianRupee className="size-5 text-accent" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-primary">
+              ₹{(revenueView === 'month' ? collectedThisMonth : collectedToday).toLocaleString()}
             </div>
             <p className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-tight">
               {revenueView === 'month' ? 'Current Cycle Total' : 'Total Collected Today'}
