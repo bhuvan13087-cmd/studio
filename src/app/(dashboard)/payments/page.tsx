@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo } from "react"
@@ -252,8 +251,8 @@ export default function PaymentsPage() {
         <div className="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-4">
           <Filter className="size-4 text-muted-foreground" />
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-full md:w-[150px] bg-muted/30 border-none shadow-none focus:ring-0">
-              <SelectValue placeholder="Collection Type" />
+            <SelectTrigger className="w-full md:w-[130px] h-8 bg-muted/30 border-none shadow-none focus:ring-0 text-xs">
+              <SelectValue placeholder="All Schemes" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Schemes</SelectItem>
