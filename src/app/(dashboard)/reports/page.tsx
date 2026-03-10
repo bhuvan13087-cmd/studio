@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -105,7 +104,7 @@ export default function ReportsPage() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4 p-4 text-center">
         <Database className="size-16 text-muted-foreground/20" />
-        <h2 className="text-xl font-semibold">No analytics available.</h2>
+        <h2 className="text-xl font-semibold">No report data available.</h2>
       </div>
     )
   }
@@ -115,69 +114,69 @@ export default function ReportsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div className="space-y-1">
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Financial Reports</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Detailed audit of collections and member participation.</p>
+          <p className="text-sm text-muted-foreground">Comprehensive audit of fund collections and distributions.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
            <Select value={reportType} onValueChange={setReportType}>
-             <SelectTrigger className="w-[120px] sm:w-[140px] h-9 text-[10px] font-bold uppercase">
-               <Filter className="mr-2 size-3 text-primary" />
+             <SelectTrigger className="w-[120px] sm:w-[150px] h-10 text-[10px] font-bold uppercase tracking-wider bg-card shadow-sm">
+               <Filter className="mr-2 size-3.5 text-primary" />
                <SelectValue placeholder="Scheme" />
              </SelectTrigger>
              <SelectContent>
-               <SelectItem value="all">All Schemes</SelectItem>
-               <SelectItem value="daily">Daily</SelectItem>
-               <SelectItem value="monthly">Monthly</SelectItem>
+               <SelectItem value="all" className="text-[10px] font-bold uppercase">All Schemes</SelectItem>
+               <SelectItem value="daily" className="text-[10px] font-bold uppercase">Daily</SelectItem>
+               <SelectItem value="monthly" className="text-[10px] font-bold uppercase">Monthly</SelectItem>
              </SelectContent>
            </Select>
-           <Button variant="outline" size="sm" className="h-9 px-4 text-[10px] font-bold shadow-sm" onClick={handlePrint}>
+           <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-sm hover:bg-muted" onClick={handlePrint}>
              <Printer className="mr-2 size-4" /> Print
            </Button>
-           <Button size="sm" className="h-9 px-4 text-[10px] font-bold shadow-md" onClick={() => toast({ title: "Exporting CSV..." })}>
+           <Button size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-md" onClick={() => toast({ title: "Generating Export...", description: "Your report will download shortly." })}>
              <Download className="mr-2 size-4" /> Export
            </Button>
         </div>
       </div>
 
       <Tabs defaultValue="collections" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 h-auto p-1 bg-muted/50 border overflow-x-auto print:hidden">
-          <TabsTrigger value="collections" className="py-2.5 text-[10px] font-bold uppercase tracking-wider">Collections</TabsTrigger>
-          <TabsTrigger value="members" className="py-2.5 text-[10px] font-bold uppercase tracking-wider">Members</TabsTrigger>
-          <TabsTrigger value="pending" className="py-2.5 text-[10px] font-bold uppercase tracking-wider">Pending Dues</TabsTrigger>
-          <TabsTrigger value="winners" className="py-2.5 text-[10px] font-bold uppercase tracking-wider">Winners</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 h-auto p-1 bg-muted/50 border rounded-xl overflow-x-auto print:hidden">
+          <TabsTrigger value="collections" className="py-3 text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-card data-[state=active]:shadow-sm">Collections</TabsTrigger>
+          <TabsTrigger value="members" className="py-3 text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-card data-[state=active]:shadow-sm">Members</TabsTrigger>
+          <TabsTrigger value="pending" className="py-3 text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-card data-[state=active]:shadow-sm">Pending Dues</TabsTrigger>
+          <TabsTrigger value="winners" className="py-3 text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-card data-[state=active]:shadow-sm">Winners</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="collections" className="mt-6 space-y-4">
-          <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+        <TabsContent value="collections" className="mt-8">
+          <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-muted/20">
-              <h3 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">
-                <Database className="size-4 text-primary" /> Monthly Revenue Report
+              <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                <Database className="size-4 text-primary" /> Monthly Revenue Summary
               </h3>
             </div>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider">Period</TableHead>
-                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Total Collection</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-12 pl-6">Period</TableHead>
+                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-12 pr-6">Total Collection</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredData.collectionData.map((row, i) => (
-                    <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                      <TableCell className="font-semibold text-sm">{row.month}</TableCell>
-                      <TableCell className="text-right font-bold text-emerald-600 text-sm tabular-nums">₹{row.amount.toLocaleString()}</TableCell>
+                    <TableRow key={i} className="hover:bg-muted/5 transition-colors h-14">
+                      <TableCell className="font-bold text-sm pl-6">{row.month}</TableCell>
+                      <TableCell className="text-right font-bold text-emerald-600 text-sm tabular-nums pr-6">₹{row.amount.toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-          </div>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="members" className="mt-6">
-          <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+        <TabsContent value="members" className="mt-8">
+          <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-muted/20">
-              <h3 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
                 <Users className="size-4 text-primary" /> Active Member Directory
               </h3>
             </div>
@@ -185,62 +184,62 @@ export default function ReportsPage() {
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider">Member Name</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider">Group / Scheme</TableHead>
-                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Monthly Commitment</TableHead>
-                    <TableHead className="text-center text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-12 pl-6">Member Name</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-12">Scheme / Group</TableHead>
+                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-12">Monthly Due</TableHead>
+                    <TableHead className="text-center text-[10px] uppercase font-bold tracking-widest h-12 pr-6">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredData.targetMembers.length > 0 ? filteredData.targetMembers.map((m, i) => (
-                    <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                      <TableCell className="font-semibold text-sm">{m.name}</TableCell>
-                      <TableCell className="text-xs font-bold text-primary uppercase">{m.chitGroup || "Unassigned"}</TableCell>
+                    <TableRow key={i} className="hover:bg-muted/5 transition-colors h-14">
+                      <TableCell className="font-bold text-sm pl-6">{m.name}</TableCell>
+                      <TableCell className="text-[10px] font-bold text-primary uppercase tracking-tight">{m.chitGroup || "N/A"}</TableCell>
                       <TableCell className="text-right font-bold text-sm tabular-nums">₹{m.monthlyAmount?.toLocaleString()}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={m.status === 'active' ? 'default' : 'secondary'} className="text-[8px] font-bold uppercase px-2 py-0.5">
+                      <TableCell className="text-center pr-6">
+                        <Badge variant={m.status === 'active' ? 'default' : 'secondary'} className="text-[8px] font-bold uppercase px-2 shadow-none border-none">
                           {m.status}
                         </Badge>
                       </TableCell>
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-32 text-center text-muted-foreground italic text-sm">No members found for this criteria.</TableCell>
+                      <TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic text-sm">No member data for selected criteria.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
             </div>
-          </div>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="pending" className="mt-6">
-          <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+        <TabsContent value="pending" className="mt-8">
+          <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-muted/20">
-              <h3 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">
-                <Clock className="size-4 text-amber-500" /> Outstanding Collections (Current Month)
+              <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                <Clock className="size-4 text-amber-500" /> Outstanding Collections
               </h3>
             </div>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider">Member</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider">Phone</TableHead>
-                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Amount Due</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-12 pl-6">Member</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-12">Contact</TableHead>
+                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-12 pr-6">Amount Due</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredData.pendingMembers.length > 0 ? filteredData.pendingMembers.map((m, i) => (
-                    <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                      <TableCell className="font-semibold text-sm">{m.name}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground tabular-nums">{m.phone}</TableCell>
-                      <TableCell className="text-right font-bold text-amber-600 text-sm tabular-nums">₹{m.monthlyAmount?.toLocaleString()}</TableCell>
+                    <TableRow key={i} className="hover:bg-muted/5 transition-colors h-14">
+                      <TableCell className="font-bold text-sm pl-6">{m.name}</TableCell>
+                      <TableCell className="text-xs font-medium text-muted-foreground tabular-nums">{m.phone}</TableCell>
+                      <TableCell className="text-right font-bold text-amber-600 text-sm tabular-nums pr-6">₹{m.monthlyAmount?.toLocaleString()}</TableCell>
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={3} className="h-32 text-center text-emerald-600 font-bold text-sm">
-                        <CheckCircle2 className="size-8 mx-auto mb-2 opacity-20" />
+                      <TableCell colSpan={3} className="h-40 text-center text-emerald-600 font-bold text-sm">
+                        <CheckCircle2 className="size-8 mx-auto mb-2 opacity-30" />
                         All collections complete for this cycle!
                       </TableCell>
                     </TableRow>
@@ -248,43 +247,43 @@ export default function ReportsPage() {
                 </TableBody>
               </Table>
             </div>
-          </div>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="winners" className="mt-6">
-          <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+        <TabsContent value="winners" className="mt-8">
+          <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-muted/20">
-              <h3 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">
-                <Trophy className="size-4 text-amber-500" /> Auction Winners History
+              <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                <Trophy className="size-4 text-amber-500" /> Auction History
               </h3>
             </div>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider">Winner Name</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider">Scheme</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-wider">Round</TableHead>
-                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Winning Amount</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-12 pl-6">Winner Name</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-12">Scheme</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-12">Round #</TableHead>
+                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-12 pr-6">Winning Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredData.winners.length > 0 ? filteredData.winners.map((r, i) => (
-                    <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                      <TableCell className="font-semibold text-sm">{r.winnerName}</TableCell>
-                      <TableCell className="text-xs font-bold text-primary uppercase">{r.name}</TableCell>
-                      <TableCell className="text-xs font-medium">Round #{r.roundNumber}</TableCell>
-                      <TableCell className="text-right font-bold text-emerald-600 text-sm tabular-nums">₹{r.winningAmount?.toLocaleString()}</TableCell>
+                    <TableRow key={i} className="hover:bg-muted/5 transition-colors h-14">
+                      <TableCell className="font-bold text-sm pl-6">{r.winnerName}</TableCell>
+                      <TableCell className="text-[10px] font-bold text-primary uppercase">{r.name}</TableCell>
+                      <TableCell className="text-xs font-bold text-muted-foreground">{r.roundNumber}</TableCell>
+                      <TableCell className="text-right font-bold text-emerald-600 text-sm tabular-nums pr-6">₹{r.winningAmount?.toLocaleString()}</TableCell>
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-32 text-center text-muted-foreground italic text-sm">No completed auctions found.</TableCell>
+                      <TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic text-sm">No auctions completed yet.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
             </div>
-          </div>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
