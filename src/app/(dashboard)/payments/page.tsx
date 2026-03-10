@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
@@ -90,7 +89,7 @@ export default function PaymentsPage() {
   const { data: membersData, isLoading: isMembersLoading } = useCollection(membersQuery);
   const members = membersData || [];
 
-  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), [db]));
+  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds')), [db]);
   const { data: roundsData } = useCollection(roundsQuery);
   const rounds = roundsData || [];
 
@@ -321,7 +320,7 @@ export default function PaymentsPage() {
           <DialogTrigger asChild>
             <Button className="h-11 shadow-lg hover:shadow-xl transition-all">
               <Plus className="mr-2 size-5" />
-              Quick Record
+              Add Payment
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto focus:outline-none">
