@@ -88,7 +88,7 @@ export default function RoundsPage() {
     duration: 20, 
     startDate: new Date().toISOString().split('T')[0], 
     description: "", 
-    collectionType: "Monthly" 
+    collectionType: "" 
   })
 
   const restoreInteraction = (open: boolean) => {
@@ -102,11 +102,17 @@ export default function RoundsPage() {
 
   const handleAddChit = async (e: React.FormEvent) => {
     e.preventDefault(); if (!db || isActionPending) return;
+    
+    if (!newChit.collectionType) {
+      toast({ variant: "destructive", title: "Selection Required", description: "Please select a collection type (Daily or Monthly)." });
+      return;
+    }
+
     setIsActionPending(true);
     try {
       await addDoc(collection(db, 'chitRounds'), { ...newChit, createdAt: serverTimestamp() });
       setIsAddChitDialogOpen(false); restoreInteraction(false);
-      setNewChit({ name: "", monthlyAmount: 5000, dailyAmount: 0, totalMembers: 20, duration: 20, startDate: new Date().toISOString().split('T')[0], description: "", collectionType: "Monthly" });
+      setNewChit({ name: "", monthlyAmount: 5000, dailyAmount: 0, totalMembers: 20, duration: 20, startDate: new Date().toISOString().split('T')[0], description: "", collectionType: "" });
       toast({ title: "Round Created" });
     } catch (e: any) { toast({ variant: "destructive", title: "Error" }); } finally { setIsActionPending(false); }
   }
@@ -193,7 +199,7 @@ export default function RoundsPage() {
                 <div className="grid gap-2">
                   <Label>Collection Type</Label>
                   <Select value={newChit.collectionType} onValueChange={v => setNewChit({...newChit, collectionType: v})} disabled={isActionPending}>
-                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select Daily/Monthly" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Monthly">Monthly</SelectItem>
                       <SelectItem value="Daily">Daily</SelectItem>
@@ -239,7 +245,7 @@ export default function RoundsPage() {
                   <div className="grid gap-2">
                     <Label>Collection Type</Label>
                     <Select value={editingChit.collectionType} onValueChange={v => setEditingChit({...editingChit, collectionType: v})} disabled={isActionPending}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select Daily/Monthly" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Monthly">Monthly</SelectItem>
                         <SelectItem value="Daily">Daily</SelectItem>
