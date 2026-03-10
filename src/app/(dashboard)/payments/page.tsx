@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2, Calendar } from "lucide-react"
+import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2, Calendar, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -30,11 +30,21 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy, deleteDoc, updateDoc, getDoc } from "firebase/firestore"
 import { addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
@@ -45,6 +55,8 @@ export default function PaymentsPage() {
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [isQuickRecordOpen, setIsQuickRecordOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [isDeletePaymentDialogOpen, setIsDeletePaymentDialogOpen] = useState(false)
+  const [paymentToDelete, setPaymentToDelete] = useState<any>(null)
   const [isActionPending, setIsActionPending] = useState(false)
   const { toast } = useToast()
   const db = useFirestore()
@@ -138,17 +150,52 @@ export default function PaymentsPage() {
     }
   }
 
+  const handleDeletePayment = async () => {
+    if (!db || !paymentToDelete || isActionPending) return;
+
+    setIsActionPending(true)
+    try {
+      const paymentRef = doc(db, 'payments', paymentToDelete.id);
+      
+      // Update member totals before deleting the payment
+      const member = members.find(m => m.id === paymentToDelete.memberId);
+      if (member) {
+        await updateDoc(doc(db, 'members', member.id), {
+          totalPaid: Math.max(0, (member.totalPaid || 0) - (paymentToDelete.amountPaid || 0)),
+          // Optionally reset paymentStatus if this was the only payment this month
+          // but for simplicity we just update the total
+        });
+      }
+
+      await deleteDoc(paymentRef);
+
+      setIsDeletePaymentDialogOpen(false);
+      setPaymentToDelete(null);
+      restoreInteraction(false);
+      
+      toast({
+        title: "Record Deleted",
+        description: `The payment record for ₹${paymentToDelete.amountPaid} has been removed.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to delete payment record.",
+      });
+    } finally {
+      setIsActionPending(false)
+    }
+  }
+
   const filteredPayments = useMemo(() => {
-    // 1. First, ensure the payment belongs to an EXISTING member
     const activeMemberIds = new Set(members.map(m => m.id));
     let list = payments.filter(p => (p.status === 'paid' || p.status === 'success') && activeMemberIds.has(p.memberId));
     
-    // 2. Filter by Search Term
     if (searchTerm) {
       list = list.filter(p => p.memberName?.toLowerCase().includes(searchTerm.toLowerCase()));
     }
 
-    // 3. Filter by Collection Type (Daily/Monthly)
     if (typeFilter !== "all") {
       list = list.filter(p => {
         const member = members.find(m => m.id === p.memberId);
@@ -325,6 +372,17 @@ export default function PaymentsPage() {
                           <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                             <Download className="mr-2 size-4" /> Download Receipt
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            className="text-destructive focus:bg-destructive/10 focus:text-destructive" 
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              setPaymentToDelete(payment)
+                              setIsDeletePaymentDialogOpen(true)
+                            }}
+                          >
+                            <Trash2 className="mr-2 size-4" /> Delete Record
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -342,6 +400,7 @@ export default function PaymentsPage() {
         </Table>
       </div>
 
+      {/* History Dialog */}
       <Dialog open={isHistoryOpen} onOpenChange={(open) => {
         setIsHistoryOpen(open)
         restoreInteraction(open)
@@ -383,6 +442,40 @@ export default function PaymentsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Payment Dialog */}
+      <AlertDialog open={isDeletePaymentDialogOpen} onOpenChange={(open) => {
+        setIsDeletePaymentDialogOpen(open)
+        restoreInteraction(open)
+        if (!open) setPaymentToDelete(null)
+      }}>
+        <AlertDialogContent className="focus:outline-none">
+          {isDeletePaymentDialogOpen && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-destructive">Delete Transaction?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently remove the payment of <strong>₹{paymentToDelete?.amountPaid?.toLocaleString()}</strong> recorded on {paymentToDelete?.paymentDate ? format(parseISO(paymentToDelete.paymentDate), 'MMM dd, yyyy') : ''} for {paymentToDelete?.memberName}. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => { setIsDeletePaymentDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction 
+                  className="bg-destructive hover:bg-destructive/90" 
+                  onClick={(e) => {
+                    e.preventDefault()
+                    handleDeletePayment()
+                  }}
+                  disabled={isActionPending}
+                >
+                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Confirm Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
