@@ -255,8 +255,8 @@ export default function PaymentsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Schemes</SelectItem>
-              <SelectItem value="daily">Daily Only</SelectItem>
-              <SelectItem value="monthly">Monthly Only</SelectItem>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
             </SelectContent>
           </Select>
         </div>
