@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -174,24 +173,24 @@ export default function ReportsPage() {
         </div>
         <div className="flex items-center gap-2">
            <Select value={reportType} onValueChange={setReportType}>
-             <SelectTrigger className="w-[180px] bg-card shadow-sm h-10">
+             <SelectTrigger className="w-[140px] bg-card shadow-sm h-8 text-xs">
                <div className="flex items-center gap-2">
-                 <Filter className="size-3.5 text-primary" />
-                 <SelectValue placeholder="Collection Type" />
+                 <Filter className="size-3 text-primary" />
+                 <SelectValue placeholder="Scheme" />
                </div>
              </SelectTrigger>
              <SelectContent>
-               <SelectItem value="all">All Collections</SelectItem>
-               <SelectItem value="daily">Daily Schemes</SelectItem>
-               <SelectItem value="monthly">Monthly Schemes</SelectItem>
+               <SelectItem value="all">All</SelectItem>
+               <SelectItem value="daily">Daily</SelectItem>
+               <SelectItem value="monthly">Monthly</SelectItem>
              </SelectContent>
            </Select>
-           <Button variant="outline" size="sm" className="hidden sm:flex h-10 px-4" onClick={() => window.print()}>
-             <Printer className="mr-2 size-4" />
+           <Button variant="outline" size="sm" className="hidden sm:flex h-8 px-3 text-xs" onClick={() => window.print()}>
+             <Printer className="mr-2 size-3.5" />
              Print
            </Button>
-           <Button size="sm" className="h-10 px-4" onClick={() => handleExport('PDF', 'Overview Report')}>
-             <Download className="mr-2 size-4" />
+           <Button size="sm" className="h-8 px-3 text-xs" onClick={() => handleExport('PDF', 'Overview Report')}>
+             <Download className="mr-2 size-3.5" />
              Export PDF
            </Button>
         </div>
