@@ -86,6 +86,7 @@ export default function RoundsPage() {
   const [newChit, setNewChit] = useState({
     name: "",
     monthlyAmount: 5000,
+    dailyAmount: 0,
     totalMembers: 20,
     duration: 20,
     startDate: new Date().toISOString().split('T')[0],
@@ -132,6 +133,7 @@ export default function RoundsPage() {
       setNewChit({ 
         name: "", 
         monthlyAmount: 5000, 
+        dailyAmount: 0,
         totalMembers: 20, 
         duration: 20, 
         startDate: new Date().toISOString().split('T')[0], 
@@ -155,6 +157,7 @@ export default function RoundsPage() {
       await updateDoc(doc(db, 'chitRounds', editingChit.id), {
         name: editingChit.name,
         monthlyAmount: Number(editingChit.monthlyAmount),
+        dailyAmount: Number(editingChit.dailyAmount || 0),
         totalMembers: Number(editingChit.totalMembers),
         duration: Number(editingChit.duration),
         startDate: editingChit.startDate,
@@ -277,6 +280,11 @@ export default function RoundsPage() {
                   <span className="font-medium text-emerald-600">Dues: ₹{group.monthlyAmount?.toLocaleString()}</span>
                   <span className="text-muted-foreground">Members: {(members || []).filter(m => m.chitGroup === group.name).length} / {group.totalMembers}</span>
                 </div>
+                {group.collectionType === "Daily" && (
+                  <div className="mt-2 text-xs font-semibold text-amber-600">
+                    Daily: ₹{group.dailyAmount?.toLocaleString() || 0}
+                  </div>
+                )}
                 <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5">
                   <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-wider h-5">
                     {group.collectionType || "Monthly"}
@@ -321,9 +329,21 @@ export default function RoundsPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {newChit.collectionType === "Daily" && (
+                    <div className="grid gap-2">
+                      <Label>Daily Amount (₹)</Label>
+                      <Input 
+                        disabled={isActionPending} 
+                        type="number" 
+                        value={newChit.dailyAmount} 
+                        onChange={e => setNewChit({...newChit, dailyAmount: Number(e.target.value)})} 
+                        required 
+                      />
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label>Amount (₹)</Label>
+                      <Label>Monthly Amount (₹)</Label>
                       <Input disabled={isActionPending} type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required />
                     </div>
                     <div className="grid gap-2">
@@ -375,9 +395,21 @@ export default function RoundsPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {editingChit?.collectionType === "Daily" && (
+                    <div className="grid gap-2">
+                      <Label>Daily Amount (₹)</Label>
+                      <Input 
+                        disabled={isActionPending} 
+                        type="number" 
+                        value={editingChit?.dailyAmount || 0} 
+                        onChange={e => setEditingChit({...editingChit, dailyAmount: Number(e.target.value)})} 
+                        required 
+                      />
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label>Amount (₹)</Label>
+                      <Label>Monthly Amount (₹)</Label>
                       <Input disabled={isActionPending} type="number" value={editingChit?.monthlyAmount} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required />
                     </div>
                     <div className="grid gap-2">

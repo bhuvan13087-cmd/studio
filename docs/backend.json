@@ -127,6 +127,10 @@
           "type": "string",
           "enum": ["Daily", "Monthly"],
           "description": "The frequency of collections for this chit round."
+        },
+        "dailyAmount": {
+          "type": "number",
+          "description": "The amount collected daily if collectionType is Daily."
         }
       },
       "required": [
