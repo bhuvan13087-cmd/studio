@@ -225,7 +225,7 @@ export default function RoundsPage() {
                         onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})}
                         required
                         disabled={isActionPending}
-                        placeholder="e.g. 100"
+                        placeholder="Enter amount"
                       />
                     </div>
                     <div className="grid gap-2">

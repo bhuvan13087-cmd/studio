@@ -220,7 +220,18 @@ export default function MembersPage() {
                 <div className="grid gap-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2">
                   <Label htmlFor="chitGroup">Assigned Scheme</Label>
-                  <Select disabled={isActionPending} value={newMember.chitGroup} onValueChange={(v) => setNewMember({...newMember, chitGroup: v})}>
+                  <Select 
+                    disabled={isActionPending} 
+                    value={newMember.chitGroup} 
+                    onValueChange={(v) => {
+                      const scheme = chitRounds?.find((r: any) => r.name === v);
+                      setNewMember({
+                        ...newMember, 
+                        chitGroup: v,
+                        monthlyAmount: scheme?.monthlyAmount || 0
+                      });
+                    }}
+                  >
                     <SelectTrigger><SelectValue placeholder="Select scheme" /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
@@ -359,7 +370,18 @@ export default function MembersPage() {
                 <div className="grid gap-2"><Label>Phone</Label><Input value={memberToEdit?.phone || ""} onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2">
                   <Label>Scheme</Label>
-                  <Select disabled={isActionPending} value={memberToEdit?.chitGroup || ""} onValueChange={v => setMemberToEdit({...memberToEdit, chitGroup: v})}>
+                  <Select 
+                    disabled={isActionPending} 
+                    value={memberToEdit?.chitGroup || ""} 
+                    onValueChange={v => {
+                      const scheme = chitRounds?.find((r: any) => r.name === v);
+                      setMemberToEdit({
+                        ...memberToEdit, 
+                        chitGroup: v,
+                        monthlyAmount: scheme?.monthlyAmount || memberToEdit.monthlyAmount
+                      });
+                    }}
+                  >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
