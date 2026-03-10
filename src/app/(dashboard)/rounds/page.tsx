@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -54,6 +55,9 @@ import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
 import { cn } from "@/lib/utils"
 
+const DAILY_SCHEME_AMOUNT = 800;
+const MONTHLY_SCHEME_AMOUNT = 5000;
+
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
@@ -82,8 +86,8 @@ export default function RoundsPage() {
 
   const [newChit, setNewChit] = useState({ 
     name: "", 
-    monthlyAmount: 5000, 
-    dailyAmount: 0, 
+    monthlyAmount: MONTHLY_SCHEME_AMOUNT, 
+    dailyAmount: DAILY_SCHEME_AMOUNT, 
     totalMembers: 20, 
     duration: 20, 
     startDate: new Date().toISOString().split('T')[0], 
@@ -110,9 +114,15 @@ export default function RoundsPage() {
 
     setIsActionPending(true);
     try {
-      await addDoc(collection(db, 'chitRounds'), { ...newChit, createdAt: serverTimestamp() });
+      const finalChit = {
+        ...newChit,
+        monthlyAmount: newChit.collectionType === "Monthly" ? MONTHLY_SCHEME_AMOUNT : 0,
+        dailyAmount: newChit.collectionType === "Daily" ? DAILY_SCHEME_AMOUNT : 0,
+        createdAt: serverTimestamp()
+      };
+      await addDoc(collection(db, 'chitRounds'), finalChit);
       setIsAddChitDialogOpen(false); restoreInteraction(false);
-      setNewChit({ name: "", monthlyAmount: 5000, dailyAmount: 0, totalMembers: 20, duration: 20, startDate: new Date().toISOString().split('T')[0], description: "", collectionType: "" });
+      setNewChit({ name: "", monthlyAmount: MONTHLY_SCHEME_AMOUNT, dailyAmount: DAILY_SCHEME_AMOUNT, totalMembers: 20, duration: 20, startDate: new Date().toISOString().split('T')[0], description: "", collectionType: "" });
       toast({ title: "Round Created" });
     } catch (e: any) { toast({ variant: "destructive", title: "Error" }); } finally { setIsActionPending(false); }
   }
@@ -121,12 +131,13 @@ export default function RoundsPage() {
     e.preventDefault(); if (!db || !editingChit || isActionPending) return;
     setIsActionPending(true);
     try {
-      await updateDoc(doc(db, 'chitRounds', editingChit.id), { 
-        ...editingChit, 
-        monthlyAmount: Number(editingChit.monthlyAmount), 
-        dailyAmount: Number(editingChit.dailyAmount || 0),
-        totalMembers: Number(editingChit.totalMembers) 
-      });
+      const finalUpdate = {
+        ...editingChit,
+        monthlyAmount: editingChit.collectionType === "Monthly" ? MONTHLY_SCHEME_AMOUNT : 0,
+        dailyAmount: editingChit.collectionType === "Daily" ? DAILY_SCHEME_AMOUNT : 0,
+        totalMembers: Number(editingChit.totalMembers)
+      };
+      await updateDoc(doc(db, 'chitRounds', editingChit.id), finalUpdate);
       setIsEditChitDialogOpen(false); restoreInteraction(false);
       toast({ title: "Updated Successfully" });
     } catch (e: any) { toast({ variant: "destructive", title: "Error" }); } finally { setIsActionPending(false); }
@@ -176,7 +187,7 @@ export default function RoundsPage() {
               <CardContent className="p-4 flex-1">
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-emerald-600">
-                    {group.collectionType === 'Daily' ? `Daily: ₹${group.dailyAmount?.toLocaleString()}` : `Dues: ₹${group.monthlyAmount?.toLocaleString()}`}
+                    {group.collectionType === 'Daily' ? `Daily: ₹${DAILY_SCHEME_AMOUNT.toLocaleString()}` : `Monthly: ₹${MONTHLY_SCHEME_AMOUNT.toLocaleString()}`}
                   </span>
                   <span className="text-muted-foreground">{(members || []).filter(m => m.chitGroup === group.name).length} / {group.totalMembers} Filled</span>
                 </div>
@@ -209,18 +220,14 @@ export default function RoundsPage() {
                 
                 {newChit.collectionType && (
                   <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                    {newChit.collectionType === "Monthly" && (
-                      <div className="grid gap-2">
-                        <Label htmlFor="monthlyAmount">Monthly Amount (₹)</Label>
-                        <Input id="monthlyAmount" type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} />
-                      </div>
-                    )}
-                    {newChit.collectionType === "Daily" && (
-                      <div className="grid gap-2">
-                        <Label htmlFor="dailyAmount">Daily Amount (₹)</Label>
-                        <Input id="dailyAmount" type="number" value={newChit.dailyAmount} onChange={e => setNewChit({...newChit, dailyAmount: Number(e.target.value)})} required disabled={isActionPending} />
-                      </div>
-                    )}
+                    <div className="grid gap-2">
+                      <Label>Fixed Amount (₹)</Label>
+                      <Input 
+                        value={newChit.collectionType === "Monthly" ? MONTHLY_SCHEME_AMOUNT : DAILY_SCHEME_AMOUNT} 
+                        readOnly 
+                        className="bg-muted font-bold text-primary"
+                      />
+                    </div>
                     <div className="grid gap-2">
                       <Label htmlFor="totalMembers">Members</Label>
                       <Input id="totalMembers" type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} />
@@ -260,12 +267,14 @@ export default function RoundsPage() {
 
                   {editingChit.collectionType && (
                     <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                      {editingChit.collectionType === "Monthly" && (
-                        <div className="grid gap-2"><Label>Monthly (₹)</Label><Input type="number" value={editingChit.monthlyAmount} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
-                      )}
-                      {editingChit.collectionType === "Daily" && (
-                        <div className="grid gap-2"><Label>Daily (₹)</Label><Input type="number" value={editingChit.dailyAmount} onChange={e => setEditingChit({...editingChit, dailyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
-                      )}
+                      <div className="grid gap-2">
+                        <Label>Fixed Amount (₹)</Label>
+                        <Input 
+                          value={editingChit.collectionType === "Monthly" ? MONTHLY_SCHEME_AMOUNT : DAILY_SCHEME_AMOUNT} 
+                          readOnly 
+                          className="bg-muted font-bold text-primary"
+                        />
+                      </div>
                       <div className="grid gap-2"><Label>Members</Label><Input type="number" value={editingChit.totalMembers} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
                     </div>
                   )}
@@ -302,10 +311,7 @@ export default function RoundsPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType || "Monthly"}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Members</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-emerald-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Monthly Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-emerald-600">₹{currentRound?.monthlyAmount?.toLocaleString()}</div></CardContent></Card>
-        {currentRound?.collectionType === 'Daily' && (
-          <Card className="shadow-sm border-l-4 border-l-amber-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Daily Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-amber-600">₹{currentRound?.dailyAmount?.toLocaleString()}</div></CardContent></Card>
-        )}
+        <Card className="shadow-sm border-l-4 border-l-emerald-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Scheme Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-emerald-600">₹{(currentRound?.collectionType === 'Daily' ? DAILY_SCHEME_AMOUNT : MONTHLY_SCHEME_AMOUNT).toLocaleString()}</div></CardContent></Card>
       </div>
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <div className="p-4 border-b bg-muted/20 flex justify-between items-center"><h3 className="text-sm font-bold flex items-center gap-2"><Users className="size-4 text-primary" /> Active Board</h3><Badge variant="secondary" className="text-[10px] tabular-nums font-bold">{assignedMembers.length} Joined</Badge></div>

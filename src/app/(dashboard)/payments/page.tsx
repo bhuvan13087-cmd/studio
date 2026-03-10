@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
@@ -89,7 +90,7 @@ export default function PaymentsPage() {
   const { data: roundsData } = useCollection(roundsQuery);
   const rounds = roundsData || [];
 
-  const [recordData, setRecordData] = useState({ memberId: "", amount: 5000, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "Cash" })
+  const [recordData, setRecordData] = useState({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "Cash" })
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -125,6 +126,12 @@ export default function PaymentsPage() {
     }
   }
 
+  const handleMemberSelect = (member: any) => {
+    setRecordData({ ...recordData, memberId: member.id, amount: member.monthlyAmount || 0 });
+    setMemberSearch(member.name);
+    setShowSuggestions(false);
+  }
+
   const handleQuickRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || isActionPending || !recordData.memberId) return;
@@ -133,11 +140,24 @@ export default function PaymentsPage() {
     setIsActionPending(true)
     const amount = Number(recordData.amount);
     try {
-      addDocumentNonBlocking(collection(db, 'payments'), { memberId: member.id, memberName: member.name, month: recordData.month, amountPaid: amount, paymentDate: new Date().toISOString(), status: "paid", method: recordData.method, createdAt: serverTimestamp() });
-      updateDocumentNonBlocking(doc(db, 'members', member.id), { paymentStatus: "success", totalPaid: (member.totalPaid || 0) + amount, pendingAmount: Math.max(0, (member.pendingAmount || 0) - amount) });
+      addDocumentNonBlocking(collection(db, 'payments'), { 
+        memberId: member.id, 
+        memberName: member.name, 
+        month: recordData.month, 
+        amountPaid: amount, 
+        paymentDate: new Date().toISOString(), 
+        status: "paid", 
+        method: recordData.method, 
+        createdAt: serverTimestamp() 
+      });
+      updateDocumentNonBlocking(doc(db, 'members', member.id), { 
+        paymentStatus: "success", 
+        totalPaid: (member.totalPaid || 0) + amount, 
+        pendingAmount: Math.max(0, (member.pendingAmount || 0) - amount) 
+      });
       setIsQuickRecordOpen(false);
       restoreInteraction(false);
-      setRecordData({ memberId: "", amount: 5000, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "Cash" });
+      setRecordData({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "Cash" });
       setMemberSearch("");
       toast({ title: "Payment Recorded", description: `Amount ₹${amount} saved for ${member.name}.` });
     } catch (error: any) {
@@ -226,17 +246,25 @@ export default function PaymentsPage() {
                   <Label>Search Member</Label>
                   <div className="relative" ref={suggestionsRef}>
                     <Input placeholder="Type member name..." value={memberSearch} onChange={(e) => { setMemberSearch(e.target.value); setShowSuggestions(true); }} onFocus={() => setShowSuggestions(true)} autoComplete="off" disabled={isActionPending} />
-                    {memberSearch && <button type="button" onClick={() => { setMemberSearch(""); setRecordData({ ...recordData, memberId: "" }); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"><X className="size-4" /></button>}
+                    {memberSearch && <button type="button" onClick={() => { setMemberSearch(""); setRecordData({ ...recordData, memberId: "", amount: 0 }); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"><X className="size-4" /></button>}
                     {showSuggestions && memberSearch.length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg overflow-hidden">
                         <ScrollArea className="h-[150px]">
-                          <div className="p-1">{filteredMembersForSelection.length > 0 ? filteredMembersForSelection.map((m) => (<Button key={m.id} type="button" variant="ghost" className="w-full justify-start font-normal h-9 px-3 text-xs" onClick={() => { setRecordData({ ...recordData, memberId: m.id }); setMemberSearch(m.name); setShowSuggestions(false); }}>{m.name}</Button>)) : <div className="p-3 text-center text-xs text-muted-foreground">No member found.</div>}</div>
+                          <div className="p-1">{filteredMembersForSelection.length > 0 ? filteredMembersForSelection.map((m) => (<Button key={m.id} type="button" variant="ghost" className="w-full justify-start font-normal h-9 px-3 text-xs" onClick={() => handleMemberSelect(m)}>{m.name} ({m.chitGroup})</Button>)) : <div className="p-3 text-center text-xs text-muted-foreground">No member found.</div>}</div>
                         </ScrollArea>
                       </div>
                     )}
                   </div>
                 </div>
-                <div className="grid gap-2"><Label>Amount (₹)</Label><Input disabled={isActionPending} type="number" value={recordData.amount} onChange={e => setRecordData({...recordData, amount: Number(e.target.value)})} required /></div>
+                <div className="grid gap-2">
+                  <Label>Contribution Amount (Fixed ₹)</Label>
+                  <Input 
+                    value={recordData.amount} 
+                    readOnly 
+                    className="bg-muted font-bold text-primary"
+                  />
+                  <p className="text-[10px] text-muted-foreground italic">Auto-filled based on member's scheme.</p>
+                </div>
                 <div className="grid gap-2">
                   <Label>Method</Label>
                   <Select disabled={isActionPending} value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>

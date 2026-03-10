@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -100,14 +101,31 @@ export default function MembersPage() {
         }
         const selectors = ['.modal-backdrop', '.overlay', '.dropdown-backdrop', '[data-radix-portal]'];
         selectors.forEach(selector => {
-          document.querySelectorAll(selector).forEach(el => {
-            if (selector === '[data-radix-portal]') {
-               if (el.innerHTML === '') el.remove();
-            } else { el.remove(); }
-          });
+          if (selector === '[data-radix-portal]') {
+               document.querySelectorAll(selector).forEach(el => { if (el.innerHTML === '') el.remove(); });
+          } else { document.querySelectorAll(selector).forEach(el => el.remove()); }
         });
-        if (document.activeElement instanceof HTMLElement) { document.activeElement.blur(); }
       }, 300)
+    }
+  }
+
+  const handleGroupChange = (groupName: string) => {
+    const selectedRound = chitRounds?.find((r: any) => r.name === groupName);
+    if (selectedRound) {
+      const amount = selectedRound.collectionType === 'Daily' ? 800 : 5000;
+      setNewMember({ ...newMember, chitGroup: groupName, monthlyAmount: amount });
+    } else {
+      setNewMember({ ...newMember, chitGroup: groupName });
+    }
+  }
+
+  const handleEditGroupChange = (groupName: string) => {
+    const selectedRound = chitRounds?.find((r: any) => r.name === groupName);
+    if (selectedRound && memberToEdit) {
+      const amount = selectedRound.collectionType === 'Daily' ? 800 : 5000;
+      setMemberToEdit({ ...memberToEdit, chitGroup: groupName, monthlyAmount: amount });
+    } else if (memberToEdit) {
+      setMemberToEdit({ ...memberToEdit, chitGroup: groupName });
     }
   }
 
@@ -216,12 +234,20 @@ export default function MembersPage() {
                 <div className="grid gap-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2">
                   <Label htmlFor="chitGroup">Chit Group</Label>
-                  <Select disabled={isActionPending} value={newMember.chitGroup} onValueChange={v => setNewMember({...newMember, chitGroup: v})}>
+                  <Select disabled={isActionPending} value={newMember.chitGroup} onValueChange={handleGroupChange}>
                     <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
-                    <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
+                    <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name} ({round.collectionType})</SelectItem>))}</SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2"><Label htmlFor="amount">Monthly Amount (₹)</Label><Input id="amount" type="number" value={newMember.monthlyAmount} onChange={e => setNewMember({...newMember, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                <div className="grid gap-2">
+                  <Label>Contribution Amount (Fixed ₹)</Label>
+                  <Input 
+                    value={newMember.monthlyAmount} 
+                    readOnly 
+                    className="bg-muted font-bold text-primary"
+                  />
+                  <p className="text-[10px] text-muted-foreground italic">Auto-filled based on selected group.</p>
+                </div>
                 <div className="grid gap-2"><Label htmlFor="joinDate">Join Date</Label><Input id="joinDate" type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required disabled={isActionPending} /></div>
               </div>
               <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -334,6 +360,21 @@ export default function MembersPage() {
                 <div className="grid gap-2"><Label>Name</Label><Input value={memberToEdit?.name || ""} onChange={e => setMemberToEdit({...memberToEdit, name: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2"><Label>Phone</Label><Input value={memberToEdit?.phone || ""} onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2">
+                  <Label>Group</Label>
+                  <Select disabled={isActionPending} value={memberToEdit?.chitGroup || ""} onValueChange={handleEditGroupChange}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name} ({round.collectionType})</SelectItem>))}</SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Contribution Amount (Fixed ₹)</Label>
+                  <Input 
+                    value={memberToEdit?.monthlyAmount || 0} 
+                    readOnly 
+                    className="bg-muted font-bold text-primary"
+                  />
+                </div>
+                <div className="grid gap-2">
                   <Label>Status</Label>
                   <Select disabled={isActionPending} value={memberToEdit?.status || "active"} onValueChange={v => setMemberToEdit({...memberToEdit, status: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -356,7 +397,7 @@ export default function MembersPage() {
               <div className="grid gap-4 py-4">
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Phone</span><span className="font-bold">{selectedMember?.phone}</span></div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Joined</span><span className="font-bold">{selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
-                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Monthly Amount</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Amount Target</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
                 <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg text-sm"><span className="text-emerald-600 font-bold uppercase text-[10px]">Total Paid</span><span className="font-bold text-emerald-600 text-base">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span></div>
               </div>
               <DialogFooter className="gap-2">
