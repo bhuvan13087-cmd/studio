@@ -206,22 +206,27 @@ export default function RoundsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="monthlyAmount">Monthly Amount (₹)</Label>
-                    <Input id="monthlyAmount" type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} />
-                  </div>
-                  {newChit.collectionType === "Daily" && (
+                
+                {newChit.collectionType && (
+                  <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    {newChit.collectionType === "Monthly" && (
+                      <div className="grid gap-2">
+                        <Label htmlFor="monthlyAmount">Monthly Amount (₹)</Label>
+                        <Input id="monthlyAmount" type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} />
+                      </div>
+                    )}
+                    {newChit.collectionType === "Daily" && (
+                      <div className="grid gap-2">
+                        <Label htmlFor="dailyAmount">Daily Amount (₹)</Label>
+                        <Input id="dailyAmount" type="number" value={newChit.dailyAmount} onChange={e => setNewChit({...newChit, dailyAmount: Number(e.target.value)})} required disabled={isActionPending} />
+                      </div>
+                    )}
                     <div className="grid gap-2">
-                      <Label htmlFor="dailyAmount">Daily Amount (₹)</Label>
-                      <Input id="dailyAmount" type="number" value={newChit.dailyAmount} onChange={e => setNewChit({...newChit, dailyAmount: Number(e.target.value)})} required disabled={isActionPending} />
+                      <Label htmlFor="totalMembers">Members</Label>
+                      <Input id="totalMembers" type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} />
                     </div>
-                  )}
-                  <div className="grid gap-2">
-                    <Label htmlFor="totalMembers">Members</Label>
-                    <Input id="totalMembers" type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} />
                   </div>
-                </div>
+                )}
               </div>
               <DialogFooter className="gap-2">
                 <Button variant="outline" type="button" onClick={() => { setIsAddChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
@@ -252,13 +257,18 @@ export default function RoundsPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2"><Label>Monthly (₹)</Label><Input type="number" value={editingChit.monthlyAmount} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
-                    {editingChit.collectionType === "Daily" && (
-                      <div className="grid gap-2"><Label>Daily (₹)</Label><Input type="number" value={editingChit.dailyAmount} onChange={e => setEditingChit({...editingChit, dailyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
-                    )}
-                    <div className="grid gap-2"><Label>Members</Label><Input type="number" value={editingChit.totalMembers} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
-                  </div>
+
+                  {editingChit.collectionType && (
+                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                      {editingChit.collectionType === "Monthly" && (
+                        <div className="grid gap-2"><Label>Monthly (₹)</Label><Input type="number" value={editingChit.monthlyAmount} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                      )}
+                      {editingChit.collectionType === "Daily" && (
+                        <div className="grid gap-2"><Label>Daily (₹)</Label><Input type="number" value={editingChit.dailyAmount} onChange={e => setEditingChit({...editingChit, dailyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                      )}
+                      <div className="grid gap-2"><Label>Members</Label><Input type="number" value={editingChit.totalMembers} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                    </div>
+                  )}
                 </div>
                 <DialogFooter className="gap-2">
                   <Button variant="outline" type="button" onClick={() => { setIsEditChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
