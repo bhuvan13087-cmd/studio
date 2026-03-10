@@ -148,9 +148,9 @@ export default function DashboardPage() {
         <Card className="hover:shadow-md transition-shadow duration-200 overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Revenue</CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <Select value={revenueView} onValueChange={(v: any) => setRevenueView(v)}>
-                <SelectTrigger className="h-7 w-[90px] text-[10px] font-bold border-none bg-muted/50 focus:ring-0 shadow-none px-2">
+                <SelectTrigger className="h-6 w-[80px] text-[9px] font-bold border-none bg-muted/50 focus:ring-0 shadow-none px-2">
                   <SelectValue placeholder="Period" />
                 </SelectTrigger>
                 <SelectContent>
@@ -158,7 +158,7 @@ export default function DashboardPage() {
                   <SelectItem value="today" className="text-[10px] font-bold">Today</SelectItem>
                 </SelectContent>
               </Select>
-              <IndianRupee className="size-5 text-accent" />
+              <IndianRupee className="size-4 text-accent" />
             </div>
           </CardHeader>
           <CardContent>
