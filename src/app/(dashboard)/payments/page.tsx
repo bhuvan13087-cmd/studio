@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2, Calendar, Trash2 } from "lucide-react"
+import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2, Calendar, Trash2, Check, ChevronsUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -40,14 +40,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, deleteDoc, updateDoc, getDoc } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy, deleteDoc, updateDoc } from "firebase/firestore"
 import { addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
+import { cn } from "@/lib/utils"
 
 export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -58,6 +65,11 @@ export default function PaymentsPage() {
   const [isDeletePaymentDialogOpen, setIsDeletePaymentDialogOpen] = useState(false)
   const [paymentToDelete, setPaymentToDelete] = useState<any>(null)
   const [isActionPending, setIsActionPending] = useState(false)
+  
+  // Searchable Member Selection State
+  const [memberSearch, setMemberSearch] = useState("")
+  const [isMemberPopoverOpen, setIsMemberPopoverOpen] = useState(false)
+
   const { toast } = useToast()
   const db = useFirestore()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
@@ -80,6 +92,14 @@ export default function PaymentsPage() {
     month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
     method: "Cash"
   })
+
+  // Filter members for the searchable selection
+  const filteredMembersForSelection = useMemo(() => {
+    if (!memberSearch) return members;
+    return members.filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()));
+  }, [members, memberSearch]);
+
+  const selectedMemberName = members.find(m => m.id === recordData.memberId)?.name || "Select member...";
 
   /**
    * Permanent Fix for UI Freeze Bug
@@ -107,7 +127,7 @@ export default function PaymentsPage() {
 
   const handleQuickRecord = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db || isActionPending) return;
+    if (!db || isActionPending || !recordData.memberId) return;
 
     const member = members.find(m => m.id === recordData.memberId);
     if (!member) return;
@@ -135,6 +155,14 @@ export default function PaymentsPage() {
 
       setIsQuickRecordOpen(false);
       restoreInteraction(false);
+      setRecordData({
+        memberId: "",
+        amount: 5000,
+        month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
+        method: "Cash"
+      });
+      setMemberSearch("");
+      
       toast({
         title: "Payment Recorded",
         description: `Payment of ₹${amount} for ${member.name} saved successfully.`,
@@ -157,13 +185,10 @@ export default function PaymentsPage() {
     try {
       const paymentRef = doc(db, 'payments', paymentToDelete.id);
       
-      // Update member totals before deleting the payment
       const member = members.find(m => m.id === paymentToDelete.memberId);
       if (member) {
         await updateDoc(doc(db, 'members', member.id), {
           totalPaid: Math.max(0, (member.totalPaid || 0) - (paymentToDelete.amountPaid || 0)),
-          // Optionally reset paymentStatus if this was the only payment this month
-          // but for simplicity we just update the total
         });
       }
 
@@ -226,6 +251,9 @@ export default function PaymentsPage() {
         <Dialog open={isQuickRecordOpen} onOpenChange={(open) => {
           setIsQuickRecordOpen(open)
           restoreInteraction(open)
+          if (!open) {
+            setMemberSearch("")
+          }
         }}>
           <DialogTrigger asChild>
             <Button className="h-11 shadow-lg hover:shadow-xl transition-all">
@@ -242,17 +270,63 @@ export default function PaymentsPage() {
                 </DialogHeader>
                 <div className="grid gap-4 py-6">
                   <div className="grid gap-2">
-                    <Label htmlFor="member">Member</Label>
-                    <Select disabled={isActionPending} value={recordData.memberId} onValueChange={(v) => setRecordData({...recordData, memberId: v})}>
-                      <SelectTrigger className="bg-muted/30">
-                        <SelectValue placeholder="Select member" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {members.map(m => (
-                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>Member</Label>
+                    <Popover open={isMemberPopoverOpen} onOpenChange={setIsMemberPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={isMemberPopoverOpen}
+                          className="w-full justify-between bg-muted/30 font-normal border-border/50 h-10 px-3"
+                          disabled={isActionPending}
+                        >
+                          {selectedMemberName}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <div className="flex flex-col">
+                          <div className="flex items-center border-b px-3">
+                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                            <Input
+                              placeholder="Search member..."
+                              className="flex h-10 w-full border-none bg-transparent py-3 text-sm outline-none focus-visible:ring-0 shadow-none"
+                              value={memberSearch}
+                              onChange={(e) => setMemberSearch(e.target.value)}
+                            />
+                          </div>
+                          <ScrollArea className="h-[200px]">
+                            <div className="p-1">
+                              {filteredMembersForSelection.length > 0 ? (
+                                filteredMembersForSelection.map((m) => (
+                                  <Button
+                                    key={m.id}
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full justify-start font-normal h-9 px-2 text-sm"
+                                    onClick={() => {
+                                      setRecordData({ ...recordData, memberId: m.id });
+                                      setIsMemberPopoverOpen(false);
+                                      setMemberSearch("");
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        recordData.memberId === m.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {m.name}
+                                  </Button>
+                                ))
+                              ) : (
+                                <div className="p-4 text-center text-sm text-muted-foreground">No member found.</div>
+                              )}
+                            </div>
+                          </ScrollArea>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="amount">Amount (₹)</Label>
@@ -274,7 +348,7 @@ export default function PaymentsPage() {
                 </div>
                 <DialogFooter className="sticky bottom-0 bg-background pt-2 border-t">
                   <Button type="button" variant="outline" onClick={() => { setIsQuickRecordOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
-                  <Button type="submit" disabled={isActionPending}>
+                  <Button type="submit" disabled={isActionPending || !recordData.memberId}>
                     {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                     Save Payment
                   </Button>
@@ -297,7 +371,7 @@ export default function PaymentsPage() {
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-4">
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-full md:w-[100px] h-8 bg-muted/30 border-none shadow-none focus:ring-0 text-xs font-semibold">
+            <SelectTrigger className="w-full md:w-[100px] h-8 bg-muted/30 border-none shadow-none focus:ring-0 text-xs font-semibold px-2">
               <SelectValue placeholder="Schemes" />
             </SelectTrigger>
             <SelectContent>
