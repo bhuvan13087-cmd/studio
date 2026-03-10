@@ -60,13 +60,11 @@ export default function RoundsPage() {
   const [isEditChitDialogOpen, setIsEditChitDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
-  const [isRemoveMemberDialogOpen, setIsRemoveMemberDialogOpen] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
   
   const [editingChit, setEditingChit] = useState<any>(null)
   const [chitToDelete, setChitToDelete] = useState<any>(null)
   const [historyMember, setHistoryMember] = useState<any>(null)
-  const [memberToRemove, setMemberToRemove] = useState<any>(null)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -82,7 +80,16 @@ export default function RoundsPage() {
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: payments } = useCollection(paymentsQuery);
 
-  const [newChit, setNewChit] = useState({ name: "", monthlyAmount: 5000, dailyAmount: 0, totalMembers: 20, duration: 20, startDate: new Date().toISOString().split('T')[0], description: "", collectionType: "Monthly" })
+  const [newChit, setNewChit] = useState({ 
+    name: "", 
+    monthlyAmount: 5000, 
+    dailyAmount: 0, 
+    totalMembers: 20, 
+    duration: 20, 
+    startDate: new Date().toISOString().split('T')[0], 
+    description: "", 
+    collectionType: "Monthly" 
+  })
 
   const restoreInteraction = (open: boolean) => {
     if (!open) {
@@ -108,7 +115,12 @@ export default function RoundsPage() {
     e.preventDefault(); if (!db || !editingChit || isActionPending) return;
     setIsActionPending(true);
     try {
-      await updateDoc(doc(db, 'chitRounds', editingChit.id), { ...editingChit, monthlyAmount: Number(editingChit.monthlyAmount), totalMembers: Number(editingChit.totalMembers) });
+      await updateDoc(doc(db, 'chitRounds', editingChit.id), { 
+        ...editingChit, 
+        monthlyAmount: Number(editingChit.monthlyAmount), 
+        dailyAmount: Number(editingChit.dailyAmount || 0),
+        totalMembers: Number(editingChit.totalMembers) 
+      });
       setIsEditChitDialogOpen(false); restoreInteraction(false);
       toast({ title: "Updated Successfully" });
     } catch (e: any) { toast({ variant: "destructive", title: "Error" }); } finally { setIsActionPending(false); }
@@ -141,35 +153,126 @@ export default function RoundsPage() {
                   <Badge variant="outline" className="text-[10px] font-bold uppercase">{group.collectionType || "Monthly"}</Badge>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
-                    <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => { setEditingChit({...group}); setIsEditChitDialogOpen(true); }}><Pencil className="mr-2 size-3.5" /> Edit</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive" onSelect={() => { setChitToDelete(group); setIsDeleteDialogOpen(true); }}><Trash2 className="mr-2 size-3.5" /> Delete</DropdownMenuItem></DropdownMenuContent>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => { setEditingChit({...group}); setIsEditChitDialogOpen(true); }}>
+                        <Pencil className="mr-2 size-3.5" /> Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive" onSelect={() => { setChitToDelete(group); setIsDeleteDialogOpen(true); }}>
+                        <Trash2 className="mr-2 size-3.5" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
                 <CardTitle className="text-lg truncate">{group.name}</CardTitle>
                 <CardDescription className="text-xs">Capacity: {group.totalMembers} Members</CardDescription>
               </CardHeader>
               <CardContent className="p-4 flex-1">
-                <div className="flex justify-between text-xs font-bold"><span className="text-emerald-600">Dues: ₹{group.monthlyAmount?.toLocaleString()}</span><span className="text-muted-foreground">{(members || []).filter(m => m.chitGroup === group.name).length} / {group.totalMembers} Filled</span></div>
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-emerald-600">
+                    {group.collectionType === 'Daily' ? `Daily: ₹${group.dailyAmount?.toLocaleString()}` : `Dues: ₹${group.monthlyAmount?.toLocaleString()}`}
+                  </span>
+                  <span className="text-muted-foreground">{(members || []).filter(m => m.chitGroup === group.name).length} / {group.totalMembers} Filled</span>
+                </div>
               </CardContent>
               <CardFooter className="p-0 border-t"><Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Round Board</Button></CardFooter>
             </Card>
           ))}
         </div>
-        {/* Add Scheme Dialog ... simplified for space */}
+
+        {/* Add Scheme Dialog */}
         <Dialog open={isAddChitDialogOpen} onOpenChange={(o) => { setIsAddChitDialogOpen(o); restoreInteraction(o); }}>
           <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleAddChit}>
-              <DialogHeader><DialogTitle>New Scheme</DialogTitle></DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2"><Label>Name</Label><Input value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required disabled={isActionPending} /></div>
+              <DialogHeader><DialogTitle>New Scheme</DialogTitle><DialogDescription>Define a new chit fund collection cycle.</DialogDescription></DialogHeader>
+              <div className="grid gap-4 py-6">
+                <div className="grid gap-2">
+                  <Label htmlFor="schemeName">Name</Label>
+                  <Input id="schemeName" value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required disabled={isActionPending} placeholder="e.g. Platinum Group" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Collection Type</Label>
+                  <Select value={newChit.collectionType} onValueChange={v => setNewChit({...newChit, collectionType: v})} disabled={isActionPending}>
+                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Monthly">Monthly</SelectItem>
+                      <SelectItem value="Daily">Daily</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
-                  <div className="grid gap-2"><Label>Members</Label><Input type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="monthlyAmount">Monthly Amount (₹)</Label>
+                    <Input id="monthlyAmount" type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} />
+                  </div>
+                  {newChit.collectionType === "Daily" && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="dailyAmount">Daily Amount (₹)</Label>
+                      <Input id="dailyAmount" type="number" value={newChit.dailyAmount} onChange={e => setNewChit({...newChit, dailyAmount: Number(e.target.value)})} required disabled={isActionPending} />
+                    </div>
+                  )}
+                  <div className="grid gap-2">
+                    <Label htmlFor="totalMembers">Members</Label>
+                    <Input id="totalMembers" type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} />
+                  </div>
                 </div>
               </div>
-              <DialogFooter className="gap-2"><Button variant="outline" type="button" onClick={() => setIsAddChitDialogOpen(false)} disabled={isActionPending}>Cancel</Button><Button type="submit" disabled={isActionPending}>Create</Button></DialogFooter>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" type="button" onClick={() => { setIsAddChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto">
+                  {isActionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Create Scheme
+                </Button>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Scheme Dialog */}
+        <Dialog open={isEditChitDialogOpen} onOpenChange={(o) => { setIsEditChitDialogOpen(o); restoreInteraction(o); if(!o) setEditingChit(null); }}>
+          <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+            {editingChit && (
+              <form onSubmit={handleEditChit}>
+                <DialogHeader><DialogTitle>Edit Scheme</DialogTitle></DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2"><Label>Name</Label><Input value={editingChit.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required disabled={isActionPending} /></div>
+                  <div className="grid gap-2">
+                    <Label>Collection Type</Label>
+                    <Select value={editingChit.collectionType} onValueChange={v => setEditingChit({...editingChit, collectionType: v})} disabled={isActionPending}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Monthly">Monthly</SelectItem>
+                        <SelectItem value="Daily">Daily</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2"><Label>Monthly (₹)</Label><Input type="number" value={editingChit.monthlyAmount} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                    {editingChit.collectionType === "Daily" && (
+                      <div className="grid gap-2"><Label>Daily (₹)</Label><Input type="number" value={editingChit.dailyAmount} onChange={e => setEditingChit({...editingChit, dailyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                    )}
+                    <div className="grid gap-2"><Label>Members</Label><Input type="number" value={editingChit.totalMembers} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                  </div>
+                </div>
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" type="button" onClick={() => { setIsEditChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
+                  <Button type="submit" disabled={isActionPending}>Update</Button>
+                </DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete AlertDialog */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={(o) => { setIsDeleteDialogOpen(o); restoreInteraction(o); if(!o) setChitToDelete(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme <strong>{chitToDelete?.name}</strong>. Members currently in this group will need to be reassigned.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={confirmDelete} disabled={isActionPending}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     )
   }
@@ -183,8 +286,10 @@ export default function RoundsPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType || "Monthly"}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Members</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-emerald-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-emerald-600">₹{currentRound?.monthlyAmount?.toLocaleString()}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-amber-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Duration</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.duration} Months</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-emerald-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Monthly Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-emerald-600">₹{currentRound?.monthlyAmount?.toLocaleString()}</div></CardContent></Card>
+        {currentRound?.collectionType === 'Daily' && (
+          <Card className="shadow-sm border-l-4 border-l-amber-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground">Daily Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-amber-600">₹{currentRound?.dailyAmount?.toLocaleString()}</div></CardContent></Card>
+        )}
       </div>
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <div className="p-4 border-b bg-muted/20 flex justify-between items-center"><h3 className="text-sm font-bold flex items-center gap-2"><Users className="size-4 text-primary" /> Active Board</h3><Badge variant="secondary" className="text-[10px] tabular-nums font-bold">{assignedMembers.length} Joined</Badge></div>
