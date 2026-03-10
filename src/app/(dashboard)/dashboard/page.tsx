@@ -1,16 +1,8 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
-import { Users, IndianRupee, AlertCircle, Calendar, Clock, CheckCircle2, DollarSign, Loader2, Database } from "lucide-react"
+import { Users, IndianRupee, AlertCircle, Calendar, Clock, CheckCircle2, Loader2, Database } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Bar, BarChart } from "recharts"
 import {
   Table,
   TableBody,
@@ -28,25 +20,7 @@ import {
 } from "@/components/ui/select"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO, subMonths } from "date-fns"
-
-const chartConfig = {
-  collected: {
-    label: "Collected",
-    color: "hsl(var(--primary))",
-  },
-  pending: {
-    label: "Pending",
-    color: "hsl(var(--accent))",
-  },
-} satisfies ChartConfig
-
-const barChartConfig = {
-  total: {
-    label: "Total Collection",
-    color: "hsl(var(--primary))",
-  },
-} satisfies ChartConfig
+import { format, isSameMonth, parseISO } from "date-fns"
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
@@ -101,23 +75,9 @@ export default function DashboardPage() {
   });
   const pendingPaymentsCount = pendingMembers.length
   
-  const futureRounds = (rounds || []).filter(r => r.date && parseISO(r.date) > now).sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
-  const nextRoundDate = futureRounds.length > 0 ? format(parseISO(futureRounds[0].date), 'MMM dd') : 'None scheduled'
-  const nextRoundDays = futureRounds.length > 0 ? Math.ceil((parseISO(futureRounds[0].date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null
-
-  const last6Months = Array.from({ length: 6 }).map((_, i) => subMonths(now, i)).reverse()
-  const financialChartData = last6Months.map(monthDate => {
-    const monthPayments = (payments || []).filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), monthDate))
-    return {
-      month: format(monthDate, 'MMM'),
-      collected: monthPayments.filter(p => p.status === 'paid' || p.status === 'success').reduce((acc, p) => acc + (p.amountPaid || 0), 0),
-      pending: monthPayments.filter(p => p.status === 'pending').reduce((acc, p) => acc + (p.amountPaid || 0), 0),
-    }
-  })
-
   const recentWinners = (rounds || []).filter(r => r.status === 'completed').slice(0, 4)
   const recentPaymentsList = (payments || []).filter(p => p.status === 'paid' || p.status === 'success').slice(0, 5)
-  const pendingMembersList = pendingMembers.slice(0, 3)
+  const pendingMembersList = pendingMembers.slice(0, 4)
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 overflow-x-hidden">
@@ -126,7 +86,7 @@ export default function DashboardPage() {
         <p className="text-sm sm:text-base text-muted-foreground">Monitor your chit fund's financial health in real-time.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card className="hover:shadow-md transition-shadow duration-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-xs sm:text-sm font-medium">Total Members</CardTitle>
@@ -172,54 +132,13 @@ export default function DashboardPage() {
             <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 uppercase font-semibold">Outstanding dues</p>
           </CardContent>
         </Card>
-        <Card className="hover:shadow-md transition-shadow duration-200">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs sm:text-sm font-medium">Next Round</CardTitle>
-            <Calendar className="size-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">{nextRoundDate}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 uppercase font-semibold">
-              {nextRoundDays ? `In ${nextRoundDays} days` : 'Not scheduled'}
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-7">
-        <Card className="lg:col-span-4 border-border/50">
-          <CardHeader>
-            <CardTitle className="text-lg">Financial Performance</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Monthly collection vs pending dues (Last 6 Months).</CardDescription>
-          </CardHeader>
-          <CardContent className="px-1 sm:px-6">
-            <ChartContainer config={chartConfig} className="h-[250px] sm:h-[300px] w-full">
-              <AreaChart data={financialChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorCollected" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorPending" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v/1000}k`} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Area type="monotone" dataKey="collected" stroke="hsl(var(--primary))" fill="url(#colorCollected)" strokeWidth={2} />
-                <Area type="monotone" dataKey="pending" stroke="hsl(var(--accent))" fill="url(#colorPending)" strokeWidth={2} />
-              </AreaChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-3 border-border/50 overflow-hidden">
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="border-border/50 overflow-hidden">
           <CardHeader>
             <CardTitle className="text-lg">Recent Winners</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Members who won the latest auction rounds.</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Latest auction winners.</CardDescription>
           </CardHeader>
           <CardContent className="px-4 sm:px-6">
             {recentWinners.length > 0 ? (
@@ -231,7 +150,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0 space-y-0.5 sm:space-y-1">
                       <p className="text-xs sm:text-sm font-medium leading-none truncate">{winner.winnerName}</p>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Round #{winner.roundNumber} • {winner.date ? format(parseISO(winner.date), 'MMM dd') : '-'}</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Round #{winner.roundNumber}</p>
                     </div>
                     <div className="font-bold text-emerald-600 text-xs sm:text-sm tabular-nums shrink-0">₹{winner.winningAmount?.toLocaleString()}</div>
                   </div>
@@ -244,16 +163,14 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
         <Card className="border-border/50 overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
                <Clock className="size-4 sm:size-5 text-amber-500" />
                Pending Members
             </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Members yet to pay for this month.</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Awaiting payment.</CardDescription>
           </CardHeader>
           <CardContent className="px-0 sm:px-6">
             <div className="rounded-md border sm:border-none">
@@ -261,21 +178,19 @@ export default function DashboardPage() {
                 <TableHeader className="sm:bg-muted/30">
                   <TableRow>
                     <TableHead className="text-[10px] sm:text-xs uppercase font-bold tracking-wider">Member</TableHead>
-                    <TableHead className="hidden sm:table-cell text-[10px] sm:text-xs uppercase font-bold tracking-wider">Phone</TableHead>
-                    <TableHead className="text-right text-[10px] sm:text-xs uppercase font-bold tracking-wider">Amount</TableHead>
+                    <TableHead className="text-right text-[10px] sm:text-xs uppercase font-bold tracking-wider">Due</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pendingMembersList.length > 0 ? pendingMembersList.map((member, i) => (
                     <TableRow key={i}>
                       <TableCell className="text-xs sm:text-sm font-medium truncate max-w-[100px] sm:max-w-none">{member.name}</TableCell>
-                      <TableCell className="hidden sm:table-cell text-xs">{member.phone}</TableCell>
                       <TableCell className="text-right font-semibold text-xs sm:text-sm tabular-nums text-amber-600">₹{member.monthlyAmount?.toLocaleString()}</TableCell>
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={3} className="h-24 text-center text-muted-foreground italic text-xs sm:text-sm">
-                        Zero pending dues this month.
+                      <TableCell colSpan={2} className="h-24 text-center text-muted-foreground italic text-xs sm:text-sm">
+                        Zero pending dues.
                       </TableCell>
                     </TableRow>
                   )}
@@ -291,7 +206,7 @@ export default function DashboardPage() {
                <CheckCircle2 className="size-4 sm:size-5 text-emerald-500" />
                Recent Activity
             </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Latest transactions recorded.</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Latest transactions.</CardDescription>
           </CardHeader>
           <CardContent className="px-4 sm:px-6">
              {recentPaymentsList.length > 0 ? (
@@ -300,7 +215,7 @@ export default function DashboardPage() {
                    <div key={i} className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                       <div className="flex flex-col min-w-0">
                          <span className="font-medium text-xs sm:text-sm truncate">{payment.memberName}</span>
-                         <span className="text-[9px] sm:text-[10px] text-muted-foreground">{payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, hh:mm a') : '-'}</span>
+                         <span className="text-[9px] sm:text-[10px] text-muted-foreground">{payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd') : '-'}</span>
                       </div>
                       <div className="flex flex-col items-end shrink-0 pl-2">
                          <span className="font-bold text-emerald-600 text-xs sm:text-sm tabular-nums">₹{payment.amountPaid?.toLocaleString()}</span>
@@ -311,30 +226,12 @@ export default function DashboardPage() {
                </div>
              ) : (
                <div className="h-[200px] flex items-center justify-center text-muted-foreground italic text-xs sm:text-sm">
-                 No recent activity found.
+                 No recent activity.
                </div>
              )}
           </CardContent>
         </Card>
       </div>
-
-      <Card className="border-border/50 overflow-hidden">
-        <CardHeader>
-          <CardTitle className="text-lg">Monthly Collection Trends</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">Revenue trends over the past 6 months.</CardDescription>
-        </CardHeader>
-        <CardContent className="px-1 sm:px-6">
-           <ChartContainer config={barChartConfig} className="h-[250px] sm:h-[300px] w-full">
-              <BarChart data={financialChartData} margin={{ top: 20, right: 10, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v/1000}k`} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="collected" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} barSize={32} />
-              </BarChart>
-           </ChartContainer>
-        </CardContent>
-      </Card>
     </div>
   )
 }
