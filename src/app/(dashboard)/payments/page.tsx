@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2 } from "lucide-react"
+import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -58,7 +58,7 @@ export default function PaymentsPage() {
   const { data: membersData } = useCollection(membersQuery);
   const members = membersData || [];
 
-  const roundsQuery = useMemoFirebase(() => collection(db, 'chitRounds'), [db]);
+  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), [db]));
   const { data: roundsData } = useCollection(roundsQuery);
   const rounds = roundsData || [];
 
@@ -173,8 +173,8 @@ export default function PaymentsPage() {
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-headline font-bold tracking-tight text-primary">Payments</h2>
-          <p className="text-muted-foreground">Comprehensive history of all successful member contributions.</p>
+          <h2 className="text-3xl font-headline font-bold tracking-tight text-primary">Payment History</h2>
+          <p className="text-muted-foreground">Overall ledger of all member transactions across all schemes.</p>
         </div>
         <Dialog open={isQuickRecordOpen} onOpenChange={(open) => {
           setIsQuickRecordOpen(open)
@@ -250,11 +250,11 @@ export default function PaymentsPage() {
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-4">
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-full md:w-[130px] h-8 bg-muted/30 border-none shadow-none focus:ring-0 text-xs">
-              <SelectValue placeholder="All Schemes" />
+            <SelectTrigger className="w-full md:w-[100px] h-8 bg-muted/30 border-none shadow-none focus:ring-0 text-xs font-semibold">
+              <SelectValue placeholder="Schemes" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Schemes</SelectItem>
+              <SelectItem value="all">All</SelectItem>
               <SelectItem value="daily">Daily</SelectItem>
               <SelectItem value="monthly">Monthly</SelectItem>
             </SelectContent>
@@ -266,20 +266,20 @@ export default function PaymentsPage() {
         <Table>
           <TableHeader className="bg-muted/30">
             <TableRow>
-              <TableHead className="font-bold">Member</TableHead>
-              <TableHead className="font-bold">Period</TableHead>
-              <TableHead className="font-bold">Amount Paid</TableHead>
+              <TableHead className="font-bold">Payment Date</TableHead>
+              <TableHead className="font-bold">Member Name</TableHead>
+              <TableHead className="font-bold">Chit Name</TableHead>
+              <TableHead className="font-bold">Amount</TableHead>
+              <TableHead className="font-bold">Collection Type</TableHead>
               <TableHead className="font-bold">Method</TableHead>
-              <TableHead className="font-bold">Date</TableHead>
-              <TableHead className="font-bold">Type</TableHead>
-              <TableHead className="w-[100px]"></TableHead>
+              <TableHead className="w-[80px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isPaymentsLoading ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center text-muted-foreground animate-pulse">
-                  Loading records...
+                  Loading transaction history...
                 </TableCell>
               </TableRow>
             ) : filteredPayments.length > 0 ? (
@@ -290,19 +290,22 @@ export default function PaymentsPage() {
 
                 return (
                   <TableRow key={payment.id} className="hover:bg-muted/10 transition-colors">
-                    <TableCell className="font-medium">{payment.memberName}</TableCell>
-                    <TableCell className="font-medium text-muted-foreground">{payment.month}</TableCell>
-                    <TableCell className="font-bold text-emerald-600">₹{payment.amountPaid?.toLocaleString()}</TableCell>
-                    <TableCell className="font-bold text-sm text-foreground">
-                      {payment.method || "Cash"}
-                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm font-medium">
-                      {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : "-"}
+                      <div className="flex items-center gap-2">
+                        <Calendar className="size-3.5 text-primary" />
+                        {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : "-"}
+                      </div>
                     </TableCell>
+                    <TableCell className="font-semibold text-foreground">{payment.memberName}</TableCell>
+                    <TableCell className="text-sm font-medium text-primary">{member?.chitGroup || "N/A"}</TableCell>
+                    <TableCell className="font-bold text-emerald-600">₹{payment.amountPaid?.toLocaleString()}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5">
+                      <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5">
                         {colType}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs font-bold text-muted-foreground uppercase tracking-tight">
+                      {payment.method || "Cash"}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -317,7 +320,7 @@ export default function PaymentsPage() {
                             setHistoryMember(payment)
                             setIsHistoryOpen(true)
                           }}>
-                            <History className="mr-2 size-4" /> Member History
+                            <History className="mr-2 size-4" /> Full Member History
                           </DropdownMenuItem>
                           <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                             <Download className="mr-2 size-4" /> Download Receipt
@@ -330,8 +333,8 @@ export default function PaymentsPage() {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                  No successful payments found.
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground italic">
+                  No payment records found matching the criteria.
                 </TableCell>
               </TableRow>
             )}
@@ -348,16 +351,16 @@ export default function PaymentsPage() {
           {isHistoryOpen && (
             <>
               <DialogHeader>
-                <DialogTitle>Payment History: {historyMember?.memberName}</DialogTitle>
+                <DialogTitle>Member History: {historyMember?.memberName}</DialogTitle>
                 <DialogDescription>Viewing all historical contributions for this participant.</DialogDescription>
               </DialogHeader>
               <div className="py-4">
                 <Table>
                   <TableHeader className="bg-muted/10">
                     <TableRow>
-                      <TableHead className="font-bold">Month</TableHead>
-                      <TableHead className="font-bold">Amount</TableHead>
-                      <TableHead className="text-right font-bold">Date</TableHead>
+                      <TableHead className="font-bold text-xs uppercase tracking-wider">Period</TableHead>
+                      <TableHead className="font-bold text-xs uppercase tracking-wider">Amount</TableHead>
+                      <TableHead className="text-right font-bold text-xs uppercase tracking-wider">Payment Date</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
