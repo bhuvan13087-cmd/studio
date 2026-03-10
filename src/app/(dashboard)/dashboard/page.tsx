@@ -20,6 +20,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy, limit } from "firebase/firestore"
 import { format, isSameMonth, parseISO, startOfMonth, endOfMonth, subMonths } from "date-fns"
@@ -44,6 +51,7 @@ const barChartConfig = {
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
+  const [revenueView, setRevenueView] = useState<'month' | 'today'>('month')
   const db = useFirestore()
 
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
@@ -86,6 +94,8 @@ export default function DashboardPage() {
   const currentMonthPayments = (payments || []).filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))
   const collectedThisMonth = currentMonthPayments.filter(p => p.status === 'paid' || p.status === 'success').reduce((acc, p) => acc + (p.amountPaid || 0), 0)
   
+  const collectedToday = (payments || []).filter(p => p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd') && (p.status === 'paid' || p.status === 'success')).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+
   // Real-time pending count derived from payments records in the current cycle
   const pendingMembers = (members || []).filter(m => {
     const paidThisMonth = currentMonthPayments.some(p => p.memberId === m.id && (p.status === 'paid' || p.status === 'success'));
@@ -135,15 +145,28 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground mt-1">Total active participants</p>
           </CardContent>
         </Card>
-        <Card className="hover:shadow-md transition-shadow duration-200">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Collected This Month</CardTitle>
-            <IndianRupee className="size-4 text-accent" />
+        <Card className="hover:shadow-md transition-shadow duration-200 overflow-hidden">
+          <CardHeader className="flex flex-row items-start justify-between pb-2 space-y-0">
+            <div className="space-y-1">
+               <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Revenue</CardTitle>
+               <Select value={revenueView} onValueChange={(v: any) => setRevenueView(v)}>
+                 <SelectTrigger className="h-7 w-[110px] text-[10px] font-bold border-none bg-muted/50 focus:ring-0 shadow-none">
+                    <SelectValue placeholder="Period" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="month" className="text-[10px] font-bold">This Month</SelectItem>
+                   <SelectItem value="today" className="text-[10px] font-bold">Today</SelectItem>
+                 </SelectContent>
+               </Select>
+            </div>
+            <IndianRupee className="size-4 text-accent mt-1" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹{collectedThisMonth.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              Current cycle revenue
+            <div className="text-2xl font-bold text-primary">
+              ₹{(revenueView === 'month' ? collectedThisMonth : collectedToday).toLocaleString()}
+            </div>
+            <p className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-tight">
+              {revenueView === 'month' ? 'Current Cycle Total' : 'Total Collected Today'}
             </p>
           </CardContent>
         </Card>
@@ -254,7 +277,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-emerald-600">
-              ₹{payments?.filter(p => p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd') && (p.status === 'paid' || p.status === 'success')).reduce((acc, p) => acc + (p.amountPaid || 0), 0).toLocaleString()}
+              ₹{collectedToday.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Total payments received today</p>
           </CardContent>
