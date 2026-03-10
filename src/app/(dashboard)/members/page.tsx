@@ -89,6 +89,7 @@ export default function MembersPage() {
 
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
 
+  // Immediate indicator lookup based on selection
   const selectedSchemeType = useMemo(() => {
     if (!newMember.chitGroup || !chitRounds) return null
     return chitRounds.find((r: any) => r.name === newMember.chitGroup)?.collectionType
@@ -229,9 +230,9 @@ export default function MembersPage() {
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
                   {selectedSchemeType && (
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
                       <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Type:</span>
-                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5">{selectedSchemeType}</Badge>
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5 border-primary/30 text-primary">{selectedSchemeType}</Badge>
                     </div>
                   )}
                 </div>
@@ -368,9 +369,9 @@ export default function MembersPage() {
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
                   {editSelectedSchemeType && (
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
                       <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Type:</span>
-                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5">{editSelectedSchemeType}</Badge>
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5 border-primary/30 text-primary">{editSelectedSchemeType}</Badge>
                     </div>
                   )}
                 </div>
