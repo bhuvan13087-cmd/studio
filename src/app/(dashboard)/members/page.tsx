@@ -83,7 +83,7 @@ export default function MembersPage() {
   const [newMember, setNewMember] = useState({
     name: "",
     phone: "",
-    monthlyAmount: 5000,
+    monthlyAmount: 0,
     joinDate: new Date().toISOString().split('T')[0],
     status: "active",
     chitGroup: ""
@@ -99,12 +99,7 @@ export default function MembersPage() {
           html.style.pointerEvents = 'auto'
           html.style.overflow = 'auto'
         }
-        const selectors = ['.modal-backdrop', '.overlay', '.dropdown-backdrop', '[data-radix-portal]'];
-        selectors.forEach(selector => {
-          if (selector === '[data-radix-portal]') {
-               document.querySelectorAll(selector).forEach(el => { if (el.innerHTML === '') el.remove(); });
-          } else { document.querySelectorAll(selector).forEach(el => el.remove()); }
-        });
+        document.querySelectorAll('.modal-backdrop, .overlay, .dropdown-backdrop, [data-radix-portal]').forEach(el => { if (el.innerHTML === '') el.remove(); });
       }, 300)
     }
   }
@@ -112,8 +107,7 @@ export default function MembersPage() {
   const handleGroupChange = (groupName: string) => {
     const selectedRound = chitRounds?.find((r: any) => r.name === groupName);
     if (selectedRound) {
-      const amount = selectedRound.collectionType === 'Daily' ? 800 : 5000;
-      setNewMember({ ...newMember, chitGroup: groupName, monthlyAmount: amount });
+      setNewMember({ ...newMember, chitGroup: groupName, monthlyAmount: selectedRound.monthlyAmount });
     } else {
       setNewMember({ ...newMember, chitGroup: groupName });
     }
@@ -122,8 +116,7 @@ export default function MembersPage() {
   const handleEditGroupChange = (groupName: string) => {
     const selectedRound = chitRounds?.find((r: any) => r.name === groupName);
     if (selectedRound && memberToEdit) {
-      const amount = selectedRound.collectionType === 'Daily' ? 800 : 5000;
-      setMemberToEdit({ ...memberToEdit, chitGroup: groupName, monthlyAmount: amount });
+      setMemberToEdit({ ...memberToEdit, chitGroup: groupName, monthlyAmount: selectedRound.monthlyAmount });
     } else if (memberToEdit) {
       setMemberToEdit({ ...memberToEdit, chitGroup: groupName });
     }
@@ -143,7 +136,7 @@ export default function MembersPage() {
       })
       setIsAddDialogOpen(false)
       restoreInteraction(false)
-      setNewMember({ name: "", phone: "", monthlyAmount: 5000, joinDate: new Date().toISOString().split('T')[0], status: "active", chitGroup: "" })
+      setNewMember({ name: "", phone: "", monthlyAmount: 0, joinDate: new Date().toISOString().split('T')[0], status: "active", chitGroup: "" })
       toast({ title: "Member Added", description: `${newMember.name} registered.` })
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to add member." })
@@ -217,7 +210,7 @@ export default function MembersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Member Directory</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage participants and group assignments.</p>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage participants and scheme assignments.</p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); restoreInteraction(open); }}>
           <DialogTrigger asChild>
@@ -228,25 +221,25 @@ export default function MembersPage() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleAddMember}>
-              <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Enter participant details for the fund.</DialogDescription></DialogHeader>
+              <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Select a scheme to auto-fill the fixed amount.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2"><Label htmlFor="name">Full Name</Label><Input id="name" value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2">
-                  <Label htmlFor="chitGroup">Chit Group</Label>
+                  <Label htmlFor="chitGroup">Scheme</Label>
                   <Select disabled={isActionPending} value={newMember.chitGroup} onValueChange={handleGroupChange}>
-                    <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select scheme" /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name} ({round.collectionType})</SelectItem>))}</SelectContent>
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label>Contribution Amount (Fixed ₹)</Label>
+                  <Label>Fixed Amount (₹)</Label>
                   <Input 
-                    value={newMember.monthlyAmount} 
+                    value={newMember.monthlyAmount || 0} 
                     readOnly 
                     className="bg-muted font-bold text-primary"
                   />
-                  <p className="text-[10px] text-muted-foreground italic">Auto-filled based on selected group.</p>
+                  <p className="text-[10px] text-muted-foreground italic font-semibold">Read-only: Matches selected scheme's amount.</p>
                 </div>
                 <div className="grid gap-2"><Label htmlFor="joinDate">Join Date</Label><Input id="joinDate" type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required disabled={isActionPending} /></div>
               </div>
@@ -274,10 +267,10 @@ export default function MembersPage() {
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="font-bold text-xs uppercase tracking-wider min-w-[200px]">Member</TableHead>
-                <TableHead className="font-bold text-xs uppercase tracking-wider hidden md:table-cell">Phone</TableHead>
-                <TableHead className="font-bold text-xs uppercase tracking-wider">Status</TableHead>
-                <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Ledger (₹)</TableHead>
+                <TableHead className="font-bold text-sm uppercase tracking-wider min-w-[200px]">Member</TableHead>
+                <TableHead className="font-bold text-sm uppercase tracking-wider hidden md:table-cell">Phone</TableHead>
+                <TableHead className="font-bold text-sm uppercase tracking-wider">Status</TableHead>
+                <TableHead className="font-bold text-sm uppercase tracking-wider text-right">Ledger (₹)</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -296,8 +289,8 @@ export default function MembersPage() {
                             {member.name.split(' ').map((n: string) => n[0]).join('')}
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-xs sm:text-sm truncate group-hover:text-primary transition-colors">{member.name}</span>
-                            <span className="text-[9px] sm:text-[10px] text-primary font-bold uppercase tracking-tight truncate">{member.chitGroup}</span>
+                            <span className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{member.name}</span>
+                            <span className="text-[10px] text-primary font-bold uppercase tracking-tight truncate">{member.chitGroup}</span>
                           </div>
                         </div>
                       </TableCell>
@@ -306,7 +299,7 @@ export default function MembersPage() {
                         {isPaid ? (
                           <Popover>
                             <PopoverTrigger asChild>
-                              <button className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[9px] font-bold border border-emerald-200 uppercase tracking-tight shadow-sm">
+                              <button className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[10px] font-bold border border-emerald-200 uppercase tracking-tight shadow-sm">
                                 <CheckCircle2 className="size-2.5" />
                                 Success
                               </button>
@@ -317,7 +310,7 @@ export default function MembersPage() {
                             </PopoverContent>
                           </Popover>
                         ) : (
-                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[9px] font-bold border border-amber-200 uppercase tracking-tight shadow-sm w-fit">
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 uppercase tracking-tight shadow-sm w-fit">
                             <Clock className="size-2.5" />
                             Pending
                           </div>
@@ -325,8 +318,8 @@ export default function MembersPage() {
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-[10px] sm:text-xs font-bold text-emerald-600">₹{(member.totalPaid || 0).toLocaleString()}</span>
-                          <span className="text-[8px] sm:text-[9px] font-bold text-muted-foreground uppercase">Total Paid</span>
+                          <span className="text-sm font-bold text-emerald-600">₹{(member.totalPaid || 0).toLocaleString()}</span>
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase">Total Paid</span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -360,14 +353,14 @@ export default function MembersPage() {
                 <div className="grid gap-2"><Label>Name</Label><Input value={memberToEdit?.name || ""} onChange={e => setMemberToEdit({...memberToEdit, name: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2"><Label>Phone</Label><Input value={memberToEdit?.phone || ""} onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2">
-                  <Label>Group</Label>
+                  <Label>Scheme</Label>
                   <Select disabled={isActionPending} value={memberToEdit?.chitGroup || ""} onValueChange={handleEditGroupChange}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name} ({round.collectionType})</SelectItem>))}</SelectContent>
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label>Contribution Amount (Fixed ₹)</Label>
+                  <Label>Fixed Amount (₹)</Label>
                   <Input 
                     value={memberToEdit?.monthlyAmount || 0} 
                     readOnly 
@@ -397,7 +390,7 @@ export default function MembersPage() {
               <div className="grid gap-4 py-4">
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Phone</span><span className="font-bold">{selectedMember?.phone}</span></div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Joined</span><span className="font-bold">{selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
-                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Amount Target</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Fixed Amount</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
                 <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg text-sm"><span className="text-emerald-600 font-bold uppercase text-[10px]">Total Paid</span><span className="font-bold text-emerald-600 text-base">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span></div>
               </div>
               <DialogFooter className="gap-2">
