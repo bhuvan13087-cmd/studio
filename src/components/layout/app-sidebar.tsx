@@ -19,6 +19,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 const navItems = [
@@ -34,8 +35,18 @@ export function AppSidebar() {
   const auth = useAuth()
   const router = useRouter()
   const { role } = useRole()
+  const { isMobile, setOpenMobile } = useSidebar()
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false)
+    }
+  }
 
   const handleLogout = async () => {
+    if (isMobile) {
+      setOpenMobile(false)
+    }
     await auth.signOut()
     router.push("/login")
   }
@@ -63,7 +74,11 @@ export function AppSidebar() {
                     size="lg"
                     className="transition-all duration-200 hover:bg-sidebar-accent/50"
                   >
-                    <Link href={item.url} className="flex items-center gap-4">
+                    <Link 
+                      href={item.url} 
+                      onClick={handleLinkClick}
+                      className="flex items-center gap-4"
+                    >
                       <item.icon className="size-6 shrink-0" />
                       <span className="font-bold text-lg group-data-[collapsible=icon]:hidden">
                         {item.title}
