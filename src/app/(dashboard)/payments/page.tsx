@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
@@ -366,18 +365,28 @@ export default function PaymentsPage() {
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           {isHistoryOpen && (
             <>
-              <DialogHeader><DialogTitle>History: {historyMember?.memberName}</DialogTitle></DialogHeader>
-              <div className="py-2">
+              <DialogHeader><DialogTitle className="text-xl">History: {historyMember?.memberName}</DialogTitle></DialogHeader>
+              <div className="py-4">
                 <Table>
-                  <TableHeader><TableRow><TableHead className="text-[10px] uppercase font-bold">Month</TableHead><TableHead className="text-[10px] uppercase font-bold">Paid</TableHead><TableHead className="text-right text-[10px] uppercase font-bold">Date</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Paid</TableHead>
+                      <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success')).map((e, i) => (
-                      <TableRow key={i}><TableCell className="text-xs">{e.month}</TableCell><TableCell className="text-xs font-bold text-emerald-600">₹{e.amountPaid?.toLocaleString()}</TableCell><TableCell className="text-right text-[10px] text-muted-foreground font-medium">{e.paymentDate ? format(parseISO(e.paymentDate), 'MMM dd') : "-"}</TableCell></TableRow>
+                      <TableRow key={i}>
+                        <TableCell className="text-sm font-semibold">{e.month}</TableCell>
+                        <TableCell className="text-sm font-bold text-emerald-600">₹{e.amountPaid?.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{e.paymentDate ? format(parseISO(e.paymentDate), 'MMM dd, yyyy') : "-"}</TableCell>
+                      </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-              <DialogFooter><Button className="w-full sm:w-auto" onClick={() => setIsHistoryOpen(false)}>Close</Button></DialogFooter>
+              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryOpen(false)}>Close</Button></DialogFooter>
             </>
           )}
         </DialogContent>

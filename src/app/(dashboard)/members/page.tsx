@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -374,18 +373,28 @@ export default function MembersPage() {
         <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
           {isHistoryDialogOpen && (
             <>
-              <DialogHeader><DialogTitle>Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
-              <div className="py-2 overflow-x-auto">
+              <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
+              <div className="py-4 overflow-x-auto">
                 <Table>
-                  <TableHeader><TableRow><TableHead className="text-[10px] uppercase font-bold">Month</TableHead><TableHead className="text-[10px] uppercase font-bold">Amount</TableHead><TableHead className="text-right text-[10px] uppercase font-bold">Date</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Amount</TableHead>
+                      <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (
-                      <TableRow key={i}><TableCell className="text-xs font-medium">{p.month}</TableCell><TableCell className="text-xs font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell><TableCell className="text-right text-[10px] text-muted-foreground font-medium">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : '-'}</TableCell></TableRow>
+                      <TableRow key={i}>
+                        <TableCell className="text-sm font-semibold">{p.month}</TableCell>
+                        <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : '-'}</TableCell>
+                      </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-              <DialogFooter><Button className="w-full sm:w-auto" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button></DialogFooter>
+              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button></DialogFooter>
             </>
           )}
         </DialogContent>
