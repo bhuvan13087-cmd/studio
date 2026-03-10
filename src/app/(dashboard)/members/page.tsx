@@ -247,11 +247,12 @@ export default function MembersPage() {
                   <Input 
                     type="number"
                     value={newMember.monthlyAmount || ""} 
-                    onChange={e => setNewMember({...newMember, monthlyAmount: Number(e.target.value)})}
-                    placeholder="Enter amount"
+                    readOnly
+                    className="bg-muted font-bold text-primary"
                     required
                     disabled={isActionPending}
                   />
+                  <p className="text-[10px] text-muted-foreground italic">Automatically set based on selected scheme.</p>
                 </div>
                 <div className="grid gap-2"><Label htmlFor="joinDate">Join Date</Label><Input id="joinDate" type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required disabled={isActionPending} /></div>
               </div>
@@ -391,7 +392,8 @@ export default function MembersPage() {
                   <Input 
                     type="number"
                     value={memberToEdit?.monthlyAmount || ""} 
-                    onChange={e => setMemberToEdit({...memberToEdit, monthlyAmount: Number(e.target.value)})}
+                    readOnly
+                    className="bg-muted font-bold"
                     required
                     disabled={isActionPending}
                   />
