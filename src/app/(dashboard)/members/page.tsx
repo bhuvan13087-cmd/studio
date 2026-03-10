@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -89,17 +88,6 @@ export default function MembersPage() {
   const { data: chitRounds } = useCollection(chitRoundsQuery);
 
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
-
-  // Immediate indicator lookup based on selection
-  const selectedSchemeType = useMemo(() => {
-    if (!newMember.chitGroup || !chitRounds) return null
-    return chitRounds.find((r: any) => r.name === newMember.chitGroup)?.collectionType
-  }, [newMember.chitGroup, chitRounds])
-
-  const editSelectedSchemeType = useMemo(() => {
-    if (!memberToEdit?.chitGroup || !chitRounds) return null
-    return chitRounds.find((r: any) => r.name === memberToEdit.chitGroup)?.collectionType
-  }, [memberToEdit?.chitGroup, chitRounds])
 
   const restoreInteraction = (open: boolean) => {
     if (!open) {
@@ -230,16 +218,6 @@ export default function MembersPage() {
                     <SelectTrigger><SelectValue placeholder="Select scheme" /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Indication:</span>
-                    {selectedSchemeType ? (
-                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5 border-primary/30 text-primary animate-in fade-in duration-300">
-                        {selectedSchemeType}
-                      </Badge>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground italic">None Selected</span>
-                    )}
-                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>
@@ -373,16 +351,6 @@ export default function MembersPage() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Indication:</span>
-                    {editSelectedSchemeType ? (
-                      <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 h-5 border-primary/30 text-primary animate-in fade-in duration-300">
-                        {editSelectedSchemeType}
-                      </Badge>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground italic">None Selected</span>
-                    )}
-                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>
