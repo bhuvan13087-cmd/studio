@@ -57,7 +57,7 @@ import { cn } from "@/lib/utils"
 const INITIAL_CHIT_STATE = { 
   name: "", 
   monthlyAmount: 0, 
-  totalMembers: 20, 
+  totalMembers: 0, 
   startDate: new Date().toISOString().split('T')[0], 
   collectionType: "" 
 }
@@ -112,6 +112,7 @@ export default function RoundsPage() {
       await addDoc(collection(db, 'chitRounds'), {
         ...newChit,
         monthlyAmount: Number(newChit.monthlyAmount),
+        totalMembers: Number(newChit.totalMembers),
         createdAt: serverTimestamp()
       });
       setIsAddChitDialogOpen(false); 
@@ -229,7 +230,14 @@ export default function RoundsPage() {
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="totalMembers">Members</Label>
-                      <Input id="totalMembers" type="number" value={newChit.totalMembers} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} />
+                      <Input 
+                        id="totalMembers" 
+                        type="number" 
+                        value={newChit.totalMembers || ""} 
+                        onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} 
+                        required 
+                        disabled={isActionPending} 
+                      />
                     </div>
                   </div>
                 )}
@@ -276,7 +284,16 @@ export default function RoundsPage() {
                           disabled={isActionPending}
                         />
                       </div>
-                      <div className="grid gap-2"><Label>Members</Label><Input type="number" value={editingChit.totalMembers} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                      <div className="grid gap-2">
+                        <Label>Members</Label>
+                        <Input 
+                          type="number" 
+                          value={editingChit.totalMembers || ""} 
+                          onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} 
+                          required 
+                          disabled={isActionPending} 
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

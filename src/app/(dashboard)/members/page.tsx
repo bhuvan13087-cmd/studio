@@ -180,6 +180,12 @@ export default function MembersPage() {
     return payments.find(p => p.memberId === memberId && (p.status === 'paid' || p.status === 'success') && parseISO(p.paymentDate) >= start && parseISO(p.paymentDate) <= end);
   }
 
+  const selectedSchemeType = useMemo(() => {
+    if (!newMember.chitGroup || !chitRounds) return null;
+    const scheme = chitRounds.find(r => r.name === newMember.chitGroup);
+    return scheme?.collectionType || null;
+  }, [newMember.chitGroup, chitRounds]);
+
   if (isRoleLoading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -218,6 +224,12 @@ export default function MembersPage() {
                     <SelectTrigger><SelectValue placeholder="Select scheme" /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
+                  {selectedSchemeType && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Type:</span>
+                      <Badge variant="secondary" className="text-[9px] font-bold uppercase tracking-tight">{selectedSchemeType}</Badge>
+                    </div>
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>
