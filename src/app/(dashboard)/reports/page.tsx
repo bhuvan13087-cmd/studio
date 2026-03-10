@@ -1,8 +1,8 @@
 
 "use client"
 
-import { useState, useEffect } from "react"
-import { Download, Printer, TrendingUp, DollarSign, FileText, User, Clock, Trophy, Loader2, Database, Calendar, BarChart3 } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { Download, Printer, TrendingUp, DollarSign, FileText, User, Clock, Trophy, Loader2, Database, Calendar, BarChart3, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +27,13 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
@@ -47,6 +54,7 @@ const pieChartConfig = {
 
 export default function ReportsPage() {
   const [mounted, setMounted] = useState(false)
+  const [reportType, setReportType] = useState("all")
   const { toast } = useToast()
   const db = useFirestore()
 
@@ -70,6 +78,71 @@ export default function ReportsPage() {
     })
   }
 
+  // --- Filtered Data Aggregations ---
+  const filteredData = useMemo(() => {
+    if (!mounted || !members || !payments || !rounds) return null;
+
+    const now = new Date();
+    
+    // 1. Identify valid members for this report type
+    let targetMembers = members;
+    if (reportType !== "all") {
+      targetMembers = members.filter(m => {
+        const round = rounds.find(r => r.name === m.chitGroup);
+        return (round?.collectionType || "Monthly").toLowerCase() === reportType;
+      });
+    }
+
+    const targetMemberIds = new Set(targetMembers.map(m => m.id));
+
+    // 2. Filter Payments
+    const successPayments = payments.filter(p => 
+      (p.status === 'paid' || p.status === 'success') && targetMemberIds.has(p.memberId)
+    );
+
+    const ytdPayments = successPayments.filter(p => p.paymentDate && isSameYear(parseISO(p.paymentDate), now))
+    const totalRevenue = ytdPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+
+    // Monthly Revenue Growth Chart
+    const last6Months = Array.from({ length: 6 }).map((_, i) => subMonths(now, i)).reverse()
+    const collectionData = last6Months.map(monthDate => {
+      const amount = successPayments.filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), monthDate))
+        .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+      return {
+        month: format(monthDate, 'MMM'),
+        amount
+      }
+    })
+
+    // Pie Chart: Member Status Distribution (Current Month)
+    const paidMembersCount = targetMembers.filter(m => 
+      successPayments.some(p => p.memberId === m.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))
+    ).length
+    const totalM = targetMembers.length || 1
+    const pendingMembersCount = Math.max(0, totalM - paidMembersCount)
+    
+    const statusData = [
+      { name: "Success", value: Math.round((paidMembersCount / totalM) * 100), color: "hsl(var(--primary))" },
+      { name: "Pending", value: Math.round((pendingMembersCount / totalM) * 100), color: "hsl(var(--accent))" },
+    ]
+
+    const roundsList = rounds.filter(r => {
+      if (reportType === "all") return true;
+      return (r.collectionType || "Monthly").toLowerCase() === reportType;
+    });
+
+    return {
+      successPayments,
+      targetMembers,
+      totalRevenue,
+      collectionData,
+      statusData,
+      paidMembersCount,
+      totalM,
+      roundsList
+    };
+  }, [mounted, reportType, members, payments, rounds]);
+
   if (!mounted || membersLoading || paymentsLoading || roundsLoading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
@@ -80,7 +153,7 @@ export default function ReportsPage() {
 
   const noData = (!members || members.length === 0) && (!payments || payments.length === 0) && (!rounds || rounds.length === 0)
 
-  if (noData) {
+  if (noData || !filteredData) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
         <Database className="size-16 text-muted-foreground/20" />
@@ -90,38 +163,7 @@ export default function ReportsPage() {
     )
   }
 
-  // --- Aggregations ---
   const now = new Date()
-  const successPayments = (payments || []).filter(p => p.status === 'paid' || p.status === 'success');
-  const ytdPayments = successPayments.filter(p => p.paymentDate && isSameYear(parseISO(p.paymentDate), now))
-  const totalRevenue = ytdPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
-
-  // Monthly Revenue Growth Chart
-  const last6Months = Array.from({ length: 6 }).map((_, i) => subMonths(now, i)).reverse()
-  const collectionData = last6Months.map(monthDate => {
-    const amount = successPayments.filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), monthDate))
-      .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
-    return {
-      month: format(monthDate, 'MMM'),
-      amount
-    }
-  })
-
-  // Pie Chart: Member Status Distribution (Current Month)
-  const paidMembersCount = (members || []).filter(m => 
-    successPayments.some(p => p.memberId === m.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))
-  ).length
-  const totalM = members?.length || 1
-  const pendingMembersCount = Math.max(0, totalM - paidMembersCount)
-  
-  const statusData = [
-    { name: "Success", value: Math.round((paidMembersCount / totalM) * 100), color: "hsl(var(--primary))" },
-    { name: "Pending", value: Math.round((pendingMembersCount / totalM) * 100), color: "hsl(var(--accent))" },
-  ]
-
-  // Pending Payments List (Simulated based on member monthly dues minus successful payments)
-  // For reporting, we'll show actual 'pending' status records if any exist in the database
-  const overduePayments = (payments || []).filter(p => p.status === 'pending')
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
@@ -131,11 +173,24 @@ export default function ReportsPage() {
           <p className="text-muted-foreground">Comprehensive overview of collections and dues from Firestore.</p>
         </div>
         <div className="flex items-center gap-2">
-           <Button variant="outline" size="sm" className="hidden sm:flex" onClick={() => window.print()}>
+           <Select value={reportType} onValueChange={setReportType}>
+             <SelectTrigger className="w-[180px] bg-card shadow-sm h-10">
+               <div className="flex items-center gap-2">
+                 <Filter className="size-3.5 text-primary" />
+                 <SelectValue placeholder="Collection Type" />
+               </div>
+             </SelectTrigger>
+             <SelectContent>
+               <SelectItem value="all">All Collections</SelectItem>
+               <SelectItem value="daily">Daily Schemes</SelectItem>
+               <SelectItem value="monthly">Monthly Schemes</SelectItem>
+             </SelectContent>
+           </Select>
+           <Button variant="outline" size="sm" className="hidden sm:flex h-10 px-4" onClick={() => window.print()}>
              <Printer className="mr-2 size-4" />
              Print
            </Button>
-           <Button size="sm" className="h-10" onClick={() => handleExport('PDF', 'Overview Report')}>
+           <Button size="sm" className="h-10 px-4" onClick={() => handleExport('PDF', 'Overview Report')}>
              <Download className="mr-2 size-4" />
              Export PDF
            </Button>
@@ -143,44 +198,44 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="shadow-sm">
+        <Card className="shadow-sm border-l-4 border-l-emerald-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <DollarSign className="size-4 text-emerald-500" />
-              Year-to-Date Revenue
+              YTD Revenue ({reportType.toUpperCase()})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">₹{totalRevenue.toLocaleString()}</div>
+            <div className="text-3xl font-bold">₹{filteredData.totalRevenue.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
               <TrendingUp className="size-3 text-emerald-500" /> Current year collections
             </p>
           </CardContent>
         </Card>
         
-        <Card className="shadow-sm">
+        <Card className="shadow-sm border-l-4 border-l-primary">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Calendar className="size-4 text-primary" />
-              Avg. Monthly Collection
+              Avg. Collection (YTD)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">₹{Math.round(totalRevenue / (now.getMonth() + 1)).toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">Based on YTD data</p>
+            <div className="text-3xl font-bold">₹{Math.round(filteredData.totalRevenue / (now.getMonth() + 1)).toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">Monthly average based on YTD</p>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
+        <Card className="shadow-sm border-l-4 border-l-accent">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <BarChart3 className="size-4 text-accent" />
-              Collection Efficiency
+              Target Efficiency
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{Math.round((paidMembersCount / (totalM || 1)) * 100)}%</div>
-            <p className="text-xs text-muted-foreground mt-1">Active month target: 95%</p>
+            <div className="text-3xl font-bold">{Math.round((filteredData.paidMembersCount / (filteredData.totalM || 1)) * 100)}%</div>
+            <p className="text-xs text-muted-foreground mt-1">Current month participation</p>
           </CardContent>
         </Card>
       </div>
@@ -189,13 +244,13 @@ export default function ReportsPage() {
         <Card className="lg:col-span-4 border-border/50">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Monthly Revenue Growth</CardTitle>
-              <CardDescription>Visualizing total collections per month.</CardDescription>
+              <CardTitle>Revenue Trends</CardTitle>
+              <CardDescription>Visualizing {reportType === 'all' ? 'total' : reportType} collections per month.</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
              <ChartContainer config={chartConfig} className="h-[350px] w-full">
-                <BarChart data={collectionData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <BarChart data={filteredData.collectionData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis dataKey="month" axisLine={false} tickLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
                   <YAxis axisLine={false} tickLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
@@ -208,14 +263,14 @@ export default function ReportsPage() {
 
         <Card className="lg:col-span-3 border-border/50">
           <CardHeader>
-            <CardTitle>Member Payment Status</CardTitle>
-            <CardDescription>Current distribution of overall payments.</CardDescription>
+            <CardTitle>Payment Status Breakdown</CardTitle>
+            <CardDescription>Current status for {reportType} participants.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
              <ChartContainer config={pieChartConfig} className="h-[250px] w-full">
                 <PieChart>
                   <Pie
-                    data={statusData}
+                    data={filteredData.statusData}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -223,7 +278,7 @@ export default function ReportsPage() {
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {statusData.map((entry, index) => (
+                    {filteredData.statusData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -231,7 +286,7 @@ export default function ReportsPage() {
                 </PieChart>
              </ChartContainer>
              <div className="w-full space-y-3 mt-4">
-                {statusData.map((item, i) => (
+                {filteredData.statusData.map((item, i) => (
                    <div key={i} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                          <div className="size-3 rounded-full" style={{ backgroundColor: item.color }} />
@@ -246,7 +301,7 @@ export default function ReportsPage() {
       </div>
 
       <div className="space-y-6">
-        <h3 className="text-2xl font-bold font-headline">Detailed Insights</h3>
+        <h3 className="text-2xl font-bold font-headline">Filtered Analytics</h3>
 
         <Tabs defaultValue="collections" className="w-full">
           <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 h-auto p-1 bg-muted/50 border">
@@ -272,8 +327,8 @@ export default function ReportsPage() {
             <Card className="border-border/50">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Monthly Collection Summary</CardTitle>
-                  <CardDescription>Total funds received grouped by month.</CardDescription>
+                  <CardTitle>Summary: {reportType.toUpperCase()}</CardTitle>
+                  <CardDescription>Grouped collection history.</CardDescription>
                 </div>
               </CardHeader>
               <CardContent>
@@ -285,7 +340,7 @@ export default function ReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {collectionData.map((row, i) => (
+                    {filteredData.collectionData.map((row, i) => (
                       <TableRow key={i}>
                         <TableCell className="font-medium">{row.month}</TableCell>
                         <TableCell className="text-right font-bold text-emerald-600">₹{row.amount.toLocaleString()}</TableCell>
@@ -301,8 +356,8 @@ export default function ReportsPage() {
             <Card className="border-border/50">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Individual Member Performance</CardTitle>
-                  <CardDescription>Cumulative contributions and outstanding dues per member.</CardDescription>
+                  <CardTitle>Member Performance</CardTitle>
+                  <CardDescription>Contributions for selected collection type.</CardDescription>
                 </div>
               </CardHeader>
               <CardContent>
@@ -315,8 +370,8 @@ export default function ReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {members?.map((row, i) => {
-                       const paidThisMonth = successPayments.some(p => p.memberId === row.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now));
+                    {filteredData.targetMembers.map((row, i) => {
+                       const paidThisMonth = filteredData.successPayments.some(p => p.memberId === row.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now));
                        return (
                         <TableRow key={i}>
                           <TableCell className="font-medium">{row.name}</TableCell>
@@ -339,8 +394,8 @@ export default function ReportsPage() {
             <Card className="border-border/50">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Overdue Contributions</CardTitle>
-                  <CardDescription>Detailed list of missing payments for the current cycle.</CardDescription>
+                  <CardTitle>Overdue: {reportType}</CardTitle>
+                  <CardDescription>Missing payments for current cycle.</CardDescription>
                 </div>
               </CardHeader>
               <CardContent>
@@ -353,8 +408,8 @@ export default function ReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {members?.filter(m => !successPayments.some(p => p.memberId === m.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))).length > 0 ? (
-                      members?.filter(m => !successPayments.some(p => p.memberId === m.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))).map((row, i) => (
+                    {filteredData.targetMembers.filter(m => !filteredData.successPayments.some(p => p.memberId === m.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))).length > 0 ? (
+                      filteredData.targetMembers.filter(m => !filteredData.successPayments.some(p => p.memberId === m.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))).map((row, i) => (
                         <TableRow key={i}>
                           <TableCell className="font-medium">{row.name}</TableCell>
                           <TableCell>{row.phone}</TableCell>
@@ -364,7 +419,7 @@ export default function ReportsPage() {
                     ) : (
                       <TableRow>
                         <TableCell colSpan={3} className="h-24 text-center text-muted-foreground italic">
-                          No pending members for this cycle. All caught up!
+                          No pending members for this cycle.
                         </TableCell>
                       </TableRow>
                     )}
@@ -378,8 +433,8 @@ export default function ReportsPage() {
             <Card className="border-border/50">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Chit Auction History</CardTitle>
-                  <CardDescription>Historical list of round winners and distributions.</CardDescription>
+                  <CardTitle>Auction History</CardTitle>
+                  <CardDescription>Winner distributions for {reportType} rounds.</CardDescription>
                 </div>
               </CardHeader>
               <CardContent>
@@ -393,7 +448,7 @@ export default function ReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(rounds || []).filter(r => r.status === 'completed').map((row, i) => (
+                    {filteredData.roundsList.filter(r => r.status === 'completed').map((row, i) => (
                       <TableRow key={i}>
                         <TableCell className="font-bold text-primary">#{row.roundNumber}</TableCell>
                         <TableCell className="font-medium">{row.winnerName}</TableCell>

@@ -1,8 +1,8 @@
 
 "use client"
 
-import { useState } from "react"
-import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2 } from "lucide-react"
+import { useState, useMemo } from "react"
+import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -42,6 +42,7 @@ import { format, parseISO } from "date-fns"
 
 export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [typeFilter, setTypeFilter] = useState("all")
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [isQuickRecordOpen, setIsQuickRecordOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
@@ -57,6 +58,10 @@ export default function PaymentsPage() {
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
   const { data: membersData } = useCollection(membersQuery);
   const members = membersData || [];
+
+  const roundsQuery = useMemoFirebase(() => collection(db, 'chitRounds'), [db]);
+  const { data: roundsData } = useCollection(roundsQuery);
+  const rounds = roundsData || [];
 
   const [recordData, setRecordData] = useState({
     memberId: "",
@@ -134,9 +139,26 @@ export default function PaymentsPage() {
     }
   }
 
-  const successfulPayments = payments.filter(p => (p.status === 'paid' || p.status === 'success') && 
-    (p.memberName?.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const filteredPayments = useMemo(() => {
+    let list = payments.filter(p => (p.status === 'paid' || p.status === 'success'));
+    
+    // Filter by Search Term
+    if (searchTerm) {
+      list = list.filter(p => p.memberName?.toLowerCase().includes(searchTerm.toLowerCase()));
+    }
+
+    // Filter by Collection Type (Daily/Monthly)
+    if (typeFilter !== "all") {
+      list = list.filter(p => {
+        const member = members.find(m => m.id === p.memberId);
+        const round = rounds.find(r => r.name === member?.chitGroup);
+        const colType = (round?.collectionType || "Monthly").toLowerCase();
+        return colType === typeFilter;
+      });
+    }
+
+    return list;
+  }, [payments, searchTerm, typeFilter, members, rounds]);
 
   if (isRoleLoading) {
     return (
@@ -215,14 +237,29 @@ export default function PaymentsPage() {
         </Dialog>
       </div>
 
-      <div className="flex items-center space-x-2 bg-card p-4 rounded-xl shadow-sm border border-border/50">
-        <Search className="size-5 text-muted-foreground" />
-        <Input
-          placeholder="Search by member name..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="border-none focus-visible:ring-0 shadow-none bg-transparent"
-        />
+      <div className="flex flex-col md:flex-row items-center gap-4 bg-card p-4 rounded-xl shadow-sm border border-border/50">
+        <div className="flex items-center flex-1 w-full gap-2">
+          <Search className="size-5 text-muted-foreground" />
+          <Input
+            placeholder="Search by member name..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="border-none focus-visible:ring-0 shadow-none bg-transparent"
+          />
+        </div>
+        <div className="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-4">
+          <Filter className="size-4 text-muted-foreground" />
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-full md:w-[150px] bg-muted/30 border-none shadow-none focus:ring-0">
+              <SelectValue placeholder="Collection Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Schemes</SelectItem>
+              <SelectItem value="daily">Daily Only</SelectItem>
+              <SelectItem value="monthly">Monthly Only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -234,7 +271,7 @@ export default function PaymentsPage() {
               <TableHead className="font-bold">Amount Paid</TableHead>
               <TableHead className="font-bold">Method</TableHead>
               <TableHead className="font-bold">Date</TableHead>
-              <TableHead className="font-bold">Payment Status</TableHead>
+              <TableHead className="font-bold">Type</TableHead>
               <TableHead className="w-[100px]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -245,46 +282,52 @@ export default function PaymentsPage() {
                   Loading records...
                 </TableCell>
               </TableRow>
-            ) : successfulPayments.length > 0 ? (
-              successfulPayments.map((payment) => (
-                <TableRow key={payment.id} className="hover:bg-muted/10 transition-colors">
-                  <TableCell className="font-medium">{payment.memberName}</TableCell>
-                  <TableCell className="font-medium text-muted-foreground">{payment.month}</TableCell>
-                  <TableCell className="font-bold text-emerald-600">₹{payment.amountPaid?.toLocaleString()}</TableCell>
-                  <TableCell className="font-bold text-sm text-foreground">
-                    {payment.method || "Cash"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm font-medium">
-                    {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : "-"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-50 gap-1.5 shadow-none font-bold uppercase tracking-wider text-[10px]">
-                      <CheckCircle2 className="size-3.5" /> Success
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10">
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 shadow-xl border-border/50">
-                        <DropdownMenuItem onSelect={(e) => {
-                          e.preventDefault()
-                          setHistoryMember(payment)
-                          setIsHistoryOpen(true)
-                        }}>
-                          <History className="mr-2 size-4" /> Member History
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                          <Download className="mr-2 size-4" /> Download Receipt
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
+            ) : filteredPayments.length > 0 ? (
+              filteredPayments.map((payment) => {
+                const member = members.find(m => m.id === payment.memberId);
+                const round = rounds.find(r => r.name === member?.chitGroup);
+                const colType = round?.collectionType || "Monthly";
+
+                return (
+                  <TableRow key={payment.id} className="hover:bg-muted/10 transition-colors">
+                    <TableCell className="font-medium">{payment.memberName}</TableCell>
+                    <TableCell className="font-medium text-muted-foreground">{payment.month}</TableCell>
+                    <TableCell className="font-bold text-emerald-600">₹{payment.amountPaid?.toLocaleString()}</TableCell>
+                    <TableCell className="font-bold text-sm text-foreground">
+                      {payment.method || "Cash"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm font-medium">
+                      {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : "-"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5">
+                        {colType}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10">
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 shadow-xl border-border/50">
+                          <DropdownMenuItem onSelect={(e) => {
+                            e.preventDefault()
+                            setHistoryMember(payment)
+                            setIsHistoryOpen(true)
+                          }}>
+                            <History className="mr-2 size-4" /> Member History
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            <Download className="mr-2 size-4" /> Download Receipt
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
             ) : (
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">

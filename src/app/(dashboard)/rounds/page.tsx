@@ -277,6 +277,12 @@ export default function RoundsPage() {
                   <span className="font-medium text-emerald-600">Dues: ₹{group.monthlyAmount?.toLocaleString()}</span>
                   <span className="text-muted-foreground">Members: {(members || []).filter(m => m.chitGroup === group.name).length} / {group.totalMembers}</span>
                 </div>
+                <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-wider h-5">
+                    {group.collectionType || "Monthly"}
+                  </Badge>
+                  <span>Scheme Collection</span>
+                </div>
               </CardContent>
               <CardFooter className="bg-muted/10 border-t p-0">
                 <Button variant="ghost" className="w-full h-12 rounded-none hover:bg-primary hover:text-primary-foreground transition-colors" onClick={() => setSelectedChitId(group.id)}>View Round Details</Button>
