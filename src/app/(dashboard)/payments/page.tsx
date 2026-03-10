@@ -51,7 +51,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@/tabs"
+} from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
@@ -60,7 +60,7 @@ import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, deleteDoc, updateDoc } from "firebase/firestore"
 import { addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, startOfMonth, endOfMonth, isSameMonth } from "date-fns"
+import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
 import { cn } from "@/lib/utils"
 
 export default function PaymentsPage() {
