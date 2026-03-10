@@ -1,8 +1,8 @@
 
 "use client"
 
-import { useState, useMemo } from "react"
-import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2, Calendar, Trash2, Check, ChevronsUpDown, FileText, LayoutList } from "lucide-react"
+import { useState, useMemo, useEffect, useRef } from "react"
+import { Search, CreditCard, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Download, History, Banknote, Smartphone, Building2, User, Plus, Loader2, Calendar, Trash2, Check, ChevronsUpDown, FileText, LayoutList, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -51,7 +51,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@/components/ui/tabs"
+} from "@/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
@@ -75,7 +75,8 @@ export default function PaymentsPage() {
   
   // Searchable Member Selection State
   const [memberSearch, setMemberSearch] = useState("")
-  const [isMemberPopoverOpen, setIsMemberPopoverOpen] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const suggestionsRef = useRef<HTMLDivElement>(null)
 
   const { toast } = useToast()
   const db = useFirestore()
@@ -100,13 +101,24 @@ export default function PaymentsPage() {
     method: "Cash"
   })
 
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Filter members for the searchable selection
   const filteredMembersForSelection = useMemo(() => {
-    if (!memberSearch) return members;
+    if (!memberSearch) return [];
     return members.filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()));
   }, [members, memberSearch]);
 
-  const selectedMemberName = members.find(m => m.id === recordData.memberId)?.name || "Select member...";
+  const selectedMemberName = members.find(m => m.id === recordData.memberId)?.name || "";
 
   /**
    * Permanent Fix for UI Freeze Bug
@@ -303,6 +315,7 @@ export default function PaymentsPage() {
           restoreInteraction(open)
           if (!open) {
             setMemberSearch("")
+            setShowSuggestions(false)
           }
         }}>
           <DialogTrigger asChild>
@@ -319,32 +332,37 @@ export default function PaymentsPage() {
                   <DialogDescription>Manually record a successful payment received from a member.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-6">
-                  <div className="grid gap-2">
-                    <Label>Member</Label>
-                    <Popover open={isMemberPopoverOpen} onOpenChange={setIsMemberPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={isMemberPopoverOpen}
-                          className="w-full justify-between bg-muted/30 font-normal border-border/50 h-10 px-3"
-                          disabled={isActionPending}
+                  <div className="grid gap-2 relative">
+                    <Label htmlFor="member-search">Search Member</Label>
+                    <div className="relative" ref={suggestionsRef}>
+                      <Input
+                        id="member-search"
+                        placeholder="Type member name..."
+                        value={memberSearch}
+                        onChange={(e) => {
+                          setMemberSearch(e.target.value);
+                          setShowSuggestions(true);
+                        }}
+                        onFocus={() => setShowSuggestions(true)}
+                        autoComplete="off"
+                        disabled={isActionPending}
+                        className="pr-10"
+                      />
+                      {memberSearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMemberSearch("");
+                            setRecordData({ ...recordData, memberId: "" });
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         >
-                          {selectedMemberName}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0" align="start">
-                        <div className="flex flex-col">
-                          <div className="flex items-center border-b px-3">
-                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                            <Input
-                              placeholder="Search member..."
-                              className="flex h-10 w-full border-none bg-transparent py-3 text-sm outline-none focus-visible:ring-0 shadow-none"
-                              value={memberSearch}
-                              onChange={(e) => setMemberSearch(e.target.value)}
-                            />
-                          </div>
+                          <X className="size-4" />
+                        </button>
+                      )}
+                      
+                      {showSuggestions && memberSearch.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg overflow-hidden">
                           <ScrollArea className="h-[200px]">
                             <div className="p-1">
                               {filteredMembersForSelection.length > 0 ? (
@@ -353,20 +371,17 @@ export default function PaymentsPage() {
                                     key={m.id}
                                     type="button"
                                     variant="ghost"
-                                    className="w-full justify-start font-normal h-9 px-2 text-sm"
+                                    className="w-full justify-start font-normal h-10 px-3 text-sm"
                                     onClick={() => {
                                       setRecordData({ ...recordData, memberId: m.id });
-                                      setIsMemberPopoverOpen(false);
-                                      setMemberSearch("");
+                                      setMemberSearch(m.name);
+                                      setShowSuggestions(false);
                                     }}
                                   >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        recordData.memberId === m.id ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    {m.name}
+                                    <div className="flex flex-col items-start">
+                                      <span>{m.name}</span>
+                                      <span className="text-[10px] text-muted-foreground">{m.chitGroup}</span>
+                                    </div>
                                   </Button>
                                 ))
                               ) : (
@@ -375,8 +390,16 @@ export default function PaymentsPage() {
                             </div>
                           </ScrollArea>
                         </div>
-                      </PopoverContent>
-                    </Popover>
+                      )}
+                    </div>
+                    {recordData.memberId && !showSuggestions && (
+                      <div className="flex items-center gap-1.5 mt-1 px-1">
+                        <CheckCircle2 className="size-3 text-emerald-600" />
+                        <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
+                          Selected: {selectedMemberName}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="amount">Amount (₹)</Label>
@@ -421,7 +444,7 @@ export default function PaymentsPage() {
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-4">
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-full md:w-[100px] h-8 bg-muted/30 border-none shadow-none focus:ring-0 text-xs font-semibold px-2">
+            <SelectTrigger className="w-full md:w-[80px] h-8 bg-muted/30 border-none shadow-none focus:ring-0 text-xs font-semibold px-2">
               <SelectValue placeholder="Schemes" />
             </SelectTrigger>
             <SelectContent>
