@@ -98,6 +98,10 @@
           "type": "string",
           "description": "Unique identifier for the ChitRound entity."
         },
+        "name": {
+          "type": "string",
+          "description": "The name of the chit scheme."
+        },
         "roundNumber": {
           "type": "number",
           "description": "The sequential number identifying this specific chit round."
@@ -118,15 +122,17 @@
           "type": "string",
           "description": "The date when this chit round concluded.",
           "format": "date-time"
+        },
+        "collectionType": {
+          "type": "string",
+          "enum": ["Daily", "Monthly"],
+          "description": "The frequency of collections for this chit round."
         }
       },
       "required": [
         "id",
-        "roundNumber",
-        "winnerMemberId",
-        "winnerName",
-        "winningAmount",
-        "date"
+        "name",
+        "collectionType"
       ]
     }
   },

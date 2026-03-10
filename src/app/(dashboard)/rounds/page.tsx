@@ -39,6 +39,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -82,7 +89,8 @@ export default function RoundsPage() {
     totalMembers: 20,
     duration: 20,
     startDate: new Date().toISOString().split('T')[0],
-    description: ""
+    description: "",
+    collectionType: "Monthly"
   })
 
   /**
@@ -121,7 +129,15 @@ export default function RoundsPage() {
       })
       setIsAddChitDialogOpen(false)
       restoreInteraction(false)
-      setNewChit({ name: "", monthlyAmount: 5000, totalMembers: 20, duration: 20, startDate: new Date().toISOString().split('T')[0], description: "" })
+      setNewChit({ 
+        name: "", 
+        monthlyAmount: 5000, 
+        totalMembers: 20, 
+        duration: 20, 
+        startDate: new Date().toISOString().split('T')[0], 
+        description: "",
+        collectionType: "Monthly"
+      })
       toast({ title: "Chit Round Created", description: "Your new chit scheme is now active." })
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to create round." })
@@ -142,7 +158,8 @@ export default function RoundsPage() {
         totalMembers: Number(editingChit.totalMembers),
         duration: Number(editingChit.duration),
         startDate: editingChit.startDate,
-        description: editingChit.description || ""
+        description: editingChit.description || "",
+        collectionType: editingChit.collectionType || "Monthly"
       })
       setIsEditChitDialogOpen(false)
       restoreInteraction(false)
@@ -228,7 +245,10 @@ export default function RoundsPage() {
             <Card key={group.id} className="hover:shadow-lg transition-all border-border/50 overflow-hidden">
               <CardHeader className="bg-muted/30">
                 <div className="flex justify-between">
-                  <Badge variant="outline">{group.duration} Mo</Badge>
+                  <div className="flex gap-2">
+                    <Badge variant="outline">{group.duration} Mo</Badge>
+                    <Badge className="bg-primary/10 text-primary border-none">{group.collectionType || "Monthly"}</Badge>
+                  </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -279,9 +299,25 @@ export default function RoundsPage() {
                     <Label htmlFor="name">Chit Name</Label>
                     <Input disabled={isActionPending} id="name" value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required />
                   </div>
+                  <div className="grid gap-2">
+                    <Label>Collection Type</Label>
+                    <Select 
+                      disabled={isActionPending} 
+                      value={newChit.collectionType} 
+                      onValueChange={v => setNewChit({...newChit, collectionType: v})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Monthly">Monthly</SelectItem>
+                        <SelectItem value="Daily">Daily</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label>Monthly Amount (₹)</Label>
+                      <Label>Amount (₹)</Label>
                       <Input disabled={isActionPending} type="number" value={newChit.monthlyAmount} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required />
                     </div>
                     <div className="grid gap-2">
@@ -317,9 +353,25 @@ export default function RoundsPage() {
                     <Label>Name</Label>
                     <Input disabled={isActionPending} value={editingChit?.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required />
                   </div>
+                  <div className="grid gap-2">
+                    <Label>Collection Type</Label>
+                    <Select 
+                      disabled={isActionPending} 
+                      value={editingChit?.collectionType || "Monthly"} 
+                      onValueChange={v => setEditingChit({...editingChit, collectionType: v})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Monthly">Monthly</SelectItem>
+                        <SelectItem value="Daily">Daily</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label>Monthly Amount (₹)</Label>
+                      <Label>Amount (₹)</Label>
                       <Input disabled={isActionPending} type="number" value={editingChit?.monthlyAmount} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required />
                     </div>
                     <div className="grid gap-2">
@@ -384,7 +436,14 @@ export default function RoundsPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-4">
+        <Card className="border-l-4 border-l-primary shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Type</CardTitle></CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{currentRound?.collectionType || "Monthly"}</div>
+            <p className="text-[10px] uppercase font-bold text-muted-foreground mt-1">Collection Mode</p>
+          </CardContent>
+        </Card>
         <Card className="border-l-4 border-l-primary shadow-sm">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Assigned Members</CardTitle></CardHeader>
           <CardContent>
@@ -396,14 +455,14 @@ export default function RoundsPage() {
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-emerald-500 shadow-sm">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Monthly Contribution</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Amount</CardTitle></CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-emerald-600">₹{currentRound?.monthlyAmount?.toLocaleString()}</div>
             <p className="text-[10px] uppercase font-bold text-muted-foreground mt-1">Per Member</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-amber-500 shadow-sm">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Scheme Duration</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Duration</CardTitle></CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{currentRound?.duration} Months</div>
             <p className="text-[10px] uppercase font-bold text-muted-foreground mt-1">Start: {currentRound?.startDate}</p>
