@@ -146,24 +146,24 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
         <Card className="hover:shadow-md transition-shadow duration-200 overflow-hidden">
-          <CardHeader className="flex flex-row items-start justify-between pb-2 space-y-0">
-            <div className="space-y-1">
-               <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Revenue</CardTitle>
-               <Select value={revenueView} onValueChange={(v: any) => setRevenueView(v)}>
-                 <SelectTrigger className="h-9 w-[130px] text-xs font-bold border-none bg-muted/50 focus:ring-0 shadow-none">
-                    <SelectValue placeholder="Period" />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectItem value="month" className="text-xs font-bold">This Month</SelectItem>
-                   <SelectItem value="today" className="text-xs font-bold">Today</SelectItem>
-                 </SelectContent>
-               </Select>
-            </div>
-            <IndianRupee className="size-5 text-accent mt-1" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Revenue</CardTitle>
+            <IndianRupee className="size-5 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary">
-              ₹{(revenueView === 'month' ? collectedThisMonth : collectedToday).toLocaleString()}
+            <div className="flex items-center justify-between gap-4">
+              <div className="text-2xl font-bold text-primary">
+                ₹{(revenueView === 'month' ? collectedThisMonth : collectedToday).toLocaleString()}
+              </div>
+              <Select value={revenueView} onValueChange={(v: any) => setRevenueView(v)}>
+                <SelectTrigger className="h-8 w-[110px] text-[10px] font-bold border-none bg-muted/50 focus:ring-0 shadow-none">
+                  <SelectValue placeholder="Period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month" className="text-[10px] font-bold">This Month</SelectItem>
+                  <SelectItem value="today" className="text-[10px] font-bold">Today</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <p className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-tight">
               {revenueView === 'month' ? 'Current Cycle Total' : 'Total Collected Today'}
