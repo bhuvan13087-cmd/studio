@@ -50,7 +50,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, deleteDoc, where } from "firebase/firestore"
+import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, deleteDoc, where, getDocs, writeBatch } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
 
@@ -205,10 +205,25 @@ export default function MembersPage() {
     
     setIsActionPending(true)
     try {
-      await deleteDoc(doc(db, 'members', memberToDelete.id))
+      const batch = writeBatch(db);
+      
+      // 1. Delete all payments associated with this member
+      const paymentsRef = collection(db, 'payments');
+      const paymentsSnapshot = await getDocs(query(paymentsRef, where('memberId', '==', memberToDelete.id)));
+      paymentsSnapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      // 2. Delete the member document
+      const memberRef = doc(db, 'members', memberToDelete.id);
+      batch.delete(memberRef);
+
+      // 3. Commit the batch
+      await batch.commit();
+
       toast({
         title: "Member Deleted",
-        description: `${memberToDelete.name} has been removed from the system.`,
+        description: `${memberToDelete.name} and all their payment records have been removed.`,
       })
       setIsDeleteMemberDialogOpen(false)
       setMemberToDelete(null)

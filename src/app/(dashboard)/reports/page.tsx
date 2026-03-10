@@ -95,7 +95,7 @@ export default function ReportsPage() {
 
     const targetMemberIds = new Set(targetMembers.map(m => m.id));
 
-    // 2. Filter Payments
+    // 2. Filter Payments (Aggressively filter out payments from deleted members)
     const successPayments = payments.filter(p => 
       (p.status === 'paid' || p.status === 'success') && targetMemberIds.has(p.memberId)
     );

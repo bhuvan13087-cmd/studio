@@ -140,14 +140,16 @@ export default function PaymentsPage() {
   }
 
   const filteredPayments = useMemo(() => {
-    let list = payments.filter(p => (p.status === 'paid' || p.status === 'success'));
+    // 1. First, ensure the payment belongs to an EXISTING member
+    const activeMemberIds = new Set(members.map(m => m.id));
+    let list = payments.filter(p => (p.status === 'paid' || p.status === 'success') && activeMemberIds.has(p.memberId));
     
-    // Filter by Search Term
+    // 2. Filter by Search Term
     if (searchTerm) {
       list = list.filter(p => p.memberName?.toLowerCase().includes(searchTerm.toLowerCase()));
     }
 
-    // Filter by Collection Type (Daily/Monthly)
+    // 3. Filter by Collection Type (Daily/Monthly)
     if (typeFilter !== "all") {
       list = list.filter(p => {
         const member = members.find(m => m.id === p.memberId);
