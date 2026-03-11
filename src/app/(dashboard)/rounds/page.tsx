@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -48,11 +49,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
+import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, addDoc, updateDoc, deleteDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
 import { cn } from "@/lib/utils"
+import { createAuditLog } from "@/firebase/logging"
 
 const INITIAL_CHIT_STATE = { 
   name: "", 
@@ -76,13 +78,14 @@ export default function RoundsPage() {
   
   const { toast } = useToast()
   const db = useFirestore()
+  const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
   const chitSchemes = roundsData || [];
 
-  const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
+  const membersQuery = useMemoFirebase(() => query(collection(db, 'members'), orderBy('name', 'asc')), [db]);
   const { data: members } = useCollection(membersQuery);
 
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
@@ -94,12 +97,6 @@ export default function RoundsPage() {
     if (!open) {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'; document.body.style.overflow = 'auto';
-        const html = document.documentElement;
-        if (html) {
-          html.style.pointerEvents = 'auto'
-          html.style.overflow = 'auto'
-        }
-        document.querySelectorAll('.modal-backdrop, .overlay, .dropdown-backdrop, [data-radix-portal]').forEach(el => { if (el.innerHTML === '') el.remove(); });
       }, 300)
     }
   }
@@ -108,7 +105,7 @@ export default function RoundsPage() {
     e.preventDefault(); if (!db || isActionPending) return;
     
     if (!newChit.collectionType) {
-      toast({ variant: "destructive", title: "Selection Required", description: "Please select a collection type (Daily or Monthly)." });
+      toast({ variant: "destructive", title: "Selection Required", description: "Please select a collection type." });
       return;
     }
 
@@ -120,9 +117,9 @@ export default function RoundsPage() {
         totalMembers: Number(newChit.totalMembers),
         createdAt: serverTimestamp()
       });
+      await createAuditLog(db, user, `Created new scheme: ${newChit.name}`)
       setIsAddChitDialogOpen(false); 
       setNewChit(INITIAL_CHIT_STATE);
-      restoreInteraction(false);
       toast({ title: "Scheme Created" });
     } catch (e: any) { toast({ variant: "destructive", title: "Error" }); } finally { setIsActionPending(false); }
   }
@@ -136,7 +133,8 @@ export default function RoundsPage() {
         monthlyAmount: Number(editingChit.monthlyAmount),
         totalMembers: Number(editingChit.totalMembers)
       });
-      setIsEditChitDialogOpen(false); restoreInteraction(false);
+      await createAuditLog(db, user, `Updated scheme details: ${editingChit.name}`)
+      setIsEditChitDialogOpen(false);
       toast({ title: "Updated Successfully" });
     } catch (e: any) { toast({ variant: "destructive", title: "Error" }); } finally { setIsActionPending(false); }
   }
@@ -144,12 +142,18 @@ export default function RoundsPage() {
   const confirmDelete = async () => {
     if (!db || !chitToDelete || isActionPending) return;
     setIsActionPending(true);
-    try { await deleteDoc(doc(db, 'chitRounds', chitToDelete.id)); toast({ title: "Scheme Deleted" }); setIsDeleteDialogOpen(false); restoreInteraction(false); }
+    try { 
+      await deleteDoc(doc(db, 'chitRounds', chitToDelete.id)); 
+      await createAuditLog(db, user, `Deleted scheme: ${chitToDelete.name}`)
+      toast({ title: "Scheme Deleted" }); 
+      setIsDeleteDialogOpen(false); 
+    }
     catch (e: any) { toast({ variant: "destructive", title: "Error" }); } finally { setIsActionPending(false); }
   }
 
   const currentRound = chitSchemes.find(r => r.id === selectedChitId)
-  const assignedMembers = (members || []).filter(m => m.chitGroup === currentRound?.name)
+  // Only show active members assigned to this group
+  const assignedMembers = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name)
 
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
@@ -187,7 +191,7 @@ export default function RoundsPage() {
                   <span className="text-emerald-600">
                     Amount: ₹{(group.monthlyAmount || 0).toLocaleString()}
                   </span>
-                  <span className="text-muted-foreground">{(members || []).filter(m => m.chitGroup === group.name).length} / {group.totalMembers} Filled</span>
+                  <span className="text-muted-foreground">{(members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length} / {group.totalMembers} Filled</span>
                 </div>
               </CardContent>
               <CardFooter className="p-0 border-t"><Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Round Board</Button></CardFooter>
@@ -202,7 +206,7 @@ export default function RoundsPage() {
           restoreInteraction(o); 
         }}>
           <DialogContent 
-            className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto"
+            className="sm:max-w-[425px]"
             onInteractOutside={(e) => e.preventDefault()}
             onPointerDownOutside={(e) => e.preventDefault()}
           >
@@ -225,7 +229,7 @@ export default function RoundsPage() {
                 </div>
                 
                 {newChit.collectionType && (
-                  <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label>Amount (₹)</Label>
                       <Input 
@@ -252,7 +256,7 @@ export default function RoundsPage() {
                 )}
               </div>
               <DialogFooter className="gap-2">
-                <Button variant="outline" type="button" onClick={() => { setIsAddChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                <Button variant="outline" type="button" onClick={() => setIsAddChitDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
                 <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto">
                   {isActionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create Scheme
@@ -263,9 +267,9 @@ export default function RoundsPage() {
         </Dialog>
 
         {/* Edit Scheme Dialog */}
-        <Dialog open={isEditChitDialogOpen} onOpenChange={(o) => { setIsEditChitDialogOpen(o); restoreInteraction(o); if(!o) setEditingChit(null); }}>
+        <Dialog open={isEditChitDialogOpen} onOpenChange={(o) => { setIsEditChitDialogOpen(o); if(!o) setEditingChit(null); }}>
           <DialogContent 
-            className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto"
+            className="sm:max-w-[425px]"
             onInteractOutside={(e) => e.preventDefault()}
             onPointerDownOutside={(e) => e.preventDefault()}
           >
@@ -311,7 +315,7 @@ export default function RoundsPage() {
                   )}
                 </div>
                 <DialogFooter className="gap-2">
-                  <Button variant="outline" type="button" onClick={() => { setIsEditChitDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending}>Cancel</Button>
+                  <Button variant="outline" type="button" onClick={() => setIsEditChitDialogOpen(false)} disabled={isActionPending}>Cancel</Button>
                   <Button type="submit" disabled={isActionPending}>Update</Button>
                 </DialogFooter>
               </form>
@@ -320,9 +324,9 @@ export default function RoundsPage() {
         </Dialog>
 
         {/* Delete AlertDialog */}
-        <AlertDialog open={isDeleteDialogOpen} onOpenChange={(o) => { setIsDeleteDialogOpen(o); restoreInteraction(o); if(!o) setChitToDelete(null); }}>
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={(o) => { setIsDeleteDialogOpen(o); if(!o) setChitToDelete(null); }}>
           <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme <strong>{chitToDelete?.name}</strong>. Members currently in this group will need to be reassigned.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme <strong>{chitToDelete?.name}</strong>.</AlertDialogDescription></AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
               <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={confirmDelete} disabled={isActionPending}>Delete</AlertDialogAction>
@@ -364,8 +368,8 @@ export default function RoundsPage() {
       </div>
 
       {/* History Dialog */}
-      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { setIsHistoryDialogOpen(open); restoreInteraction(open); if (!open) setHistoryMember(null) }}>
-        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) }}>
+        <DialogContent className="sm:max-w-[550px]">
           {isHistoryDialogOpen && (
             <>
               <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader>

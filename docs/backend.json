@@ -30,7 +30,13 @@
         },
         "status": {
           "type": "string",
-          "description": "The current status of the member in the chit fund (e.g., 'active', 'inactive')."
+          "description": "The current status of the member (e.g., 'active', 'inactive').",
+          "enum": ["active", "inactive"]
+        },
+        "deactivatedAt": {
+          "type": "string",
+          "description": "Timestamp when the member was deactivated.",
+          "format": "date-time"
         }
       },
       "required": [
@@ -151,6 +157,19 @@
         "targetAmount": { "type": "number" }
       },
       "required": ["id", "year", "month", "targetAmount"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "type": "object",
+      "description": "History of administrative actions taken in the system.",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "adminEmail": { "type": "string" },
+        "adminId": { "type": "string" },
+        "actionDescription": { "type": "string" }
+      },
+      "required": ["timestamp", "adminEmail", "actionDescription"]
     }
   },
   "auth": {
@@ -168,13 +187,7 @@
           "schema": {
             "$ref": "#/backend/entities/Member"
           },
-          "description": "Stores individual member details.",
-          "params": [
-            {
-              "name": "memberId",
-              "description": "The unique identifier for a member."
-            }
-          ]
+          "description": "Stores individual member details."
         }
       },
       {
@@ -184,13 +197,7 @@
           "schema": {
             "$ref": "#/backend/entities/Payment"
           },
-          "description": "Records monthly contributions.",
-          "params": [
-            {
-              "name": "paymentId",
-              "description": "The unique identifier for a payment."
-            }
-          ]
+          "description": "Records monthly contributions."
         }
       },
       {
@@ -200,13 +207,7 @@
           "schema": {
             "$ref": "#/backend/entities/ChitRound"
           },
-          "description": "Stores details of completed chit rounds.",
-          "params": [
-            {
-              "name": "roundId",
-              "description": "The unique identifier for a round."
-            }
-          ]
+          "description": "Stores details of completed chit rounds."
         }
       },
       {
@@ -216,16 +217,20 @@
           "schema": {
             "$ref": "#/backend/entities/MonthlyTarget"
           },
-          "description": "Stores monthly collection targets.",
-          "params": [
-            {
-              "name": "targetId",
-              "description": "The year and month (YYYY-MM)."
-            }
-          ]
+          "description": "Stores monthly collection targets."
+        }
+      },
+      {
+        "path": "/auditLogs/{logId}",
+        "definition": {
+          "entityName": "AuditLog",
+          "schema": {
+            "$ref": "#/backend/entities/AuditLog"
+          },
+          "description": "Stores system audit logs."
         }
       }
     ],
-    "reasoning": "The application manages members, payments, chit rounds, and now monthly collection targets. Any authenticated user is granted administrative privileges for full dashboard access."
+    "reasoning": "The application manages members, payments, chit rounds, collection targets, and now audit logs for full traceability."
   }
 }

@@ -5,65 +5,44 @@ service cloud.firestore {
 
     /**
      * CHITFUND PRO SECURITY RULES
-     * 
-     * PHILOSOPHY:
-     * Access is granted to any authenticated user. This supports the simplified
-     * admin model where any logged-in user can manage members, payments, and rounds.
      */
 
-    // --- Global Helper Functions ---
-
-    /** @description Checks if the request is from an authenticated user. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** @description Checks if the user is authorized. Currently all signed-in users are authorized. */
     function isAdmin() {
       return isSignedIn();
     }
 
-    /** @description Checks if user is authorized and resource exists. */
-    function isExistingAdmin() {
-      return isAdmin() && resource != null;
-    }
-
-    // --- Collection Rules ---
-
-    /**
-     * @description Stores individual member details for the chit fund.
-     */
     match /members/{memberId} {
       allow get, list: if isAdmin();
       allow create, update: if isAdmin();
-      allow delete: if isExistingAdmin();
+      allow delete: if false; // Disallow deletion, use status=inactive
     }
 
-    /**
-     * @description Records all monthly payments made by members.
-     */
     match /payments/{paymentId} {
       allow get, list: if isAdmin();
       allow create, update: if isAdmin();
-      allow delete: if isExistingAdmin();
+      allow delete: if isAdmin();
     }
 
-    /**
-     * @description Stores details of chit fund schemes and rounds.
-     */
     match /chitRounds/{roundId} {
       allow get, list: if isAdmin();
       allow create, update: if isAdmin();
-      allow delete: if isExistingAdmin();
+      allow delete: if isAdmin();
     }
 
-    /**
-     * @description Stores monthly collection targets.
-     */
     match /monthlyTargets/{targetId} {
       allow get, list: if isAdmin();
       allow create, update: if isAdmin();
-      allow delete: if isExistingAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false; // Logs are immutable
     }
   }
 }

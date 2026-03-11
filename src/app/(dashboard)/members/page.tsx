@@ -1,7 +1,8 @@
+
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { Search, UserPlus, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical } from "lucide-react"
+import { useState, useMemo } from "react"
+import { Search, UserPlus, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -47,10 +48,11 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc, getDocs, where, writeBatch } from "firebase/firestore"
+import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
+import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
+import { createAuditLog } from "@/firebase/logging"
 
 const INITIAL_MEMBER_STATE = {
   name: "",
@@ -68,17 +70,18 @@ export default function MembersPage() {
   const [selectedMember, setSelectedMember] = useState<any>(null)
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
-  const [isDeleteMemberDialogOpen, setIsDeleteMemberDialogOpen] = useState(false)
-  const [memberToDelete, setMemberToDelete] = useState<any>(null)
+  const [isDeactivateMemberDialogOpen, setIsDeactivateMemberDialogOpen] = useState(false)
+  const [memberToDeactivate, setMemberToDeactivate] = useState<any>(null)
   const [memberToEdit, setMemberToEdit] = useState<any>(null)
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [isActionPending, setIsActionPending] = useState(false)
   const { toast } = useToast()
   
   const db = useFirestore()
+  const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
+  const membersQuery = useMemoFirebase(() => query(collection(db, 'members'), orderBy('name', 'asc')), [db]);
   const { data: members, isLoading: isMembersLoading } = useCollection(membersQuery);
 
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
@@ -94,12 +97,6 @@ export default function MembersPage() {
       setTimeout(() => {
         document.body.style.pointerEvents = 'auto'
         document.body.style.overflow = 'auto'
-        const html = document.documentElement;
-        if (html) {
-          html.style.pointerEvents = 'auto'
-          html.style.overflow = 'auto'
-        }
-        document.querySelectorAll('.modal-backdrop, .overlay, .dropdown-backdrop, [data-radix-portal]').forEach(el => { if (el.innerHTML === '') el.remove(); });
       }, 300)
     }
   }
@@ -115,8 +112,10 @@ export default function MembersPage() {
         createdAt: serverTimestamp(),
         paymentStatus: "pending",
         totalPaid: 0,
-        pendingAmount: 0
+        pendingAmount: 0,
+        status: "active"
       })
+      await createAuditLog(db, user, `Registered new member: ${newMember.name}`)
       setIsAddDialogOpen(false)
       setNewMember(INITIAL_MEMBER_STATE)
       restoreInteraction(false)
@@ -140,6 +139,7 @@ export default function MembersPage() {
         status: memberToEdit.status,
         chitGroup: memberToEdit.chitGroup
       });
+      await createAuditLog(db, user, `Updated member details: ${memberToEdit.name}`)
       setIsEditMemberDialogOpen(false)
       setMemberToEdit(null)
       restoreInteraction(false)
@@ -149,28 +149,30 @@ export default function MembersPage() {
     } finally { setIsActionPending(false) }
   }
 
-  const confirmDeleteMember = async () => {
-    if (!db || !memberToDelete || isActionPending) return
+  const confirmDeactivateMember = async () => {
+    if (!db || !memberToDeactivate || isActionPending) return
     setIsActionPending(true)
     try {
-      const batch = writeBatch(db);
-      const paymentsSnapshot = await getDocs(query(collection(db, 'payments'), where('memberId', '==', memberToDelete.id)));
-      paymentsSnapshot.forEach((doc) => batch.delete(doc.ref));
-      batch.delete(doc(db, 'members', memberToDelete.id));
-      await batch.commit();
-      toast({ title: "Member Deleted", description: "Records removed." })
-      setIsDeleteMemberDialogOpen(false)
-      setMemberToDelete(null)
+      await updateDoc(doc(db, 'members', memberToDeactivate.id), {
+        status: "inactive",
+        deactivatedAt: new Date().toISOString()
+      });
+      await createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`)
+      toast({ title: "Member Deactivated", description: "Member is now inactive." })
+      setIsDeactivateMemberDialogOpen(false)
+      setMemberToDeactivate(null)
       restoreInteraction(false)
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to delete member." })
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to deactivate member." })
     } finally { setIsActionPending(false) }
   }
 
-  const filteredMembers = (members || []).filter(member => 
-    member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.phone.includes(searchTerm)
-  )
+  const filteredMembers = (members || [])
+    .filter(member => member.status !== "inactive") // Only show active members in the directory
+    .filter(member => 
+      member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.phone.includes(searchTerm)
+    )
 
   const getRecentPayment = (memberId: string) => {
     if (!payments) return null;
@@ -213,7 +215,7 @@ export default function MembersPage() {
             </Button>
           </DialogTrigger>
           <DialogContent 
-            className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto"
+            className="sm:max-w-[425px]"
             onInteractOutside={(e) => e.preventDefault()}
             onPointerDownOutside={(e) => e.preventDefault()}
           >
@@ -250,7 +252,7 @@ export default function MembersPage() {
                   <Label>Amount (₹)</Label>
                   <Input 
                     type="number"
-                    value={newMember.monthlyAmount === 0 ? "" : newMember.monthlyAmount} 
+                    value={newMember.monthlyAmount || ""} 
                     readOnly
                     className="bg-muted font-bold text-primary"
                     required
@@ -272,7 +274,7 @@ export default function MembersPage() {
       <div className="flex items-center space-x-2 bg-card p-3 sm:p-4 rounded-xl shadow-sm border border-border/50">
         <Search className="size-4 sm:size-5 text-muted-foreground shrink-0" />
         <Input
-          placeholder="Search by name or phone..."
+          placeholder="Search active members..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="border-none focus-visible:ring-0 shadow-none bg-transparent h-8 text-sm"
@@ -345,7 +347,7 @@ export default function MembersPage() {
                           <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuItem onSelect={() => { setMemberToEdit({...member}); setIsEditMemberDialogOpen(true); }}><Pencil className="mr-2 size-4" /> Edit Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => { setMemberToDelete(member); setIsDeleteMemberDialogOpen(true); }}><Trash2 className="mr-2 size-4" /> Delete Member</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => { setMemberToDeactivate(member); setIsDeactivateMemberDialogOpen(true); }}><Ban className="mr-2 size-4" /> Deactivate</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -353,7 +355,7 @@ export default function MembersPage() {
                   )
                 })
               ) : (
-                <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic text-sm">No members found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic text-sm">No active members found.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -367,7 +369,7 @@ export default function MembersPage() {
         restoreInteraction(open); 
       }}>
         <DialogContent 
-          className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto"
+          className="sm:max-w-[425px]"
           onInteractOutside={(e) => e.preventDefault()}
           onPointerDownOutside={(e) => e.preventDefault()}
         >
@@ -399,19 +401,12 @@ export default function MembersPage() {
                   <Label>Amount (₹)</Label>
                   <Input 
                     type="number"
-                    value={memberToEdit?.monthlyAmount === 0 ? "" : memberToEdit?.monthlyAmount} 
+                    value={memberToEdit?.monthlyAmount || ""} 
                     readOnly
                     className="bg-muted font-bold"
                     required
                     disabled={isActionPending}
                   />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Status</Label>
-                  <Select disabled={isActionPending} value={memberToEdit?.status || "active"} onValueChange={v => setMemberToEdit({...memberToEdit, status: v})}>
-                    <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                    <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
-                  </Select>
                 </div>
               </div>
               <DialogFooter className="gap-2"><Button type="button" variant="outline" onClick={() => setIsEditMemberDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button><Button type="submit" disabled={isActionPending} className="w-full sm:w-auto">Save</Button></DialogFooter>
@@ -422,7 +417,7 @@ export default function MembersPage() {
 
       {/* Profile Dialog */}
       <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { setIsProfileDialogOpen(open); restoreInteraction(open); if (!open) setSelectedMember(null) }}>
-        <DialogContent className="sm:max-w-[450px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[450px]">
           {isProfileDialogOpen && (
             <>
               <DialogHeader><DialogTitle className="flex items-center gap-2"><div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">{selectedMember?.name?.split(' ').map((n: string) => n[0]).join('')}</div>Profile View</DialogTitle></DialogHeader>
@@ -443,7 +438,7 @@ export default function MembersPage() {
 
       {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { setIsHistoryDialogOpen(open); restoreInteraction(open); if (!open) setHistoryMember(null) }}>
-        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[550px]">
           {isHistoryDialogOpen && (
             <>
               <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
@@ -473,11 +468,11 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
-      <AlertDialog open={isDeleteMemberDialogOpen} onOpenChange={(open) => { setIsDeleteMemberDialogOpen(open); restoreInteraction(open); if (!open) setMemberToDelete(null) }}>
+      {/* Deactivate Dialog */}
+      <AlertDialog open={isDeactivateMemberDialogOpen} onOpenChange={(open) => { setIsDeactivateMemberDialogOpen(open); restoreInteraction(open); if (!open) setMemberToDeactivate(null) }}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle className="text-destructive">Confirm Deletion</AlertDialogTitle><AlertDialogDescription>Permanently remove <strong>{memberToDelete?.name}</strong> and all payment history? This is irreversible.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={confirmDeleteMember} disabled={isActionPending}>Confirm Delete</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle className="text-destructive">Deactivate Member?</AlertDialogTitle><AlertDialogDescription>This will move <strong>{memberToDeactivate?.name}</strong> to inactive status. They will no longer appear in active lists, but their payment history will be preserved.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={confirmDeactivateMember} disabled={isActionPending}>Deactivate</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
