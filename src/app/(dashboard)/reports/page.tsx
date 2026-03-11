@@ -125,51 +125,24 @@ export default function ReportsPage() {
     }
   }
 
-  // Calculate which months actually have data for the selected year
+  // Calculate available months based on the selected year and current date
   const availableMonths = useMemo(() => {
-    if (!members || !payments || !rounds) return MONTHS_MASTER;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const selectedYearNum = parseInt(selectedYear);
 
-    const monthsWithData = new Set<number>();
-    const currentYear = new Date().getFullYear().toString();
-    const currentMonth = new Date().getMonth();
-
-    members.forEach(m => {
-      if (m.joinDate) {
-        const d = parseISO(m.joinDate);
-        if (getYear(d).toString() === selectedYear) {
-          monthsWithData.add(getMonth(d));
-        }
-      }
-    });
-
-    payments.forEach(p => {
-      if (p.paymentDate) {
-        const d = parseISO(p.paymentDate);
-        if (getYear(d).toString() === selectedYear) {
-          monthsWithData.add(getMonth(d));
-        }
-      }
-    });
-
-    rounds.forEach(r => {
-      if (r.date) {
-        const d = parseISO(r.date);
-        if (getYear(d).toString() === selectedYear) {
-          monthsWithData.add(getMonth(d));
-        }
-      }
-    });
-
-    if (selectedYear === currentYear) {
-      monthsWithData.add(currentMonth);
+    if (selectedYearNum < currentYear) {
+      // Previous year: show all months
+      return MONTHS_MASTER;
+    } else if (selectedYearNum === currentYear) {
+      // Current year: show months up to current month
+      return MONTHS_MASTER.filter(m => m.value === "all" || parseInt(m.value) <= currentMonth);
+    } else {
+      // Future year: hide all months except "All Months" as they are in the future
+      return MONTHS_MASTER.filter(m => m.value === "all");
     }
-
-    const filtered = MONTHS_MASTER.filter(m => 
-      m.value === "all" || monthsWithData.has(parseInt(m.value))
-    );
-
-    return filtered;
-  }, [members, payments, rounds, selectedYear]);
+  }, [selectedYear]);
 
   useEffect(() => {
     if (selectedMonth !== "all") {
