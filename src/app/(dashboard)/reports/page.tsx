@@ -34,7 +34,7 @@ import { format, parseISO, isSameMonth, subMonths, isSameYear, getMonth, getYear
 import * as XLSX from 'xlsx'
 import { cn } from "@/lib/utils"
 
-const MONTHS = [
+const MONTHS_MASTER = [
   { value: "all", label: "All Months" },
   { value: "0", label: "January" },
   { value: "1", label: "February" },
@@ -72,6 +72,66 @@ export default function ReportsPage() {
   const { data: rounds, isLoading: roundsLoading } = useCollection(roundsQuery)
 
   useEffect(() => { setMounted(true) }, [])
+
+  // Calculate which months actually have data for the selected year
+  const availableMonths = useMemo(() => {
+    if (!members || !payments || !rounds) return MONTHS_MASTER;
+
+    const monthsWithData = new Set<number>();
+    const currentYear = new Date().getFullYear().toString();
+    const currentMonth = new Date().getMonth();
+
+    // Scan members for join dates in the selected year
+    members.forEach(m => {
+      if (m.joinDate) {
+        const d = parseISO(m.joinDate);
+        if (getYear(d).toString() === selectedYear) {
+          monthsWithData.add(getMonth(d));
+        }
+      }
+    });
+
+    // Scan payments for collection dates in the selected year
+    payments.forEach(p => {
+      if (p.paymentDate) {
+        const d = parseISO(p.paymentDate);
+        if (getYear(d).toString() === selectedYear) {
+          monthsWithData.add(getMonth(d));
+        }
+      }
+    });
+
+    // Scan rounds for activity dates in the selected year
+    rounds.forEach(r => {
+      if (r.date) {
+        const d = parseISO(r.date);
+        if (getYear(d).toString() === selectedYear) {
+          monthsWithData.add(getMonth(d));
+        }
+      }
+    });
+
+    // Always allow current month if viewing the current year
+    if (selectedYear === currentYear) {
+      monthsWithData.add(currentMonth);
+    }
+
+    const filtered = MONTHS_MASTER.filter(m => 
+      m.value === "all" || monthsWithData.has(parseInt(m.value))
+    );
+
+    return filtered;
+  }, [members, payments, rounds, selectedYear]);
+
+  // Reset selected month if it's no longer available for the chosen year
+  useEffect(() => {
+    if (selectedMonth !== "all") {
+      const isAvailable = availableMonths.some(m => m.value === selectedMonth);
+      if (!isAvailable) {
+        setSelectedMonth("all");
+      }
+    }
+  }, [selectedYear, availableMonths, selectedMonth]);
 
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
@@ -114,7 +174,11 @@ export default function ReportsPage() {
         month: format(new Date(Number(selectedYear), i), 'MMMM yyyy'),
         amount: monthPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
       };
-    }).filter(row => selectedMonth === "all" || row.month.startsWith(MONTHS.find(m => m.value === selectedMonth)?.label || ""));
+    }).filter(row => {
+      const isMonthAll = selectedMonth === "all";
+      const monthLabel = MONTHS_MASTER.find(m => m.value === selectedMonth)?.label || "";
+      return isMonthAll ? row.amount > 0 : row.month.startsWith(monthLabel);
+    });
 
     const winners = rounds.filter(r => r.winnerName && 
       (reportType === "all" || (r.collectionType || "Monthly").toLowerCase() === reportType) &&
@@ -122,8 +186,6 @@ export default function ReportsPage() {
     );
 
     const pendingMembers = targetMembers.filter(m => {
-      // Logic for "Pending" usually refers to the CURRENT selected month
-      // If selectedMonth is "all", we look at the entire year's outstanding (simplified)
       const paidInPeriod = successPayments.some(p => p.memberId === m.id && p.paymentDate && isMatchingDate(p.paymentDate));
       return !paidInPeriod;
     });
@@ -151,7 +213,7 @@ export default function ReportsPage() {
     if (!filteredData) return;
 
     let exportData: any[] = [];
-    const fileName = `Report_${selectedYear}_${selectedMonth === 'all' ? 'FullYear' : MONTHS.find(m => m.value === selectedMonth)?.label}.xlsx`;
+    const fileName = `Report_${selectedYear}_${selectedMonth === 'all' ? 'FullYear' : MONTHS_MASTER.find(m => m.value === selectedMonth)?.label}.xlsx`;
 
     switch (activeTab) {
       case "collections":
@@ -232,7 +294,7 @@ export default function ReportsPage() {
                 <SelectValue placeholder="Month" />
               </SelectTrigger>
               <SelectContent>
-                {MONTHS.map(m => (
+                {availableMonths.map(m => (
                   <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                 ))}
               </SelectContent>
