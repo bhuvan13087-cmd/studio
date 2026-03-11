@@ -81,6 +81,7 @@ export default function RoundsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
+  // STABILIZED QUERIES
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
   const chitSchemes = roundsData || [];

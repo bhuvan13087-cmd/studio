@@ -81,6 +81,7 @@ export default function MembersPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
+  // STABILIZED QUERIES TO PREVENT INFINITE LOOPS
   const membersQuery = useMemoFirebase(() => query(collection(db, 'members'), orderBy('name', 'asc')), [db]);
   const { data: members, isLoading: isMembersLoading } = useCollection(membersQuery);
 
@@ -92,6 +93,7 @@ export default function MembersPage() {
 
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
 
+  // CRITICAL: CLEANUP INTERACTION LOCKS
   useEffect(() => {
     return () => {
       document.body.style.pointerEvents = 'auto'
@@ -99,6 +101,7 @@ export default function MembersPage() {
     }
   }, [])
 
+  // OPTIMIZED PAID STATUS CHECK (Complexity O(N) instead of O(N*M))
   const paidMemberStatus = useMemo(() => {
     if (!payments) return new Map<string, any>();
     const now = new Date();

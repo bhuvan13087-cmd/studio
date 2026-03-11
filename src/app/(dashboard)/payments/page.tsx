@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
-import { Search, CheckCircle2, Clock, MoreHorizontal, History, Plus, Loader2, Calendar, Trash2, X, LayoutList, FileText, User } from "lucide-react"
+import { Search, CheckCircle2, Clock, MoreHorizontal, History, Plus, Loader2, Calendar, Trash2, X, LayoutList, FileText, User, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -79,6 +79,7 @@ export default function PaymentsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
+  // STABILIZED QUERIES
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: paymentsData, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const payments = paymentsData || [];
@@ -91,11 +92,14 @@ export default function PaymentsPage() {
   const { data: roundsData } = useCollection(roundsQuery);
   const rounds = roundsData || [];
 
+  const locksQuery = useMemoFirebase(() => collection(db, 'monthLocks'), [db]);
+  const { data: monthLocks } = useCollection(locksQuery);
+
   const [recordData, setRecordData] = useState({ 
     memberId: "", 
     amount: 0, 
     month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), 
-    method: "" 
+    method: "Cash" 
   })
 
   useEffect(() => {
@@ -109,6 +113,14 @@ export default function PaymentsPage() {
       document.body.style.overflow = 'auto'
     }
   }, []);
+
+  const currentMonthYear = format(new Date(), 'yyyy-MM')
+  const isCurrentMonthLocked = useMemo(() => {
+    if (!monthLocks) return false;
+    const [monthName, yearStr] = recordData.month.split(' ');
+    // Simple lookup - for real apps we'd map month names to numbers
+    return monthLocks.some(l => l.year === yearStr && l.monthName === monthName);
+  }, [monthLocks, recordData.month]);
 
   const filteredMembersForSelection = useMemo(() => {
     if (!memberSearch) return [];
@@ -124,6 +136,12 @@ export default function PaymentsPage() {
   const handleQuickRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || isActionPending || !recordData.memberId) return;
+    
+    if (isCurrentMonthLocked) {
+      toast({ variant: "destructive", title: "Locked", description: "This month is locked. No new payments allowed." });
+      return;
+    }
+
     const member = members.find(m => m.id === recordData.memberId);
     if (!member) return;
 
@@ -154,12 +172,12 @@ export default function PaymentsPage() {
         memberId: "", 
         amount: 0, 
         month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), 
-        method: "" 
+        method: "Cash" 
       });
       setMemberSearch("");
       toast({ title: "Payment Recorded", description: `Amount ₹${amount} saved for ${member.name}.` });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to record payment." });
+      toast({ variant: "destructive", title: "Error", description: "Failed to record payment." })
     } finally { 
       setIsActionPending(false);
     }
@@ -168,6 +186,15 @@ export default function PaymentsPage() {
   const handleDeletePayment = async () => {
     if (!db || !paymentToDelete || isActionPending) return;
     
+    // Check if the payment belongs to a locked month
+    const [monthName, yearStr] = paymentToDelete.month.split(' ');
+    const isLocked = monthLocks?.some(l => l.year === yearStr && l.monthName === monthName);
+    
+    if (isLocked) {
+      toast({ variant: "destructive", title: "Locked", description: "Cannot delete record from a locked month." });
+      return;
+    }
+
     setIsActionPending(true)
     try {
       const member = members.find(m => m.id === paymentToDelete.memberId);
@@ -179,7 +206,6 @@ export default function PaymentsPage() {
       }
       
       await deleteDocumentNonBlocking(doc(db, 'payments', paymentToDelete.id));
-      
       await createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`)
       
       setIsDeletePaymentDialogOpen(false);
@@ -267,7 +293,7 @@ export default function PaymentsPage() {
                 memberId: "", 
                 amount: 0, 
                 month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), 
-                method: "" 
+                method: "Cash" 
               });
             }
           }
@@ -281,10 +307,15 @@ export default function PaymentsPage() {
             <form onSubmit={handleQuickRecord}>
               <DialogHeader><DialogTitle>Record Payment</DialogTitle><DialogDescription>Manual entry for active member contributions.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
+                {isCurrentMonthLocked && (
+                  <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-center gap-2 text-amber-800 text-xs font-bold">
+                    <Lock className="size-4" /> This month is locked for financial entry.
+                  </div>
+                )}
                 <div className="grid gap-2 relative">
                   <Label>Search Active Member</Label>
                   <div className="relative" ref={suggestionsRef}>
-                    <Input placeholder="Type member name..." value={memberSearch} onChange={(e) => { setMemberSearch(e.target.value); setShowSuggestions(true); }} autoComplete="off" disabled={isActionPending} />
+                    <Input placeholder="Type member name..." value={memberSearch} onChange={(e) => { setMemberSearch(e.target.value); setShowSuggestions(true); }} autoComplete="off" disabled={isActionPending || isCurrentMonthLocked} />
                     {showSuggestions && memberSearch.length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg overflow-hidden">
                         <ScrollArea className="h-[150px]">
@@ -300,7 +331,7 @@ export default function PaymentsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label>Method</Label>
-                  <Select disabled={isActionPending} value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
+                  <Select disabled={isActionPending || isCurrentMonthLocked} value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
                     <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
                     <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="UPI">UPI</SelectItem><SelectItem value="Bank Transfer">Bank Transfer</SelectItem></SelectContent>
                   </Select>
@@ -308,7 +339,7 @@ export default function PaymentsPage() {
               </div>
               <DialogFooter className="flex-col sm:flex-row gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)} className="w-full sm:w-auto">Cancel</Button>
-                <Button type="submit" disabled={isActionPending || !recordData.memberId} className="w-full sm:w-auto font-bold">
+                <Button type="submit" disabled={isActionPending || !recordData.memberId || isCurrentMonthLocked} className="w-full sm:w-auto font-bold">
                   {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />} Save Payment
                 </Button>
               </DialogFooter>
@@ -353,28 +384,43 @@ export default function PaymentsPage() {
                   {isPaymentsLoading ? (
                     <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Loading history...</TableCell></TableRow>
                   ) : filteredPayments.length > 0 ? (
-                    filteredPayments.map((p) => (
-                      <TableRow key={p.id} className="hover:bg-muted/10 transition-colors">
-                        <TableCell className="text-[10px] sm:text-xs font-medium tabular-nums text-muted-foreground">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : "-"}</TableCell>
-                        <TableCell className="font-semibold text-xs sm:text-sm">
-                          <button onClick={() => openAuditProfile(p.memberId)} className="hover:text-primary hover:underline transition-all text-left">
-                            {p.memberName}
-                          </button>
-                        </TableCell>
-                        <TableCell className="font-bold text-emerald-600 text-xs sm:text-sm tabular-nums">₹{p.amountPaid?.toLocaleString()}</TableCell>
-                        <TableCell className="hidden md:table-cell text-[10px] font-bold text-muted-foreground uppercase">{p.method || "Cash"}</TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem onSelect={() => { setHistoryMember(p); setIsHistoryOpen(true); }}><History className="mr-2 size-4" /> Full History</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => { setPaymentToDelete(p); setIsDeletePaymentDialogOpen(true); }}><Trash2 className="mr-2 size-4" /> Delete Record</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    filteredPayments.map((p) => {
+                      const [m, y] = p.month.split(' ');
+                      const isLocked = monthLocks?.some(l => l.year === y && l.monthName === m);
+                      return (
+                        <TableRow key={p.id} className="hover:bg-muted/10 transition-colors">
+                          <TableCell className="text-[10px] sm:text-xs font-medium tabular-nums text-muted-foreground">
+                            <div className="flex items-center gap-1.5">
+                              {isLocked && <Lock className="size-2.5 text-amber-600" title="Month Locked" />}
+                              {p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-semibold text-xs sm:text-sm">
+                            <button onClick={() => openAuditProfile(p.memberId)} className="hover:text-primary hover:underline transition-all text-left">
+                              {p.memberName}
+                            </button>
+                          </TableCell>
+                          <TableCell className="font-bold text-emerald-600 text-xs sm:text-sm tabular-nums">₹{p.amountPaid?.toLocaleString()}</TableCell>
+                          <TableCell className="hidden md:table-cell text-[10px] font-bold text-muted-foreground uppercase">{p.method || "Cash"}</TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuItem onSelect={() => { setHistoryMember(p); setIsHistoryOpen(true); }}><History className="mr-2 size-4" /> Full History</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  disabled={isLocked}
+                                  className={cn("text-destructive focus:bg-destructive/10 focus:text-destructive", isLocked && "opacity-50 pointer-events-none")} 
+                                  onSelect={() => { setPaymentToDelete(p); setIsDeletePaymentDialogOpen(true); }}
+                                >
+                                  <Trash2 className="mr-2 size-4" /> Delete Record
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
                   ) : (
                     <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic text-xs">No records matching search.</TableCell></TableRow>
                   )}

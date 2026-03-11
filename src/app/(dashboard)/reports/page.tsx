@@ -1,8 +1,7 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Trophy, Users, IndianRupee, TrendingUp, Calendar, Pencil } from "lucide-react"
+import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Trophy, Users, IndianRupee, TrendingUp, Calendar, Pencil, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -39,7 +38,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useDoc, useUser } from "@/firebase"
-import { collection, query, orderBy, doc, setDoc } from "firebase/firestore"
+import { collection, query, orderBy, doc, setDoc, deleteDoc } from "firebase/firestore"
 import { format, parseISO, getMonth, getYear } from "date-fns"
 import * as XLSX from 'xlsx'
 import { cn } from "@/lib/utils"
@@ -78,6 +77,7 @@ export default function ReportsPage() {
   const db = useFirestore()
   const { user } = useUser()
 
+  // STABILIZED QUERIES
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
   const { data: members, isLoading: membersLoading } = useCollection(membersQuery)
 
@@ -94,6 +94,15 @@ export default function ReportsPage() {
   )
   const { data: targetData } = useDoc(targetDocRef)
 
+  const locksQuery = useMemoFirebase(() => collection(db, 'monthLocks'), [db]);
+  const { data: monthLocks } = useCollection(locksQuery);
+
+  const currentMonthName = useMemo(() => MONTHS_MASTER.find(m => m.value === selectedMonth)?.label, [selectedMonth]);
+  const isMonthLocked = useMemo(() => {
+    if (selectedMonth === 'all' || !monthLocks) return false;
+    return monthLocks.some(l => l.year === selectedYear && l.monthName === currentMonthName);
+  }, [monthLocks, selectedYear, currentMonthName, selectedMonth]);
+
   useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
@@ -108,6 +117,11 @@ export default function ReportsPage() {
       return
     }
 
+    if (isMonthLocked) {
+      toast({ variant: "destructive", title: "Locked", description: "Cannot modify target for a locked month." });
+      return;
+    }
+
     setIsSavingTarget(true)
     try {
       const amount = parseFloat(targetInput)
@@ -120,7 +134,7 @@ export default function ReportsPage() {
         targetAmount: amount
       }, { merge: true })
 
-      await createAuditLog(db, user, `Updated collection target for ${MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} ${selectedYear} to ₹${amount.toLocaleString()}`)
+      await createAuditLog(db, user, `Updated collection target for ${currentMonthName} ${selectedYear} to ₹${amount.toLocaleString()}`)
       
       setIsTargetDialogOpen(false)
       toast({ title: "Target Saved", description: `Collection goal updated.` })
@@ -128,6 +142,35 @@ export default function ReportsPage() {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save target." })
     } finally {
       setIsSavingTarget(false)
+    }
+  }
+
+  const toggleMonthLock = async () => {
+    if (selectedMonth === 'all') return;
+    
+    setIsSavingTarget(true);
+    try {
+      const lockId = `${selectedYear}-${currentMonthName}`;
+      if (isMonthLocked) {
+        const lockRef = doc(db, 'monthLocks', lockId);
+        await deleteDoc(lockRef);
+        await createAuditLog(db, user, `Unlocked month: ${currentMonthName} ${selectedYear}`);
+        toast({ title: "Month Unlocked", description: "Records can now be modified." });
+      } else {
+        await setDoc(doc(db, 'monthLocks', lockId), {
+          id: lockId,
+          year: selectedYear,
+          monthName: currentMonthName,
+          lockedAt: serverTimestamp(),
+          lockedBy: user?.email
+        });
+        await createAuditLog(db, user, `Locked month: ${currentMonthName} ${selectedYear}`);
+        toast({ title: "Month Locked", description: "Financial records are now read-only." });
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: "Operation failed." });
+    } finally {
+      setIsSavingTarget(false);
     }
   }
 
@@ -215,7 +258,7 @@ export default function ReportsPage() {
   const handleExportExcel = () => {
     if (!filteredData) return;
     let exportData: any[] = [];
-    const fileName = `Report_${selectedYear}_${selectedMonth === 'all' ? 'Year' : MONTHS_MASTER.find(m => m.value === selectedMonth)?.label}.xlsx`;
+    const fileName = `Report_${selectedYear}_${selectedMonth === 'all' ? 'Year' : currentMonthName}.xlsx`;
 
     switch (activeTab) {
       case "collections": exportData = filteredData.collectionData.map(d => ({ Period: d.month, Amount: d.amount })); break;
@@ -247,6 +290,18 @@ export default function ReportsPage() {
             <p className="text-sm text-muted-foreground">Comprehensive audit of fund collections and distributions.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+             {selectedMonth !== 'all' && (
+               <Button 
+                 variant={isMonthLocked ? "secondary" : "outline"} 
+                 size="sm" 
+                 className={cn("h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-sm", isMonthLocked && "text-amber-700 bg-amber-50")}
+                 onClick={toggleMonthLock}
+                 disabled={isSavingTarget}
+               >
+                 {isMonthLocked ? <Lock className="mr-2 size-4" /> : <Clock className="mr-2 size-4" />}
+                 {isMonthLocked ? "Unlock Month" : "Lock Month"}
+               </Button>
+             )}
              <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-sm" onClick={handlePrint}>
                <Printer className="mr-2 size-4" /> Print
              </Button>
@@ -279,24 +334,24 @@ export default function ReportsPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Monthly Target (₹)</label>
-            {selectedMonth === 'all' ? (
-              <div className="h-10 flex items-center px-3 bg-muted/30 rounded-md text-[10px] text-muted-foreground italic border border-dashed">Select month to set target</div>
-            ) : (
-              <div className="flex items-center gap-1.5 h-10">
-                <div className="flex-1 flex items-center justify-between bg-primary/5 px-2.5 h-full rounded-md border border-primary/20">
-                  <span className="font-bold text-xs tabular-nums text-primary">{targetAmount > 0 ? `₹${targetAmount.toLocaleString()}` : "Not Set"}</span>
-                  <Button variant="ghost" size="icon" onClick={() => setIsTargetDialogOpen(true)} className="h-6 w-6 text-primary hover:bg-primary/10"><Pencil className="size-3" /></Button>
-                </div>
+            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Month Status</label>
+            <div className="flex items-center gap-1.5 h-10">
+              <div className={cn("flex-1 flex items-center justify-between px-2.5 h-full rounded-md border", isMonthLocked ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200")}>
+                <span className={cn("text-[10px] font-bold uppercase tracking-tight", isMonthLocked ? "text-amber-700" : "text-emerald-700")}>
+                  {selectedMonth === 'all' ? "Select Month" : (isMonthLocked ? "LOCKED 🔒" : "ACTIVE ✨")}
+                </span>
+                {selectedMonth !== 'all' && !isMonthLocked && (
+                  <Button variant="ghost" size="icon" onClick={() => setIsTargetDialogOpen(true)} className="h-6 w-6 text-emerald-600 hover:bg-emerald-100"><Pencil className="size-3" /></Button>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
 
       <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader><DialogTitle>Update Monthly Target</DialogTitle><DialogDescription>Set a goal for {MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} {selectedYear}.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Update Monthly Target</DialogTitle><DialogDescription>Set a goal for {currentMonthName} {selectedYear}.</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2"><Label htmlFor="targetAmount">Target Amount (₹)</Label><Input id="targetAmount" type="number" value={targetInput} onChange={(e) => setTargetInput(e.target.value)} className="font-bold" autoFocus /></div>
           </div>
