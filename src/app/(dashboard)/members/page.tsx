@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Search, UserPlus, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban } from "lucide-react"
+import { Search, UserPlus, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -427,9 +427,26 @@ export default function MembersPage() {
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Amount</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
                 <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg text-sm"><span className="text-emerald-600 font-bold uppercase text-[10px]">Total Paid</span><span className="font-bold text-emerald-600 text-base">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span></div>
               </div>
-              <DialogFooter className="gap-2">
-                <Button variant="outline" className="w-full sm:w-auto" onClick={() => { setIsProfileDialogOpen(false); setTimeout(() => { setHistoryMember(selectedMember); setIsHistoryDialogOpen(true); }, 300) }}>History</Button>
-                <Button className="w-full sm:w-auto" onClick={() => setIsProfileDialogOpen(false)}>Close</Button>
+              <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                <Button 
+                  variant="destructive" 
+                  className="w-full sm:w-auto sm:mr-auto" 
+                  onClick={() => { 
+                    setMemberToDeactivate(selectedMember); 
+                    setIsDeactivateMemberDialogOpen(true); 
+                    setIsProfileDialogOpen(false); 
+                  }}
+                >
+                  <Ban className="mr-2 size-4" />
+                  Deactivate
+                </Button>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                  <Button variant="outline" className="w-full sm:w-auto" onClick={() => { setIsProfileDialogOpen(false); setTimeout(() => { setHistoryMember(selectedMember); setIsHistoryDialogOpen(true); }, 300) }}>
+                    <HistoryIcon className="mr-2 size-4" />
+                    History
+                  </Button>
+                  <Button className="w-full sm:w-auto" onClick={() => setIsProfileDialogOpen(false)}>Close</Button>
+                </div>
               </DialogFooter>
             </>
           )}
@@ -441,7 +458,7 @@ export default function MembersPage() {
         <DialogContent className="sm:max-w-[550px]">
           {isHistoryDialogOpen && (
             <>
-              <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader}
               <div className="py-4 overflow-x-auto">
                 <Table>
                   <TableHeader>
