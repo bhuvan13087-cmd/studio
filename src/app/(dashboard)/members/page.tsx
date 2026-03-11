@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Search, UserPlus, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -50,6 +50,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc } from "firebase/firestore"
+import { addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
 import { createAuditLog } from "@/firebase/logging"
@@ -92,21 +93,20 @@ export default function MembersPage() {
 
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
 
-  const restoreInteraction = (open: boolean) => {
-    if (!open) {
-      setTimeout(() => {
-        document.body.style.pointerEvents = 'auto'
-        document.body.style.overflow = 'auto'
-      }, 300)
+  // Safety cleanup for UI interactions
+  useEffect(() => {
+    return () => {
+      document.body.style.pointerEvents = 'auto'
+      document.body.style.overflow = 'auto'
     }
-  }
+  }, [])
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!db || isActionPending) return;
     setIsActionPending(true)
     try {
-      await addDoc(collection(db, 'members'), {
+      addDocumentNonBlocking(collection(db, 'members'), {
         ...newMember,
         monthlyAmount: Number(newMember.monthlyAmount),
         createdAt: serverTimestamp(),
@@ -115,14 +115,18 @@ export default function MembersPage() {
         pendingAmount: 0,
         status: "active"
       })
-      await createAuditLog(db, user, `Registered new member: ${newMember.name}`)
+      
+      // Log the action asynchronously
+      createAuditLog(db, user, `Registered new member: ${newMember.name}`)
+      
       setIsAddDialogOpen(false)
       setNewMember(INITIAL_MEMBER_STATE)
-      restoreInteraction(false)
-      toast({ title: "Member Added", description: `${newMember.name} registered.` })
+      toast({ title: "Member Added", description: `${newMember.name} registered successfully.` })
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to add member." })
-    } finally { setIsActionPending(false) }
+      toast({ variant: "destructive", title: "Error", description: "Failed to add member." })
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
   const handleUpdateMember = async (e: React.FormEvent) => {
@@ -131,7 +135,7 @@ export default function MembersPage() {
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToEdit.id);
-      await updateDoc(memberRef, {
+      updateDocumentNonBlocking(memberRef, {
         name: memberToEdit.name,
         phone: memberToEdit.phone,
         monthlyAmount: Number(memberToEdit.monthlyAmount),
@@ -139,40 +143,50 @@ export default function MembersPage() {
         status: memberToEdit.status,
         chitGroup: memberToEdit.chitGroup
       });
-      await createAuditLog(db, user, `Updated member details: ${memberToEdit.name}`)
+      
+      createAuditLog(db, user, `Updated member details: ${memberToEdit.name}`)
+      
       setIsEditMemberDialogOpen(false)
       setMemberToEdit(null)
-      restoreInteraction(false)
       toast({ title: "Member Updated", description: "Details saved." })
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update member." })
-    } finally { setIsActionPending(false) }
+      toast({ variant: "destructive", title: "Error", description: "Failed to update member." })
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
   const confirmDeactivateMember = async () => {
     if (!db || !memberToDeactivate || isActionPending) return
     setIsActionPending(true)
     try {
-      await updateDoc(doc(db, 'members', memberToDeactivate.id), {
+      const memberRef = doc(db, 'members', memberToDeactivate.id)
+      updateDocumentNonBlocking(memberRef, {
         status: "inactive",
         deactivatedAt: new Date().toISOString()
       });
-      await createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`)
+      
+      createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`)
+      
       toast({ title: "Member Deactivated", description: "Member is now inactive." })
       setIsDeactivateMemberDialogOpen(false)
       setMemberToDeactivate(null)
-      restoreInteraction(false)
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to deactivate member." })
-    } finally { setIsActionPending(false) }
+      toast({ variant: "destructive", title: "Error", description: "Failed to deactivate member." })
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
-  const filteredMembers = (members || [])
-    .filter(member => member.status !== "inactive") // Hide deactivated members from directory search
-    .filter(member => 
-      member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.phone.includes(searchTerm)
-    )
+  const filteredMembers = useMemo(() => {
+    if (!members) return []
+    return members
+      .filter(member => member.status !== "inactive")
+      .filter(member => 
+        member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.phone.includes(searchTerm)
+      )
+  }, [members, searchTerm])
 
   const getRecentPayment = (memberId: string) => {
     if (!payments) return null;
@@ -204,9 +218,10 @@ export default function MembersPage() {
           <p className="text-sm sm:text-base text-muted-foreground">Manage participants and scheme assignments.</p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={(open) => { 
-          setIsAddDialogOpen(open); 
-          if (!open) setNewMember(INITIAL_MEMBER_STATE);
-          restoreInteraction(open); 
+          if (!isActionPending) {
+            setIsAddDialogOpen(open); 
+            if (!open) setNewMember(INITIAL_MEMBER_STATE);
+          }
         }}>
           <DialogTrigger asChild>
             <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg hover:shadow-xl transition-all font-bold">
@@ -214,11 +229,7 @@ export default function MembersPage() {
               Add Member
             </Button>
           </DialogTrigger>
-          <DialogContent 
-            className="sm:max-w-[425px]"
-            onInteractOutside={(e) => e.preventDefault()}
-            onPointerDownOutside={(e) => e.preventDefault()}
-          >
+          <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleAddMember}>
               <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Enter member details and assign to a scheme.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
@@ -258,13 +269,15 @@ export default function MembersPage() {
                     required
                     disabled={isActionPending}
                   />
-                  <p className="text-[10px] text-muted-foreground italic">Automatically set based on selected scheme.</p>
                 </div>
                 <div className="grid gap-2"><Label htmlFor="joinDate">Join Date</Label><Input id="joinDate" type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required disabled={isActionPending} /></div>
               </div>
               <DialogFooter className="flex-col sm:flex-row gap-2">
-                <Button type="button" variant="outline" onClick={() => { setIsAddDialogOpen(false); restoreInteraction(false); }} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
-                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto">{isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Register Member</Button>
+                <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
+                  {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                  Register Member
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -364,15 +377,12 @@ export default function MembersPage() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditMemberDialogOpen} onOpenChange={(open) => { 
-        setIsEditMemberDialogOpen(open); 
-        if (!open) setMemberToEdit(null);
-        restoreInteraction(open); 
+        if (!isActionPending) {
+          setIsEditMemberDialogOpen(open); 
+          if (!open) setMemberToEdit(null);
+        }
       }}>
-        <DialogContent 
-          className="sm:max-w-[425px]"
-          onInteractOutside={(e) => e.preventDefault()}
-          onPointerDownOutside={(e) => e.preventDefault()}
-        >
+        <DialogContent className="sm:max-w-[425px]">
           {isEditMemberDialogOpen && (
             <form onSubmit={handleUpdateMember}>
               <DialogHeader><DialogTitle>Edit Member</DialogTitle><DialogDescription>Update details for {memberToEdit?.name}.</DialogDescription></DialogHeader>
@@ -409,14 +419,20 @@ export default function MembersPage() {
                   />
                 </div>
               </div>
-              <DialogFooter className="gap-2"><Button type="button" variant="outline" onClick={() => setIsEditMemberDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button><Button type="submit" disabled={isActionPending} className="w-full sm:w-auto">Save</Button></DialogFooter>
+              <DialogFooter className="gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsEditMemberDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
+                  {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                  Save Changes
+                </Button>
+              </DialogFooter>
             </form>
           )}
         </DialogContent>
       </Dialog>
 
       {/* Profile Dialog */}
-      <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { setIsProfileDialogOpen(open); restoreInteraction(open); if (!open) setSelectedMember(null) }}>
+      <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsProfileDialogOpen(open); if (!open) setSelectedMember(null) } }}>
         <DialogContent className="sm:max-w-[450px]">
           {isProfileDialogOpen && (
             <>
@@ -430,7 +446,8 @@ export default function MembersPage() {
               <DialogFooter className="flex flex-col sm:flex-row gap-2">
                 <Button 
                   variant="destructive" 
-                  className="w-full sm:w-auto sm:mr-auto" 
+                  className="w-full sm:w-auto sm:mr-auto font-bold" 
+                  disabled={isActionPending}
                   onClick={() => { 
                     setMemberToDeactivate(selectedMember); 
                     setIsDeactivateMemberDialogOpen(true); 
@@ -441,11 +458,11 @@ export default function MembersPage() {
                   Deactivate
                 </Button>
                 <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                  <Button variant="outline" className="w-full sm:w-auto" onClick={() => { setIsProfileDialogOpen(false); setTimeout(() => { setHistoryMember(selectedMember); setIsHistoryDialogOpen(true); }, 300) }}>
+                  <Button variant="outline" className="w-full sm:w-auto font-bold" onClick={() => { setIsProfileDialogOpen(false); setTimeout(() => { setHistoryMember(selectedMember); setIsHistoryDialogOpen(true); }, 300) }}>
                     <HistoryIcon className="mr-2 size-4" />
                     History
                   </Button>
-                  <Button className="w-full sm:w-auto" onClick={() => setIsProfileDialogOpen(false)}>Close</Button>
+                  <Button className="w-full sm:w-auto font-bold" onClick={() => setIsProfileDialogOpen(false)}>Close</Button>
                 </div>
               </DialogFooter>
             </>
@@ -454,7 +471,7 @@ export default function MembersPage() {
       </Dialog>
 
       {/* History Dialog */}
-      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { setIsHistoryDialogOpen(open); restoreInteraction(open); if (!open) setHistoryMember(null) }}>
+      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) }}>
         <DialogContent className="sm:max-w-[550px]">
           {isHistoryDialogOpen && (
             <>
@@ -486,10 +503,13 @@ export default function MembersPage() {
       </Dialog>
 
       {/* Deactivate Dialog */}
-      <AlertDialog open={isDeactivateMemberDialogOpen} onOpenChange={(open) => { setIsDeactivateMemberDialogOpen(open); restoreInteraction(open); if (!open) setMemberToDeactivate(null) }}>
+      <AlertDialog open={isDeactivateMemberDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeactivateMemberDialogOpen(open); if (!open) setMemberToDeactivate(null) } }}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle className="text-destructive">Deactivate Member?</AlertDialogTitle><AlertDialogDescription>This will move <strong>{memberToDeactivate?.name}</strong> to inactive status. They will no longer appear in active lists, but their payment history will be preserved.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={confirmDeactivateMember} disabled={isActionPending}>Deactivate</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={confirmDeactivateMember} disabled={isActionPending}>
+            {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Deactivate
+          </AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

@@ -52,7 +52,7 @@ import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, deleteDoc, updateDoc } from "firebase/firestore"
-import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
+import { addDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -99,12 +99,14 @@ export default function PaymentsPage() {
       if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) setShowSuggestions(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.body.style.pointerEvents = 'auto'
+    }
   }, []);
 
   const filteredMembersForSelection = useMemo(() => {
     if (!memberSearch) return [];
-    // Only allow active members to be selected for new payments
     return members.filter(m => m.status !== 'inactive' && m.name.toLowerCase().includes(memberSearch.toLowerCase()));
   }, [members, memberSearch]);
 
@@ -122,7 +124,7 @@ export default function PaymentsPage() {
     setIsActionPending(true)
     const amount = Number(recordData.amount);
     try {
-      await addDocumentNonBlocking(collection(db, 'payments'), { 
+      addDocumentNonBlocking(collection(db, 'payments'), { 
         memberId: member.id, 
         memberName: member.name, 
         month: recordData.month, 
@@ -132,17 +134,22 @@ export default function PaymentsPage() {
         method: recordData.method || "Cash", 
         createdAt: serverTimestamp() 
       });
-      await updateDoc(doc(db, 'members', member.id), { 
+
+      // Update member total paid asynchronously
+      const memberRef = doc(db, 'members', member.id);
+      updateDoc(memberRef, { 
         paymentStatus: "success", 
         totalPaid: (member.totalPaid || 0) + amount 
       });
-      await createAuditLog(db, user, `Recorded Payment ₹${amount} for ${member.name}`)
+      
+      createAuditLog(db, user, `Recorded Payment ₹${amount} for ${member.name}`)
+      
       setIsQuickRecordOpen(false);
       setRecordData({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "" });
       setMemberSearch("");
       toast({ title: "Payment Recorded", description: `Amount ₹${amount} saved for ${member.name}.` });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to record payment." });
+      toast({ variant: "destructive", title: "Error", description: "Failed to record payment." });
     } finally { setIsActionPending(false) }
   }
 
@@ -151,14 +158,22 @@ export default function PaymentsPage() {
     setIsActionPending(true)
     try {
       const member = members.find(m => m.id === paymentToDelete.memberId);
-      if (member) await updateDoc(doc(db, 'members', member.id), { totalPaid: Math.max(0, (member.totalPaid || 0) - (paymentToDelete.amountPaid || 0)) });
-      await deleteDoc(doc(db, 'payments', paymentToDelete.id));
-      await createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`)
+      if (member) {
+        const memberRef = doc(db, 'members', member.id);
+        updateDoc(memberRef, { 
+          totalPaid: Math.max(0, (member.totalPaid || 0) - (paymentToDelete.amountPaid || 0)) 
+        });
+      }
+      
+      deleteDocumentNonBlocking(doc(db, 'payments', paymentToDelete.id));
+      
+      createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`)
+      
       setIsDeletePaymentDialogOpen(false);
       setPaymentToDelete(null);
-      toast({ title: "Record Deleted", description: "Payment removed." });
+      toast({ title: "Record Deleted", description: "Payment removed successfully." });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to delete record." });
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete record." });
     } finally { setIsActionPending(false) }
   }
 
@@ -179,7 +194,6 @@ export default function PaymentsPage() {
     const now = new Date();
     const start = startOfMonth(now);
     const end = endOfMonth(now);
-    // Only show active members in summary
     return members.filter(m => m.status !== 'inactive').filter(m => {
         const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase());
         if (!matchesSearch) return false;
@@ -221,12 +235,14 @@ export default function PaymentsPage() {
           <p className="text-sm sm:text-base text-muted-foreground">Manage and track all fund transactions.</p>
         </div>
         <Dialog open={isQuickRecordOpen} onOpenChange={(open) => { 
-          setIsQuickRecordOpen(open); 
-          if (!open) { 
-            setMemberSearch(""); 
-            setShowSuggestions(false); 
-            setRecordData({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "" });
-          } 
+          if (!isActionPending) {
+            setIsQuickRecordOpen(open); 
+            if (!open) { 
+              setMemberSearch(""); 
+              setShowSuggestions(false); 
+              setRecordData({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "" });
+            }
+          }
         }}>
           <DialogTrigger asChild>
             <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg font-bold">
@@ -234,11 +250,7 @@ export default function PaymentsPage() {
               Add Payment
             </Button>
           </DialogTrigger>
-          <DialogContent 
-            className="sm:max-w-[425px]"
-            onInteractOutside={(e) => e.preventDefault()}
-            onPointerDownOutside={(e) => e.preventDefault()}
-          >
+          <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleQuickRecord}>
               <DialogHeader><DialogTitle>Record Payment</DialogTitle><DialogDescription>Manual entry for active member contributions.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
@@ -279,7 +291,10 @@ export default function PaymentsPage() {
               </div>
               <DialogFooter className="flex-col sm:flex-row gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)} className="w-full sm:w-auto">Cancel</Button>
-                <Button type="submit" disabled={isActionPending || !recordData.memberId} className="w-full sm:w-auto">Save Payment</Button>
+                <Button type="submit" disabled={isActionPending || !recordData.memberId} className="w-full sm:w-auto font-bold">
+                  {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                  Save Payment
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -471,10 +486,13 @@ export default function PaymentsPage() {
       </Dialog>
 
       {/* Delete Record Dialog */}
-      <AlertDialog open={isDeletePaymentDialogOpen} onOpenChange={(open) => { setIsDeletePaymentDialogOpen(open); if (!open) setPaymentToDelete(null) }}>
+      <AlertDialog open={isDeletePaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeletePaymentDialogOpen(open); if (!open) setPaymentToDelete(null) } }}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Transaction?</AlertDialogTitle><AlertDialogDescription>Permanently remove this payment of <strong>₹{paymentToDelete?.amountPaid?.toLocaleString()}</strong>? This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={handleDeletePayment} disabled={isActionPending}>Delete</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeletePayment} disabled={isActionPending}>
+            {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Delete
+          </AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
