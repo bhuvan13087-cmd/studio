@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
-import { Search, CheckCircle2, Clock, MoreHorizontal, History, Plus, Loader2, Calendar, Trash2, X, LayoutList, FileText, User, Lock } from "lucide-react"
+import { Search, CheckCircle2, Clock, MoreHorizontal, History, Plus, Loader2, Calendar, Trash2, X, LayoutList, FileText, User, Lock, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -50,12 +50,14 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, updateDoc } from "firebase/firestore"
-import { addDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates"
+import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc } from "firebase/firestore"
+import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
-import { cn } from "@/lib/utils"
+import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
+
+const PAGE_SIZE = 50
 
 export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -66,6 +68,8 @@ export default function PaymentsPage() {
   const [isDeletePaymentDialogOpen, setIsDeletePaymentDialogOpen] = useState(false)
   const [paymentToDelete, setPaymentToDelete] = useState<any>(null)
   const [isActionPending, setIsActionPending] = useState(false)
+  const [historyLimit, setHistoryLimit] = useState(PAGE_SIZE)
+  const [summaryLimit, setSummaryLimit] = useState(PAGE_SIZE)
   
   const [memberSearch, setMemberSearch] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -79,7 +83,6 @@ export default function PaymentsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // STABILIZED QUERIES
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: paymentsData, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const payments = paymentsData || [];
@@ -107,8 +110,6 @@ export default function PaymentsPage() {
       if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) setShowSuggestions(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
-    
-    // Recovery cleanup
     document.body.style.pointerEvents = 'auto'
     document.body.style.overflow = 'auto'
 
@@ -151,7 +152,7 @@ export default function PaymentsPage() {
     setIsActionPending(true)
     const amount = Number(recordData.amount);
     try {
-      addDocumentNonBlocking(collection(db, 'payments'), { 
+      await withTimeout(addDocumentNonBlocking(collection(db, 'payments'), { 
         memberId: member.id, 
         memberName: member.name, 
         month: recordData.month, 
@@ -160,15 +161,15 @@ export default function PaymentsPage() {
         status: "paid", 
         method: recordData.method || "Cash", 
         createdAt: serverTimestamp() 
-      });
+      }));
 
       const memberRef = doc(db, 'members', member.id);
-      updateDoc(memberRef, { 
+      await withTimeout(updateDoc(memberRef, { 
         paymentStatus: "success", 
         totalPaid: (member.totalPaid || 0) + amount 
-      });
+      }));
       
-      createAuditLog(db, user, `Recorded Payment ₹${amount} for ${member.name}`)
+      await createAuditLog(db, user, `Recorded Payment ₹${amount} for ${member.name}`);
       
       setIsQuickRecordOpen(false);
       setRecordData({ 
@@ -180,7 +181,7 @@ export default function PaymentsPage() {
       setMemberSearch("");
       toast({ title: "Payment Recorded", description: `Amount ₹${amount} saved for ${member.name}.` });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to record payment." })
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to record payment." })
     } finally { 
       setIsActionPending(false);
     }
@@ -202,19 +203,19 @@ export default function PaymentsPage() {
       const member = members.find(m => m.id === paymentToDelete.memberId);
       if (member) {
         const memberRef = doc(db, 'members', member.id);
-        updateDoc(memberRef, { 
+        await withTimeout(updateDoc(memberRef, { 
           totalPaid: Math.max(0, (member.totalPaid || 0) - (paymentToDelete.amountPaid || 0)) 
-        });
+        }));
       }
       
-      deleteDocumentNonBlocking(doc(db, 'payments', paymentToDelete.id));
-      createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`)
+      await withTimeout(deleteDoc(doc(db, 'payments', paymentToDelete.id)));
+      await createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`);
       
       setIsDeletePaymentDialogOpen(false);
       setPaymentToDelete(null);
       toast({ title: "Record Deleted", description: "Payment removed successfully." });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete record." });
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to delete record." });
     } finally { 
       setIsActionPending(false);
     }
@@ -232,6 +233,8 @@ export default function PaymentsPage() {
     }
     return list;
   }, [payments, searchTerm, typeFilter, members, rounds]);
+
+  const visiblePayments = useMemo(() => filteredPayments.slice(0, historyLimit), [filteredPayments, historyLimit]);
 
   const memberSummaries = useMemo(() => {
     const now = new Date();
@@ -261,6 +264,8 @@ export default function PaymentsPage() {
         };
       });
   }, [members, payments, rounds, searchTerm, typeFilter]);
+
+  const visibleSummaries = useMemo(() => memberSummaries.slice(0, summaryLimit), [memberSummaries, summaryLimit]);
 
   const openAuditProfile = (memberId: string) => {
     const member = members.find(m => m.id === memberId);
@@ -301,7 +306,7 @@ export default function PaymentsPage() {
           }
         }}>
           <DialogTrigger asChild>
-            <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg font-bold">
+            <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg font-bold" disabled={isActionPending}>
               <Plus className="mr-2 size-4 sm:size-5" /> Add Payment
             </Button>
           </DialogTrigger>
@@ -342,7 +347,7 @@ export default function PaymentsPage() {
               <DialogFooter className="flex-col sm:flex-row gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)} className="w-full sm:w-auto">Cancel</Button>
                 <Button type="submit" disabled={isActionPending || !recordData.memberId || isCurrentMonthLocked} className="w-full sm:w-auto font-bold">
-                  {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />} Save Payment
+                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null} Save Payment
                 </Button>
               </DialogFooter>
             </form>
@@ -353,7 +358,7 @@ export default function PaymentsPage() {
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 bg-card p-3 sm:p-4 rounded-xl shadow-sm border border-border/50">
         <div className="flex items-center flex-1 gap-2">
           <Search className="size-4 sm:size-5 text-muted-foreground shrink-0" />
-          <Input placeholder="Search member in history..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="border-none focus-visible:ring-0 shadow-none bg-transparent h-8 text-sm" />
+          <Input placeholder="Search member in history..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setHistoryLimit(PAGE_SIZE); setSummaryLimit(PAGE_SIZE); }} className="border-none focus-visible:ring-0 shadow-none bg-transparent h-8 text-sm" />
         </div>
         <div className="flex items-center gap-2 border-t md:border-t-0 md:border-l pt-3 md:pt-0 md:pl-4">
           <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -385,8 +390,8 @@ export default function PaymentsPage() {
                 <TableBody>
                   {isPaymentsLoading ? (
                     <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Loading history...</TableCell></TableRow>
-                  ) : filteredPayments.length > 0 ? (
-                    filteredPayments.map((p) => {
+                  ) : visiblePayments.length > 0 ? (
+                    visiblePayments.map((p) => {
                       const [m, y] = p.month.split(' ');
                       const isLocked = monthLocks?.some(l => l.year === y && l.monthName === m);
                       return (
@@ -406,12 +411,12 @@ export default function PaymentsPage() {
                           <TableCell className="hidden md:table-cell text-[10px] font-bold text-muted-foreground uppercase">{p.method || "Cash"}</TableCell>
                           <TableCell>
                             <DropdownMenu>
-                              <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
+                              <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" disabled={isActionPending}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44">
                                 <DropdownMenuItem onSelect={() => { setHistoryMember(p); setIsHistoryOpen(true); }}><History className="mr-2 size-4" /> Full History</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
-                                  disabled={isLocked}
+                                  disabled={isLocked || isActionPending}
                                   className={cn("text-destructive focus:bg-destructive/10 focus:text-destructive", isLocked && "opacity-50 pointer-events-none")} 
                                   onSelect={() => { setPaymentToDelete(p); setIsDeletePaymentDialogOpen(true); }}
                                 >
@@ -429,6 +434,13 @@ export default function PaymentsPage() {
                 </TableBody>
               </Table>
             </div>
+            {filteredPayments.length > historyLimit && (
+              <div className="p-4 border-t flex justify-center">
+                <Button variant="ghost" size="sm" onClick={() => setHistoryLimit(prev => prev + PAGE_SIZE)} className="text-xs font-bold uppercase tracking-widest gap-2">
+                  <ChevronDown className="size-4" /> Load More History
+                </Button>
+              </div>
+            )}
           </div>
         </TabsContent>
 
@@ -448,8 +460,8 @@ export default function PaymentsPage() {
                 <TableBody>
                   {isMembersLoading ? (
                     <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Calculating summary...</TableCell></TableRow>
-                  ) : memberSummaries.length > 0 ? (
-                    memberSummaries.map((s) => (
+                  ) : visibleSummaries.length > 0 ? (
+                    visibleSummaries.map((s) => (
                       <TableRow key={s.id} className="hover:bg-muted/10 transition-colors">
                         <TableCell className="font-semibold text-xs sm:text-sm">{s.name}</TableCell>
                         <TableCell className="text-right text-xs font-medium tabular-nums">₹{s.totalAmount.toLocaleString()}</TableCell>
@@ -466,6 +478,13 @@ export default function PaymentsPage() {
                 </TableBody>
               </Table>
             </div>
+            {memberSummaries.length > summaryLimit && (
+              <div className="p-4 border-t flex justify-center">
+                <Button variant="ghost" size="sm" onClick={() => setSummaryLimit(prev => prev + PAGE_SIZE)} className="text-xs font-bold uppercase tracking-widest gap-2">
+                  <ChevronDown className="size-4" /> Load More Summaries
+                </Button>
+              </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>
@@ -507,7 +526,7 @@ export default function PaymentsPage() {
       <AlertDialog open={isDeletePaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeletePaymentDialogOpen(open); if (!open) setPaymentToDelete(null) } }}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Transaction?</AlertDialogTitle><AlertDialogDescription>Permanently remove this payment of <strong>₹{paymentToDelete?.amountPaid?.toLocaleString()}</strong>? This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeletePayment} disabled={isActionPending}>{isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />} Delete</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeletePayment} disabled={isActionPending}>{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

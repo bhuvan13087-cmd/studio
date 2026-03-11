@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, UserPlus, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon } from "lucide-react"
+import { Search, UserPlus, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -53,6 +53,7 @@ import { addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/no
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
 import { createAuditLog } from "@/firebase/logging"
+import { withTimeout } from "@/lib/utils"
 
 const INITIAL_MEMBER_STATE = {
   name: "",
@@ -62,6 +63,8 @@ const INITIAL_MEMBER_STATE = {
   status: "active",
   chitGroup: ""
 }
+
+const PAGE_SIZE = 50
 
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -75,13 +78,13 @@ export default function MembersPage() {
   const [memberToEdit, setMemberToEdit] = useState<any>(null)
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [isActionPending, setIsActionPending] = useState(false)
-  const { toast } = useToast()
+  const [displayLimit, setDisplayLimit] = useState(PAGE_SIZE)
   
+  const { toast } = useToast()
   const db = useFirestore()
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // STABILIZED QUERIES TO PREVENT INFINITE LOOPS
   const membersQuery = useMemoFirebase(() => query(collection(db, 'members'), orderBy('name', 'asc')), [db]);
   const { data: members, isLoading: isMembersLoading } = useCollection(membersQuery);
 
@@ -93,19 +96,15 @@ export default function MembersPage() {
 
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
 
-  // CRITICAL: CLEANUP INTERACTION LOCKS
   useEffect(() => {
-    // Reset body styles on mount to recover from any previous crashes
     document.body.style.pointerEvents = 'auto'
     document.body.style.overflow = 'auto'
-    
     return () => {
       document.body.style.pointerEvents = 'auto'
       document.body.style.overflow = 'auto'
     }
   }, [])
 
-  // OPTIMIZED PAID STATUS CHECK (O(N) instead of O(N*M))
   const paidMemberStatus = useMemo(() => {
     if (!payments) return new Map<string, any>();
     const now = new Date();
@@ -132,7 +131,7 @@ export default function MembersPage() {
     
     setIsActionPending(true)
     try {
-      addDocumentNonBlocking(collection(db, 'members'), {
+      await withTimeout(addDocumentNonBlocking(collection(db, 'members'), {
         ...newMember,
         monthlyAmount: Number(newMember.monthlyAmount),
         createdAt: serverTimestamp(),
@@ -140,15 +139,15 @@ export default function MembersPage() {
         totalPaid: 0,
         pendingAmount: 0,
         status: "active"
-      })
+      }));
       
-      createAuditLog(db, user, `Registered new member: ${newMember.name}`)
+      await createAuditLog(db, user, `Registered new member: ${newMember.name}`);
       
       setIsAddDialogOpen(false)
       setNewMember(INITIAL_MEMBER_STATE)
       toast({ title: "Member Added", description: `${newMember.name} registered successfully.` })
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to add member." })
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to add member." })
     } finally {
       setIsActionPending(false)
     }
@@ -161,22 +160,22 @@ export default function MembersPage() {
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToEdit.id);
-      updateDocumentNonBlocking(memberRef, {
+      await withTimeout(updateDoc(memberRef, {
         name: memberToEdit.name,
         phone: memberToEdit.phone,
         monthlyAmount: Number(memberToEdit.monthlyAmount),
         joinDate: memberToEdit.joinDate,
         status: memberToEdit.status,
         chitGroup: memberToEdit.chitGroup
-      });
+      }));
       
-      createAuditLog(db, user, `Updated member details: ${memberToEdit.name}`)
+      await createAuditLog(db, user, `Updated member details: ${memberToEdit.name}`)
       
       setIsEditMemberDialogOpen(false)
       setMemberToEdit(null)
       toast({ title: "Member Updated", description: "Details saved." })
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to update member." })
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update member." })
     } finally {
       setIsActionPending(false)
     }
@@ -188,18 +187,18 @@ export default function MembersPage() {
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToDeactivate.id)
-      updateDocumentNonBlocking(memberRef, {
+      await withTimeout(updateDoc(memberRef, {
         status: "inactive",
         deactivatedAt: new Date().toISOString()
-      });
+      }));
       
-      createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`)
+      await createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`)
       
       toast({ title: "Member Deactivated", description: "Member is now inactive." })
       setIsDeactivateMemberDialogOpen(false)
       setMemberToDeactivate(null)
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to deactivate member." })
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to deactivate member." })
     } finally {
       setIsActionPending(false)
     }
@@ -214,6 +213,8 @@ export default function MembersPage() {
         member.phone.includes(searchTerm)
       )
   }, [members, searchTerm])
+
+  const visibleMembers = useMemo(() => filteredMembers.slice(0, displayLimit), [filteredMembers, displayLimit])
 
   if (isRoleLoading) {
     return (
@@ -237,7 +238,7 @@ export default function MembersPage() {
           }
         }}>
           <DialogTrigger asChild>
-            <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg hover:shadow-xl transition-all font-bold">
+            <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg hover:shadow-xl transition-all font-bold" disabled={isActionPending}>
               <UserPlus className="mr-2 size-4 sm:size-5" />
               Add Member
             </Button>
@@ -275,7 +276,7 @@ export default function MembersPage() {
               <DialogFooter className="flex-col sm:flex-row gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
                 <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
-                  {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   Register Member
                 </Button>
               </DialogFooter>
@@ -289,7 +290,7 @@ export default function MembersPage() {
         <Input
           placeholder="Search active members..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => { setSearchTerm(e.target.value); setDisplayLimit(PAGE_SIZE); }}
           className="border-none focus-visible:ring-0 shadow-none bg-transparent h-8 text-sm"
         />
       </div>
@@ -309,14 +310,14 @@ export default function MembersPage() {
             <TableBody>
               {isMembersLoading ? (
                 <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Loading members...</TableCell></TableRow>
-              ) : filteredMembers.length > 0 ? (
-                filteredMembers.map((member) => {
+              ) : visibleMembers.length > 0 ? (
+                visibleMembers.map((member) => {
                   const currentMonthPayment = paidMemberStatus.get(member.id);
                   const isPaid = !!currentMonthPayment;
                   return (
                     <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
                       <TableCell>
-                        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => { setSelectedMember(member); setIsProfileDialogOpen(true); }}>
+                        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => { if(!isActionPending) { setSelectedMember(member); setIsProfileDialogOpen(true); } }}>
                           <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-primary font-bold text-xs transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                             {member.name.split(' ').map((n: string) => n[0]).join('')}
                           </div>
@@ -354,7 +355,7 @@ export default function MembersPage() {
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
+                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" disabled={isActionPending}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuItem onSelect={() => { setMemberToEdit({...member}); setIsEditMemberDialogOpen(true); }}><Pencil className="mr-2 size-4" /> Edit Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -371,9 +372,15 @@ export default function MembersPage() {
             </TableBody>
           </Table>
         </div>
+        {filteredMembers.length > displayLimit && (
+          <div className="p-4 border-t flex justify-center">
+            <Button variant="ghost" size="sm" onClick={() => setDisplayLimit(prev => prev + PAGE_SIZE)} className="text-xs font-bold uppercase tracking-widest gap-2">
+              <ChevronDown className="size-4" /> Load More Members
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Edit Member Dialog */}
       <Dialog open={isEditMemberDialogOpen} onOpenChange={(open) => { 
         if (!isActionPending) {
           setIsEditMemberDialogOpen(open); 
@@ -413,7 +420,7 @@ export default function MembersPage() {
               <DialogFooter className="gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsEditMemberDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
                 <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
-                  {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   Save Changes
                 </Button>
               </DialogFooter>
@@ -422,7 +429,6 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Profile Dialog */}
       <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { 
         if (!isActionPending) { 
           setIsProfileDialogOpen(open); 
@@ -471,7 +477,6 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
         <DialogContent className="sm:max-w-[550px]">
           {isHistoryDialogOpen && (
@@ -503,12 +508,11 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Deactivate Confirmation */}
       <AlertDialog open={isDeactivateMemberDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeactivateMemberDialogOpen(open); if (!open) setMemberToDeactivate(null) } }}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle className="text-destructive">Deactivate Member?</AlertDialogTitle><AlertDialogDescription>This will move <strong>{memberToDeactivate?.name}</strong> to inactive status. They will no longer appear in active lists, but their payment history will be preserved.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={confirmDeactivateMember} disabled={isActionPending}>
-            {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+            {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
             Deactivate
           </AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>

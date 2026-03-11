@@ -49,11 +49,11 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy } from "firebase/firestore"
-import { addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates"
+import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc } from "firebase/firestore"
+import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
-import { cn } from "@/lib/utils"
+import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
 const INITIAL_CHIT_STATE = { 
@@ -81,7 +81,6 @@ export default function RoundsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // STABILIZED QUERIES
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
   const chitSchemes = roundsData || [];
@@ -95,10 +94,8 @@ export default function RoundsPage() {
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
 
   useEffect(() => {
-    // Recovery cleanup
     document.body.style.pointerEvents = 'auto'
     document.body.style.overflow = 'auto'
-
     return () => {
       document.body.style.pointerEvents = 'auto'
       document.body.style.overflow = 'auto'
@@ -116,18 +113,18 @@ export default function RoundsPage() {
 
     setIsActionPending(true);
     try {
-      addDocumentNonBlocking(collection(db, 'chitRounds'), {
+      await withTimeout(addDocumentNonBlocking(collection(db, 'chitRounds'), {
         ...newChit,
         monthlyAmount: Number(newChit.monthlyAmount),
         totalMembers: Number(newChit.totalMembers),
         createdAt: serverTimestamp()
-      });
-      createAuditLog(db, user, `Created new scheme: ${newChit.name}`)
+      }));
+      await createAuditLog(db, user, `Created new scheme: ${newChit.name}`)
       setIsAddChitDialogOpen(false); 
       setNewChit(INITIAL_CHIT_STATE);
       toast({ title: "Scheme Created", description: "The scheme has been added to the registry." });
     } catch (e: any) { 
-      toast({ variant: "destructive", title: "Error", description: "Failed to create scheme." }); 
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to create scheme." }); 
     } finally { 
       setIsActionPending(false); 
     }
@@ -140,16 +137,16 @@ export default function RoundsPage() {
     setIsActionPending(true);
     try {
       const chitRef = doc(db, 'chitRounds', editingChit.id);
-      updateDocumentNonBlocking(chitRef, {
+      await withTimeout(updateDoc(chitRef, {
         ...editingChit,
         monthlyAmount: Number(editingChit.monthlyAmount),
         totalMembers: Number(editingChit.totalMembers)
-      });
-      createAuditLog(db, user, `Updated scheme details: ${editingChit.name}`)
+      }));
+      await createAuditLog(db, user, `Updated scheme details: ${editingChit.name}`)
       setIsEditChitDialogOpen(false);
       toast({ title: "Scheme Updated", description: "Details saved successfully." });
     } catch (e: any) { 
-      toast({ variant: "destructive", title: "Error", description: "Failed to update scheme." }); 
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update scheme." }); 
     } finally { 
       setIsActionPending(false); 
     }
@@ -160,12 +157,12 @@ export default function RoundsPage() {
     
     setIsActionPending(true);
     try { 
-      deleteDocumentNonBlocking(doc(db, 'chitRounds', chitToDelete.id)); 
-      createAuditLog(db, user, `Deleted scheme: ${chitToDelete.name}`)
+      await withTimeout(deleteDoc(doc(db, 'chitRounds', chitToDelete.id))); 
+      await createAuditLog(db, user, `Deleted scheme: ${chitToDelete.name}`)
       toast({ title: "Scheme Deleted", description: "The scheme record has been removed." }); 
       setIsDeleteDialogOpen(false); 
     } catch (e: any) { 
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete scheme." }); 
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to delete scheme." }); 
     } finally { 
       setIsActionPending(false); 
     }
@@ -207,7 +204,7 @@ export default function RoundsPage() {
                 <div className="grid gap-2"><Label>Collection Type</Label><Select value={newChit.collectionType} onValueChange={v => setNewChit({...newChit, collectionType: v})} disabled={isActionPending}><SelectTrigger><SelectValue placeholder="Select Daily/Monthly" /></SelectTrigger><SelectContent><SelectItem value="Monthly">Monthly</SelectItem><SelectItem value="Daily">Daily</SelectItem></SelectContent></Select></div>
                 {newChit.collectionType && (<div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} placeholder="Enter amount" /></div><div className="grid gap-2"><Label htmlFor="totalMembers">Seats</Label><Input id="totalMembers" type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div></div>)}
               </div>
-              <DialogFooter className="gap-2"><Button variant="outline" type="button" onClick={() => setIsAddChitDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button><Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">{isActionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create Scheme</Button></DialogFooter>
+              <DialogFooter className="gap-2"><Button variant="outline" type="button" onClick={() => setIsAddChitDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button><Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create Scheme</Button></DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
@@ -218,14 +215,14 @@ export default function RoundsPage() {
               <form onSubmit={handleEditChit}>
                 <DialogHeader><DialogTitle>Edit Scheme</DialogTitle></DialogHeader>
                 <div className="grid gap-4 py-4"><div className="grid gap-2"><Label>Name</Label><Input value={editingChit.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required disabled={isActionPending} /></div><div className="grid gap-2"><Label>Collection Type</Label><Select value={editingChit.collectionType} onValueChange={v => setEditingChit({...editingChit, collectionType: v})} disabled={isActionPending}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Monthly">Monthly</SelectItem><SelectItem value="Daily">Daily</SelectItem></SelectContent></Select></div>{editingChit.collectionType && (<div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={editingChit.monthlyAmount || ""} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div><div className="grid gap-2"><Label>Seats</Label><Input type="number" value={editingChit.totalMembers || ""} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div></div>)}</div>
-                <DialogFooter className="gap-2"><Button variant="outline" type="button" onClick={() => setIsEditChitDialogOpen(false)} disabled={isActionPending}>Cancel</Button><Button type="submit" disabled={isActionPending} className="font-bold">{isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />} Update</Button></DialogFooter>
+                <DialogFooter className="gap-2"><Button variant="outline" type="button" onClick={() => setIsEditChitDialogOpen(false)} disabled={isActionPending}>Cancel</Button><Button type="submit" disabled={isActionPending} className="font-bold">{isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null} Update</Button></DialogFooter>
               </form>
             )}
           </DialogContent>
         </Dialog>
 
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={(o) => { if (!isActionPending) { setIsDeleteDialogOpen(o); if(!o) setChitToDelete(null); } }}>
-          <AlertDialogContent><AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme <strong>{chitToDelete?.name}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={confirmDelete} disabled={isActionPending}>{isActionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+          <AlertDialogContent><AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme <strong>{chitToDelete?.name}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={confirmDelete} disabled={isActionPending}>{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
         </AlertDialog>
       </div>
     )

@@ -41,7 +41,7 @@ import { useFirestore, useCollection, useMemoFirebase, useDoc, useUser } from "@
 import { collection, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"
 import { format, parseISO, getMonth, getYear } from "date-fns"
 import * as XLSX from 'xlsx'
-import { cn } from "@/lib/utils"
+import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
 const MONTHS_MASTER = [
@@ -70,14 +70,13 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState("collections")
   
   const [targetInput, setTargetInput] = useState<string>("")
-  const [isSavingTarget, setIsSavingTarget] = useState(false)
+  const [isActionPending, setIsActionPending] = useState(false)
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false)
   
   const { toast } = useToast()
   const db = useFirestore()
   const { user } = useUser()
 
-  // STABILIZED QUERIES
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
   const { data: members, isLoading: membersLoading } = useCollection(membersQuery)
 
@@ -122,17 +121,17 @@ export default function ReportsPage() {
       return;
     }
 
-    setIsSavingTarget(true)
+    setIsActionPending(true)
     try {
       const amount = parseFloat(targetInput)
       if (isNaN(amount)) throw new Error("Invalid amount")
 
-      await setDoc(doc(db, 'monthlyTargets', targetId), {
+      await withTimeout(setDoc(doc(db, 'monthlyTargets', targetId), {
         id: targetId,
         year: selectedYear,
         month: selectedMonth,
         targetAmount: amount
-      }, { merge: true })
+      }, { merge: true }));
 
       await createAuditLog(db, user, `Updated collection target for ${currentMonthName} ${selectedYear} to ₹${amount.toLocaleString()}`)
       
@@ -141,36 +140,36 @@ export default function ReportsPage() {
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save target." })
     } finally {
-      setIsSavingTarget(false)
+      setIsActionPending(false)
     }
   }
 
   const toggleMonthLock = async () => {
     if (selectedMonth === 'all') return;
     
-    setIsSavingTarget(true);
+    setIsActionPending(true);
     try {
       const lockId = `${selectedYear}-${currentMonthName}`;
       if (isMonthLocked) {
         const lockRef = doc(db, 'monthLocks', lockId);
-        await deleteDoc(lockRef);
+        await withTimeout(deleteDoc(lockRef));
         await createAuditLog(db, user, `Unlocked month: ${currentMonthName} ${selectedYear}`);
         toast({ title: "Month Unlocked", description: "Records can now be modified." });
       } else {
-        await setDoc(doc(db, 'monthLocks', lockId), {
+        await withTimeout(setDoc(doc(db, 'monthLocks', lockId), {
           id: lockId,
           year: selectedYear,
           monthName: currentMonthName,
           lockedAt: serverTimestamp(),
           lockedBy: user?.email
-        });
+        }));
         await createAuditLog(db, user, `Locked month: ${currentMonthName} ${selectedYear}`);
         toast({ title: "Month Locked", description: "Financial records are now read-only." });
       }
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: "Operation failed." });
+      toast({ variant: "destructive", title: "Error", description: e.message || "Operation failed." });
     } finally {
-      setIsSavingTarget(false);
+      setIsActionPending(false);
     }
   }
 
@@ -296,16 +295,16 @@ export default function ReportsPage() {
                  size="sm" 
                  className={cn("h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-sm", isMonthLocked && "text-amber-700 bg-amber-50")}
                  onClick={toggleMonthLock}
-                 disabled={isSavingTarget}
+                 disabled={isActionPending}
                >
                  {isMonthLocked ? <Lock className="mr-2 size-4" /> : <Clock className="mr-2 size-4" />}
                  {isMonthLocked ? "Unlock Month" : "Lock Month"}
                </Button>
              )}
-             <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-sm" onClick={handlePrint}>
+             <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-sm" onClick={handlePrint} disabled={isActionPending}>
                <Printer className="mr-2 size-4" /> Print
              </Button>
-             <Button size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-md" onClick={handleExportExcel}>
+             <Button size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-md" onClick={handleExportExcel} disabled={isActionPending}>
                <Download className="mr-2 size-4" /> Export Excel
              </Button>
           </div>
@@ -314,21 +313,21 @@ export default function ReportsPage() {
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 bg-card p-4 rounded-xl border border-border/50 shadow-sm items-end">
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Scheme Filter</label>
-            <Select value={reportType} onValueChange={setReportType}>
+            <Select value={reportType} onValueChange={setReportType} disabled={isActionPending}>
               <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Filter className="mr-2 size-3.5 text-primary" /><SelectValue placeholder="Scheme Type" /></SelectTrigger>
               <SelectContent><SelectItem value="all">All Schemes</SelectItem><SelectItem value="daily">Daily Only</SelectItem><SelectItem value="monthly">Monthly Only</SelectItem></SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Report Month</label>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <Select value={selectedMonth} onValueChange={setSelectedMonth} disabled={isActionPending}>
               <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Calendar className="mr-2 size-3.5 text-primary" /><SelectValue placeholder="Month" /></SelectTrigger>
               <SelectContent>{availableMonths.map(m => (<SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>))}</SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Report Year</label>
-            <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <Select value={selectedYear} onValueChange={setSelectedYear} disabled={isActionPending}>
               <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Calendar className="mr-2 size-3.5 text-primary" /><SelectValue placeholder="Year" /></SelectTrigger>
               <SelectContent>{YEARS.map(y => (<SelectItem key={y} value={y}>{y}</SelectItem>))}</SelectContent>
             </Select>
@@ -341,7 +340,7 @@ export default function ReportsPage() {
                   {selectedMonth === 'all' ? "Select Month" : (isMonthLocked ? "LOCKED 🔒" : "ACTIVE ✨")}
                 </span>
                 {selectedMonth !== 'all' && !isMonthLocked && (
-                  <Button variant="ghost" size="icon" onClick={() => setIsTargetDialogOpen(true)} className="h-6 w-6 text-emerald-600 hover:bg-emerald-100"><Pencil className="size-3" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => setIsTargetDialogOpen(true)} className="h-6 w-6 text-emerald-600 hover:bg-emerald-100" disabled={isActionPending}><Pencil className="size-3" /></Button>
                 )}
               </div>
             </div>
@@ -349,13 +348,13 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
+      <Dialog open={isTargetDialogOpen} onOpenChange={(open) => { if(!isActionPending) setIsTargetDialogOpen(open) }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader><DialogTitle>Update Monthly Target</DialogTitle><DialogDescription>Set a goal for {currentMonthName} {selectedYear}.</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2"><Label htmlFor="targetAmount">Target Amount (₹)</Label><Input id="targetAmount" type="number" value={targetInput} onChange={(e) => setTargetInput(e.target.value)} className="font-bold" autoFocus /></div>
+            <div className="grid gap-2"><Label htmlFor="targetAmount">Target Amount (₹)</Label><Input id="targetAmount" type="number" value={targetInput} onChange={(e) => setTargetInput(e.target.value)} className="font-bold" autoFocus disabled={isActionPending} /></div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setIsTargetDialogOpen(false)} disabled={isSavingTarget}>Cancel</Button><Button onClick={handleSaveTarget} disabled={isSavingTarget}>{isSavingTarget && <Loader2 className="mr-2 size-4 animate-spin" />}Save Target</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setIsTargetDialogOpen(false)} disabled={isActionPending}>Cancel</Button><Button onClick={handleSaveTarget} disabled={isActionPending}>{isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Save Target</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
