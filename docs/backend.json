@@ -138,6 +138,19 @@
         "name",
         "collectionType"
       ]
+    },
+    "MonthlyTarget": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MonthlyTarget",
+      "type": "object",
+      "description": "A financial collection goal set by the admin for a specific month and year.",
+      "properties": {
+        "id": { "type": "string", "description": "Format: YYYY-MM" },
+        "year": { "type": "string" },
+        "month": { "type": "string" },
+        "targetAmount": { "type": "number" }
+      },
+      "required": ["id", "year", "month", "targetAmount"]
     }
   },
   "auth": {
@@ -155,7 +168,7 @@
           "schema": {
             "$ref": "#/backend/entities/Member"
           },
-          "description": "Stores individual member details. Accessible to all authenticated users for now.",
+          "description": "Stores individual member details.",
           "params": [
             {
               "name": "memberId",
@@ -171,7 +184,7 @@
           "schema": {
             "$ref": "#/backend/entities/Payment"
           },
-          "description": "Records monthly contributions. Accessible to all authenticated users for now.",
+          "description": "Records monthly contributions.",
           "params": [
             {
               "name": "paymentId",
@@ -187,7 +200,7 @@
           "schema": {
             "$ref": "#/backend/entities/ChitRound"
           },
-          "description": "Stores details of completed chit rounds. Accessible to all authenticated users for now.",
+          "description": "Stores details of completed chit rounds.",
           "params": [
             {
               "name": "roundId",
@@ -195,8 +208,24 @@
             }
           ]
         }
+      },
+      {
+        "path": "/monthlyTargets/{targetId}",
+        "definition": {
+          "entityName": "MonthlyTarget",
+          "schema": {
+            "$ref": "#/backend/entities/MonthlyTarget"
+          },
+          "description": "Stores monthly collection targets.",
+          "params": [
+            {
+              "name": "targetId",
+              "description": "The year and month (YYYY-MM)."
+            }
+          ]
+        }
       }
     ],
-    "reasoning": "The application has moved to a simplified authorization model where any authenticated user is granted administrative privileges. This ensures immediate access to all dashboard modules (Members, Payments, Rounds, Reports) upon successful login, while maintaining Firestore structure for scalability."
+    "reasoning": "The application manages members, payments, chit rounds, and now monthly collection targets. Any authenticated user is granted administrative privileges for full dashboard access."
   }
 }

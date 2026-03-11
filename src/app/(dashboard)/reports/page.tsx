@@ -2,10 +2,11 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Trophy, Users, IndianRupee, TrendingUp, Calendar } from "lucide-react"
+import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Trophy, Users, IndianRupee, TrendingUp, Calendar, Target, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -28,8 +29,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, orderBy } from "firebase/firestore"
+import { useFirestore, useCollection, useMemoFirebase, useDoc } from "@/firebase"
+import { collection, query, orderBy, doc, setDoc } from "firebase/firestore"
 import { format, parseISO, isSameMonth, subMonths, isSameYear, getMonth, getYear } from "date-fns"
 import * as XLSX from 'xlsx'
 import { cn } from "@/lib/utils"
@@ -59,6 +60,10 @@ export default function ReportsPage() {
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
   const [activeTab, setActiveTab] = useState("collections")
   
+  // Target Setting State
+  const [targetInput, setTargetInput] = useState<string>("")
+  const [isSavingTarget, setIsSavingTarget] = useState(false)
+  
   const { toast } = useToast()
   const db = useFirestore()
 
@@ -71,7 +76,54 @@ export default function ReportsPage() {
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('date', 'desc')), [db])
   const { data: rounds, isLoading: roundsLoading } = useCollection(roundsQuery)
 
+  // Monthly Target Subscription
+  const targetId = `${selectedYear}-${selectedMonth}`
+  const targetDocRef = useMemoFirebase(() => 
+    selectedMonth !== 'all' ? doc(db, 'monthlyTargets', targetId) : null, 
+    [db, selectedYear, selectedMonth, targetId]
+  )
+  const { data: targetData, isLoading: targetLoading } = useDoc(targetDocRef)
+
   useEffect(() => { setMounted(true) }, [])
+
+  // Sync target input with stored data
+  useEffect(() => {
+    if (targetData) {
+      setTargetInput(targetData.targetAmount.toString())
+    } else {
+      setTargetInput("")
+    }
+  }, [targetData])
+
+  const handleSaveTarget = async () => {
+    if (!selectedMonth || selectedMonth === 'all' || !targetInput) {
+      toast({ 
+        variant: "destructive", 
+        title: "Validation Error", 
+        description: "Please select a specific month and enter a valid target amount." 
+      })
+      return
+    }
+
+    setIsSavingTarget(true)
+    try {
+      const amount = parseFloat(targetInput)
+      if (isNaN(amount)) throw new Error("Invalid amount")
+
+      await setDoc(doc(db, 'monthlyTargets', targetId), {
+        id: targetId,
+        year: selectedYear,
+        month: selectedMonth,
+        targetAmount: amount
+      }, { merge: true })
+
+      toast({ title: "Target Saved", description: `Collection goal for ${MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} ${selectedYear} updated.` })
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save target." })
+    } finally {
+      setIsSavingTarget(false)
+    }
+  }
 
   // Calculate which months actually have data for the selected year
   const availableMonths = useMemo(() => {
@@ -81,7 +133,6 @@ export default function ReportsPage() {
     const currentYear = new Date().getFullYear().toString();
     const currentMonth = new Date().getMonth();
 
-    // Scan members for join dates in the selected year
     members.forEach(m => {
       if (m.joinDate) {
         const d = parseISO(m.joinDate);
@@ -91,7 +142,6 @@ export default function ReportsPage() {
       }
     });
 
-    // Scan payments for collection dates in the selected year
     payments.forEach(p => {
       if (p.paymentDate) {
         const d = parseISO(p.paymentDate);
@@ -101,7 +151,6 @@ export default function ReportsPage() {
       }
     });
 
-    // Scan rounds for activity dates in the selected year
     rounds.forEach(r => {
       if (r.date) {
         const d = parseISO(r.date);
@@ -111,7 +160,6 @@ export default function ReportsPage() {
       }
     });
 
-    // Always allow current month if viewing the current year
     if (selectedYear === currentYear) {
       monthsWithData.add(currentMonth);
     }
@@ -123,7 +171,6 @@ export default function ReportsPage() {
     return filtered;
   }, [members, payments, rounds, selectedYear]);
 
-  // Reset selected month if it's no longer available for the chosen year
   useEffect(() => {
     if (selectedMonth !== "all") {
       const isAvailable = availableMonths.some(m => m.value === selectedMonth);
@@ -136,7 +183,6 @@ export default function ReportsPage() {
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
-    // 1. Filter by Scheme Type
     let targetMembers = members;
     if (reportType !== "all") {
       targetMembers = members.filter(m => {
@@ -146,7 +192,6 @@ export default function ReportsPage() {
     }
     const targetIds = new Set(targetMembers.map(m => m.id));
 
-    // 2. Filter by Date (Month/Year)
     const isMatchingDate = (dateStr: string) => {
       if (!dateStr) return false;
       const d = parseISO(dateStr);
@@ -159,12 +204,10 @@ export default function ReportsPage() {
     const successPayments = payments.filter(p => (p.status === 'paid' || p.status === 'success') && targetIds.has(p.memberId));
     const periodPayments = successPayments.filter(p => p.paymentDate && isMatchingDate(p.paymentDate));
 
-    // Summary Metrics
     const totalCollected = periodPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     const membersJoined = periodMembers.length;
     const paymentsCount = periodPayments.length;
 
-    // Table Data
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthPayments = successPayments.filter(p => {
         const d = parseISO(p.paymentDate);
@@ -251,9 +294,14 @@ export default function ReportsPage() {
     )
   }
 
+  // Calculate Target Achievement Percentage
+  const targetAmount = targetData?.targetAmount || 0
+  const reachPercentage = targetAmount > 0 
+    ? Math.round((filteredData.metrics.totalCollected / targetAmount) * 100) 
+    : 0
+
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden print:p-0">
-      {/* Filters Section */}
       <div className="flex flex-col gap-6 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -270,7 +318,7 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 bg-card p-4 rounded-xl border border-border/50 shadow-sm">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 bg-card p-4 rounded-xl border border-border/50 shadow-sm items-end">
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Scheme Filter</label>
             <Select value={reportType} onValueChange={setReportType}>
@@ -316,9 +364,49 @@ export default function ReportsPage() {
             </Select>
           </div>
         </div>
+
+        {/* Set Monthly Target Section */}
+        {selectedMonth !== 'all' && (
+          <Card className="border-border/50 shadow-sm bg-primary/5">
+            <CardHeader className="py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Target className="size-4 text-primary" />
+                  <CardTitle className="text-sm font-bold uppercase tracking-wider">Set Monthly Target</CardTitle>
+                </div>
+                <Badge variant="outline" className="bg-white text-[10px] font-bold uppercase">
+                  {MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                </Badge>
+              </div>
+              <CardDescription className="text-[11px]">Define a collection goal for this specific period.</CardDescription>
+            </CardHeader>
+            <CardContent className="pb-6">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1 max-w-[300px]">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                  <Input 
+                    type="number" 
+                    placeholder="Enter target amount..." 
+                    value={targetInput}
+                    onChange={(e) => setTargetInput(e.target.value)}
+                    className="pl-8 h-10 font-bold tabular-nums"
+                  />
+                </div>
+                <Button 
+                  size="sm" 
+                  onClick={handleSaveTarget} 
+                  disabled={isSavingTarget}
+                  className="h-10 px-6 font-bold uppercase tracking-wider"
+                >
+                  {isSavingTarget ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                  Save Target
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Summary Metrics Grid */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -342,21 +430,36 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 shadow-sm">
+        <Card className="border-border/50 shadow-sm overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Target Reach</CardTitle>
-            <TrendingUp className="size-4 text-blue-500" />
+            <TrendingUp className={cn("size-4", reachPercentage >= 100 ? "text-emerald-500" : "text-blue-500")} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {filteredData.targetMembers.length > 0 ? Math.round((filteredData.metrics.membersJoined / filteredData.targetMembers.length) * 100) : 0}%
+            <div className={cn("text-2xl font-bold", reachPercentage >= 100 ? "text-emerald-600" : "text-blue-600")}>
+              {selectedMonth === 'all' ? (
+                <span className="text-xs uppercase text-muted-foreground">Select Month</span>
+              ) : (
+                `${reachPercentage}%`
+              )}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1 font-medium">Growth vs Total Pool</p>
+            <p className="text-[10px] text-muted-foreground mt-1 font-medium">
+              {targetAmount > 0 
+                ? `Goal: ₹${targetAmount.toLocaleString()}` 
+                : "No goal defined"}
+            </p>
+            {targetAmount > 0 && (
+              <div className="w-full bg-muted h-1 rounded-full mt-2 overflow-hidden">
+                <div 
+                  className={cn("h-full transition-all duration-1000", reachPercentage >= 100 ? "bg-emerald-500" : "bg-blue-500")}
+                  style={{ width: `${Math.min(reachPercentage, 100)}%` }}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs & Detailed Reports */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 h-auto p-1 bg-muted/50 border rounded-xl overflow-x-auto print:hidden">
           <TabsTrigger value="collections" className="py-3 text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-card data-[state=active]:shadow-sm">Collections</TabsTrigger>
