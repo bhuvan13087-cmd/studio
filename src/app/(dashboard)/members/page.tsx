@@ -132,7 +132,7 @@ export default function MembersPage() {
     
     setIsActionPending(true)
     try {
-      await addDocumentNonBlocking(collection(db, 'members'), {
+      addDocumentNonBlocking(collection(db, 'members'), {
         ...newMember,
         monthlyAmount: Number(newMember.monthlyAmount),
         createdAt: serverTimestamp(),
@@ -142,7 +142,7 @@ export default function MembersPage() {
         status: "active"
       })
       
-      await createAuditLog(db, user, `Registered new member: ${newMember.name}`)
+      createAuditLog(db, user, `Registered new member: ${newMember.name}`)
       
       setIsAddDialogOpen(false)
       setNewMember(INITIAL_MEMBER_STATE)
@@ -170,7 +170,7 @@ export default function MembersPage() {
         chitGroup: memberToEdit.chitGroup
       });
       
-      await createAuditLog(db, user, `Updated member details: ${memberToEdit.name}`)
+      createAuditLog(db, user, `Updated member details: ${memberToEdit.name}`)
       
       setIsEditMemberDialogOpen(false)
       setMemberToEdit(null)
@@ -193,7 +193,7 @@ export default function MembersPage() {
         deactivatedAt: new Date().toISOString()
       });
       
-      await createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`)
+      createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`)
       
       toast({ title: "Member Deactivated", description: "Member is now inactive." })
       setIsDeactivateMemberDialogOpen(false)

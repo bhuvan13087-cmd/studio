@@ -107,6 +107,11 @@ export default function PaymentsPage() {
       if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) setShowSuggestions(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
+    
+    // Recovery cleanup
+    document.body.style.pointerEvents = 'auto'
+    document.body.style.overflow = 'auto'
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.body.style.pointerEvents = 'auto'
@@ -146,7 +151,7 @@ export default function PaymentsPage() {
     setIsActionPending(true)
     const amount = Number(recordData.amount);
     try {
-      await addDocumentNonBlocking(collection(db, 'payments'), { 
+      addDocumentNonBlocking(collection(db, 'payments'), { 
         memberId: member.id, 
         memberName: member.name, 
         month: recordData.month, 
@@ -158,12 +163,12 @@ export default function PaymentsPage() {
       });
 
       const memberRef = doc(db, 'members', member.id);
-      await updateDoc(memberRef, { 
+      updateDoc(memberRef, { 
         paymentStatus: "success", 
         totalPaid: (member.totalPaid || 0) + amount 
       });
       
-      await createAuditLog(db, user, `Recorded Payment ₹${amount} for ${member.name}`)
+      createAuditLog(db, user, `Recorded Payment ₹${amount} for ${member.name}`)
       
       setIsQuickRecordOpen(false);
       setRecordData({ 
@@ -197,13 +202,13 @@ export default function PaymentsPage() {
       const member = members.find(m => m.id === paymentToDelete.memberId);
       if (member) {
         const memberRef = doc(db, 'members', member.id);
-        await updateDoc(memberRef, { 
+        updateDoc(memberRef, { 
           totalPaid: Math.max(0, (member.totalPaid || 0) - (paymentToDelete.amountPaid || 0)) 
         });
       }
       
-      await deleteDocumentNonBlocking(doc(db, 'payments', paymentToDelete.id));
-      await createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`)
+      deleteDocumentNonBlocking(doc(db, 'payments', paymentToDelete.id));
+      createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`)
       
       setIsDeletePaymentDialogOpen(false);
       setPaymentToDelete(null);

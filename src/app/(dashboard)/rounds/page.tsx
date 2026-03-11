@@ -95,6 +95,10 @@ export default function RoundsPage() {
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
 
   useEffect(() => {
+    // Recovery cleanup
+    document.body.style.pointerEvents = 'auto'
+    document.body.style.overflow = 'auto'
+
     return () => {
       document.body.style.pointerEvents = 'auto'
       document.body.style.overflow = 'auto'
@@ -112,13 +116,13 @@ export default function RoundsPage() {
 
     setIsActionPending(true);
     try {
-      await addDocumentNonBlocking(collection(db, 'chitRounds'), {
+      addDocumentNonBlocking(collection(db, 'chitRounds'), {
         ...newChit,
         monthlyAmount: Number(newChit.monthlyAmount),
         totalMembers: Number(newChit.totalMembers),
         createdAt: serverTimestamp()
       });
-      await createAuditLog(db, user, `Created new scheme: ${newChit.name}`)
+      createAuditLog(db, user, `Created new scheme: ${newChit.name}`)
       setIsAddChitDialogOpen(false); 
       setNewChit(INITIAL_CHIT_STATE);
       toast({ title: "Scheme Created", description: "The scheme has been added to the registry." });
@@ -141,7 +145,7 @@ export default function RoundsPage() {
         monthlyAmount: Number(editingChit.monthlyAmount),
         totalMembers: Number(editingChit.totalMembers)
       });
-      await createAuditLog(db, user, `Updated scheme details: ${editingChit.name}`)
+      createAuditLog(db, user, `Updated scheme details: ${editingChit.name}`)
       setIsEditChitDialogOpen(false);
       toast({ title: "Scheme Updated", description: "Details saved successfully." });
     } catch (e: any) { 
@@ -156,8 +160,8 @@ export default function RoundsPage() {
     
     setIsActionPending(true);
     try { 
-      await deleteDocumentNonBlocking(doc(db, 'chitRounds', chitToDelete.id)); 
-      await createAuditLog(db, user, `Deleted scheme: ${chitToDelete.name}`)
+      deleteDocumentNonBlocking(doc(db, 'chitRounds', chitToDelete.id)); 
+      createAuditLog(db, user, `Deleted scheme: ${chitToDelete.name}`)
       toast({ title: "Scheme Deleted", description: "The scheme record has been removed." }); 
       setIsDeleteDialogOpen(false); 
     } catch (e: any) { 
