@@ -465,6 +465,7 @@ export default function PaymentsPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Member Audit Profile Modal */}
       <Dialog open={isAuditProfileOpen} onOpenChange={setIsAuditProfileOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><User className="size-5 text-primary" /> Member Audit Profile</DialogTitle></DialogHeader>

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect } from "react"
@@ -13,10 +12,11 @@ export default function Error({
   reset: () => void
 }) {
   useEffect(() => {
-    // Log the error to an error reporting service if needed
+    // Log the error for diagnosis
     console.error("Application Error Boundary caught:", error)
     
-    // Safety cleanup for Radix/ShadCN UI artifacts
+    // CRITICAL RECOVERY: Ensure body pointer events and overflow are reset 
+    // to prevent the UI from being locked if a modal/popup crashed.
     document.body.style.pointerEvents = 'auto'
     document.body.style.overflow = 'auto'
   }, [error])

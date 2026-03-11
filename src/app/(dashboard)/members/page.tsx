@@ -95,13 +95,17 @@ export default function MembersPage() {
 
   // CRITICAL: CLEANUP INTERACTION LOCKS
   useEffect(() => {
+    // Reset body styles on mount to recover from any previous crashes
+    document.body.style.pointerEvents = 'auto'
+    document.body.style.overflow = 'auto'
+    
     return () => {
       document.body.style.pointerEvents = 'auto'
       document.body.style.overflow = 'auto'
     }
   }, [])
 
-  // OPTIMIZED PAID STATUS CHECK
+  // OPTIMIZED PAID STATUS CHECK (O(N) instead of O(N*M))
   const paidMemberStatus = useMemo(() => {
     if (!payments) return new Map<string, any>();
     const now = new Date();
@@ -369,6 +373,7 @@ export default function MembersPage() {
         </div>
       </div>
 
+      {/* Edit Member Dialog */}
       <Dialog open={isEditMemberDialogOpen} onOpenChange={(open) => { 
         if (!isActionPending) {
           setIsEditMemberDialogOpen(open); 
@@ -417,6 +422,7 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Profile Dialog */}
       <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { 
         if (!isActionPending) { 
           setIsProfileDialogOpen(open); 
@@ -465,6 +471,7 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
         <DialogContent className="sm:max-w-[550px]">
           {isHistoryDialogOpen && (
@@ -496,6 +503,7 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Deactivate Confirmation */}
       <AlertDialog open={isDeactivateMemberDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeactivateMemberDialogOpen(open); if (!open) setMemberToDeactivate(null) } }}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle className="text-destructive">Deactivate Member?</AlertDialogTitle><AlertDialogDescription>This will move <strong>{memberToDeactivate?.name}</strong> to inactive status. They will no longer appear in active lists, but their payment history will be preserved.</AlertDialogDescription></AlertDialogHeader>
