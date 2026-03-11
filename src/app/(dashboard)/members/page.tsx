@@ -458,7 +458,7 @@ export default function MembersPage() {
         <DialogContent className="sm:max-w-[550px]">
           {isHistoryDialogOpen && (
             <>
-              <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader}
+              <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
               <div className="py-4 overflow-x-auto">
                 <Table>
                   <TableHeader>
