@@ -82,7 +82,7 @@ export default function MembersPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // MEMOIZED QUERIES - Essential to prevent infinite re-fetching
+  // FIXED: MEMOIZED QUERIES - Essential to prevent infinite re-fetching loops
   const membersQuery = useMemoFirebase(() => query(collection(db, 'members'), orderBy('name', 'asc')), [db]);
   const { data: members, isLoading: isMembersLoading } = useCollection(membersQuery);
 
@@ -94,7 +94,7 @@ export default function MembersPage() {
 
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
 
-  // Safety cleanup for UI interactions to prevent freezing
+  // FIXED: Safety cleanup for UI interactions to prevent freezing if dialogs unmount weirdly
   useEffect(() => {
     return () => {
       document.body.style.pointerEvents = 'auto'
@@ -102,7 +102,8 @@ export default function MembersPage() {
     }
   }, [])
 
-  // OPTIMIZATION: Pre-calculate current month's paid members to avoid O(N*M) lookups in render
+  // OPTIMIZATION: Pre-calculate current month's paid status Map
+  // This reduces complexity from O(N*M) to O(N+M) during list rendering
   const paidMemberStatus = useMemo(() => {
     if (!payments) return new Map<string, any>();
     const now = new Date();
@@ -112,9 +113,13 @@ export default function MembersPage() {
     const paidMap = new Map<string, any>();
     payments.forEach(p => {
       if ((p.status === 'paid' || p.status === 'success') && p.paymentDate) {
-        const d = parseISO(p.paymentDate);
-        if (isWithinInterval(d, { start, end })) {
-          paidMap.set(p.memberId, p);
+        try {
+          const d = parseISO(p.paymentDate);
+          if (isWithinInterval(d, { start, end })) {
+            paidMap.set(p.memberId, p);
+          }
+        } catch (e) {
+          // Skip invalid dates
         }
       }
     });
@@ -125,10 +130,9 @@ export default function MembersPage() {
     e.preventDefault()
     if (!db || isActionPending) return;
     
-    console.log("Adding member started...");
     setIsActionPending(true)
     try {
-      addDocumentNonBlocking(collection(db, 'members'), {
+      await addDocumentNonBlocking(collection(db, 'members'), {
         ...newMember,
         monthlyAmount: Number(newMember.monthlyAmount),
         createdAt: serverTimestamp(),
@@ -148,7 +152,6 @@ export default function MembersPage() {
       toast({ variant: "destructive", title: "Error", description: "Failed to add member." })
     } finally {
       setIsActionPending(false)
-      console.log("Adding member finished.");
     }
   }
 
@@ -156,11 +159,10 @@ export default function MembersPage() {
     e.preventDefault()
     if (!db || !memberToEdit || isActionPending) return;
     
-    console.log("Updating member started...");
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToEdit.id);
-      updateDocumentNonBlocking(memberRef, {
+      await updateDocumentNonBlocking(memberRef, {
         name: memberToEdit.name,
         phone: memberToEdit.phone,
         monthlyAmount: Number(memberToEdit.monthlyAmount),
@@ -179,18 +181,16 @@ export default function MembersPage() {
       toast({ variant: "destructive", title: "Error", description: "Failed to update member." })
     } finally {
       setIsActionPending(false)
-      console.log("Updating member finished.");
     }
   }
 
   const confirmDeactivateMember = async () => {
     if (!db || !memberToDeactivate || isActionPending) return
     
-    console.log("Deactivating member started...");
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToDeactivate.id)
-      updateDocumentNonBlocking(memberRef, {
+      await updateDocumentNonBlocking(memberRef, {
         status: "inactive",
         deactivatedAt: new Date().toISOString()
       });
@@ -205,7 +205,6 @@ export default function MembersPage() {
       toast({ variant: "destructive", title: "Error", description: "Failed to deactivate member." })
     } finally {
       setIsActionPending(false)
-      console.log("Deactivating member finished.");
     }
   }
 
@@ -361,7 +360,7 @@ export default function MembersPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-3 shadow-xl text-xs" align="start">
                                <div className="font-bold text-emerald-600 mb-1">Paid: ₹{currentMonthPayment?.amountPaid?.toLocaleString()}</div>
-                               <div className="text-[10px] text-muted-foreground uppercase font-semibold">Date: {format(parseISO(currentMonthPayment.paymentDate), 'MMM dd, yyyy')}</div>
+                               <div className="text-[10px] text-muted-foreground uppercase font-semibold">Date: {currentMonthPayment.paymentDate ? format(parseISO(currentMonthPayment.paymentDate), 'MMM dd, yyyy') : '-'}</div>
                             </PopoverContent>
                           </Popover>
                         ) : (

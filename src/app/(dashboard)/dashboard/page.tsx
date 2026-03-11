@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -27,6 +28,7 @@ export default function DashboardPage() {
   const [revenueView, setRevenueView] = useState<'month' | 'today'>('month')
   const db = useFirestore()
 
+  // FIXED: MEMOIZED QUERIES
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
   const { data: members, isLoading: membersLoading } = useCollection(membersQuery)
 
@@ -64,12 +66,31 @@ export default function DashboardPage() {
 
   // --- Calculations ---
   const now = new Date()
-  const currentMonthPayments = (payments || []).filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), now))
-  const collectedThisMonth = currentMonthPayments.filter(p => p.status === 'paid' || p.status === 'success').reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+  const currentMonthPayments = (payments || []).filter(p => {
+    if (!p.paymentDate) return false;
+    try {
+      return isSameMonth(parseISO(p.paymentDate), now);
+    } catch {
+      return false;
+    }
+  })
   
-  const collectedToday = (payments || []).filter(p => p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd') && (p.status === 'paid' || p.status === 'success')).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+  const collectedThisMonth = currentMonthPayments
+    .filter(p => p.status === 'paid' || p.status === 'success')
+    .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+  
+  const collectedToday = (payments || []).filter(p => {
+    if (!p.paymentDate) return false;
+    try {
+      return format(parseISO(p.paymentDate), 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd') && 
+             (p.status === 'paid' || p.status === 'success');
+    } catch {
+      return false;
+    }
+  }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
   const pendingMembers = (members || []).filter(m => {
+    if (m.status === 'inactive') return false;
     const paidThisMonth = currentMonthPayments.some(p => p.memberId === m.id && (p.status === 'paid' || p.status === 'success'));
     return !paidThisMonth;
   });
@@ -93,7 +114,7 @@ export default function DashboardPage() {
             <Users className="size-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl sm:text-3xl font-bold">{members?.length || 0}</div>
+            <div className="text-2xl sm:text-3xl font-bold">{members?.filter(m => m.status !== 'inactive').length || 0}</div>
             <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Active participants</p>
           </CardContent>
         </Card>

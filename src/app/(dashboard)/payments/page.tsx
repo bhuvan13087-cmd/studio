@@ -45,7 +45,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@/components/ui/tabs"
+} from "@/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
@@ -80,7 +80,7 @@ export default function PaymentsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // MEMOIZED QUERIES
+  // FIXED: MEMOIZED QUERIES - Prevents re-subscription loops
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: paymentsData, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const payments = paymentsData || [];
@@ -129,11 +129,10 @@ export default function PaymentsPage() {
     const member = members.find(m => m.id === recordData.memberId);
     if (!member) return;
 
-    console.log("Recording payment started...");
     setIsActionPending(true)
     const amount = Number(recordData.amount);
     try {
-      addDocumentNonBlocking(collection(db, 'payments'), { 
+      await addDocumentNonBlocking(collection(db, 'payments'), { 
         memberId: member.id, 
         memberName: member.name, 
         month: recordData.month, 
@@ -146,7 +145,7 @@ export default function PaymentsPage() {
 
       // Update member total paid
       const memberRef = doc(db, 'members', member.id);
-      updateDoc(memberRef, { 
+      await updateDoc(memberRef, { 
         paymentStatus: "success", 
         totalPaid: (member.totalPaid || 0) + amount 
       });
@@ -167,25 +166,23 @@ export default function PaymentsPage() {
       toast({ variant: "destructive", title: "Error", description: "Failed to record payment." });
     } finally { 
       setIsActionPending(false);
-      console.log("Recording payment finished.");
     }
   }
 
   const handleDeletePayment = async () => {
     if (!db || !paymentToDelete || isActionPending) return;
     
-    console.log("Deleting payment started...");
     setIsActionPending(true)
     try {
       const member = members.find(m => m.id === paymentToDelete.memberId);
       if (member) {
         const memberRef = doc(db, 'members', member.id);
-        updateDoc(memberRef, { 
+        await updateDoc(memberRef, { 
           totalPaid: Math.max(0, (member.totalPaid || 0) - (paymentToDelete.amountPaid || 0)) 
         });
       }
       
-      deleteDocumentNonBlocking(doc(db, 'payments', paymentToDelete.id));
+      await deleteDocumentNonBlocking(doc(db, 'payments', paymentToDelete.id));
       
       createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`)
       
@@ -197,7 +194,6 @@ export default function PaymentsPage() {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete record." });
     } finally { 
       setIsActionPending(false);
-      console.log("Deleting payment finished.");
     }
   }
 
@@ -471,7 +467,7 @@ export default function PaymentsPage() {
                 <div className="p-4 border border-destructive/20 bg-destructive/5 rounded-lg space-y-2">
                   <span className="text-[10px] font-bold uppercase text-destructive tracking-widest block">Active Period</span>
                   <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                    {format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy')}
+                    {selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}
                     <span className="text-muted-foreground">→</span>
                     {selectedAuditMember.deactivatedAt ? format(parseISO(selectedAuditMember.deactivatedAt), 'MMM dd, yyyy') : '-'}
                   </div>
@@ -479,7 +475,7 @@ export default function PaymentsPage() {
               ) : (
                 <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
                   <span className="text-xs font-bold uppercase text-emerald-600">Joined Date</span>
-                  <span className="font-bold text-sm text-emerald-700">{format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy')}</span>
+                  <span className="font-bold text-sm text-emerald-700">{selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}</span>
                 </div>
               )}
             </div>

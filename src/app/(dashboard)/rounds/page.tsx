@@ -82,7 +82,7 @@ export default function RoundsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // MEMOIZED QUERIES - Crucial for performance
+  // FIXED: MEMOIZED QUERIES
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
   const chitSchemes = roundsData || [];
@@ -111,10 +111,9 @@ export default function RoundsPage() {
       return;
     }
 
-    console.log("Creating scheme started...");
     setIsActionPending(true);
     try {
-      addDocumentNonBlocking(collection(db, 'chitRounds'), {
+      await addDocumentNonBlocking(collection(db, 'chitRounds'), {
         ...newChit,
         monthlyAmount: Number(newChit.monthlyAmount),
         totalMembers: Number(newChit.totalMembers),
@@ -136,10 +135,10 @@ export default function RoundsPage() {
     e.preventDefault(); 
     if (!db || !editingChit || isActionPending) return;
     
-    console.log("Updating scheme started...");
     setIsActionPending(true);
     try {
-      updateDocumentNonBlocking(doc(db, 'chitRounds', editingChit.id), {
+      const chitRef = doc(db, 'chitRounds', editingChit.id);
+      await updateDocumentNonBlocking(chitRef, {
         ...editingChit,
         monthlyAmount: Number(editingChit.monthlyAmount),
         totalMembers: Number(editingChit.totalMembers)
@@ -158,10 +157,9 @@ export default function RoundsPage() {
   const confirmDelete = async () => {
     if (!db || !chitToDelete || isActionPending) return;
     
-    console.log("Deleting scheme started...");
     setIsActionPending(true);
     try { 
-      deleteDocumentNonBlocking(doc(db, 'chitRounds', chitToDelete.id)); 
+      await deleteDocumentNonBlocking(doc(db, 'chitRounds', chitToDelete.id)); 
       createAuditLog(db, user, `Deleted scheme: ${chitToDelete.name}`)
       toast({ title: "Scheme Deleted", description: "The scheme record has been removed." }); 
       setIsDeleteDialogOpen(false); 
