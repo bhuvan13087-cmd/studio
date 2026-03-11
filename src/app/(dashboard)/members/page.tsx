@@ -52,7 +52,7 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebas
 import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc } from "firebase/firestore"
 import { addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
 import { createAuditLog } from "@/firebase/logging"
 
 const INITIAL_MEMBER_STATE = {
@@ -82,6 +82,7 @@ export default function MembersPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
+  // MEMOIZED QUERIES - Essential to prevent infinite re-fetching
   const membersQuery = useMemoFirebase(() => query(collection(db, 'members'), orderBy('name', 'asc')), [db]);
   const { data: members, isLoading: isMembersLoading } = useCollection(membersQuery);
 
@@ -93,7 +94,7 @@ export default function MembersPage() {
 
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
 
-  // Safety cleanup for UI interactions
+  // Safety cleanup for UI interactions to prevent freezing
   useEffect(() => {
     return () => {
       document.body.style.pointerEvents = 'auto'
@@ -101,9 +102,30 @@ export default function MembersPage() {
     }
   }, [])
 
+  // OPTIMIZATION: Pre-calculate current month's paid members to avoid O(N*M) lookups in render
+  const paidMemberStatus = useMemo(() => {
+    if (!payments) return new Map<string, any>();
+    const now = new Date();
+    const start = startOfMonth(now);
+    const end = endOfMonth(now);
+    
+    const paidMap = new Map<string, any>();
+    payments.forEach(p => {
+      if ((p.status === 'paid' || p.status === 'success') && p.paymentDate) {
+        const d = parseISO(p.paymentDate);
+        if (isWithinInterval(d, { start, end })) {
+          paidMap.set(p.memberId, p);
+        }
+      }
+    });
+    return paidMap;
+  }, [payments]);
+
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!db || isActionPending) return;
+    
+    console.log("Adding member started...");
     setIsActionPending(true)
     try {
       addDocumentNonBlocking(collection(db, 'members'), {
@@ -116,22 +138,25 @@ export default function MembersPage() {
         status: "active"
       })
       
-      // Log the action asynchronously
       createAuditLog(db, user, `Registered new member: ${newMember.name}`)
       
       setIsAddDialogOpen(false)
       setNewMember(INITIAL_MEMBER_STATE)
       toast({ title: "Member Added", description: `${newMember.name} registered successfully.` })
     } catch (error: any) {
+      console.error("Error adding member:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to add member." })
     } finally {
       setIsActionPending(false)
+      console.log("Adding member finished.");
     }
   }
 
   const handleUpdateMember = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!db || !memberToEdit || isActionPending) return;
+    
+    console.log("Updating member started...");
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToEdit.id);
@@ -150,14 +175,18 @@ export default function MembersPage() {
       setMemberToEdit(null)
       toast({ title: "Member Updated", description: "Details saved." })
     } catch (error: any) {
+      console.error("Error updating member:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to update member." })
     } finally {
       setIsActionPending(false)
+      console.log("Updating member finished.");
     }
   }
 
   const confirmDeactivateMember = async () => {
     if (!db || !memberToDeactivate || isActionPending) return
+    
+    console.log("Deactivating member started...");
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToDeactivate.id)
@@ -172,9 +201,11 @@ export default function MembersPage() {
       setIsDeactivateMemberDialogOpen(false)
       setMemberToDeactivate(null)
     } catch (error: any) {
+      console.error("Error deactivating member:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to deactivate member." })
     } finally {
       setIsActionPending(false)
+      console.log("Deactivating member finished.");
     }
   }
 
@@ -187,14 +218,6 @@ export default function MembersPage() {
         member.phone.includes(searchTerm)
       )
   }, [members, searchTerm])
-
-  const getRecentPayment = (memberId: string) => {
-    if (!payments) return null;
-    const now = new Date();
-    const start = startOfMonth(now);
-    const end = endOfMonth(now);
-    return payments.find(p => p.memberId === memberId && (p.status === 'paid' || p.status === 'success') && parseISO(p.paymentDate) >= start && parseISO(p.paymentDate) <= end);
-  }
 
   const selectedSchemeType = useMemo(() => {
     if (!newMember.chitGroup || !chitRounds) return null;
@@ -215,7 +238,7 @@ export default function MembersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Member Directory</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage participants and scheme assignments.</p>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage participants and seat reservations.</p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={(open) => { 
           if (!isActionPending) {
@@ -231,7 +254,7 @@ export default function MembersPage() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleAddMember}>
-              <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Enter member details and assign to a scheme.</DialogDescription></DialogHeader>
+              <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Enter member details and assign to a reservation scheme.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2"><Label htmlFor="name">Full Name</Label><Input id="name" value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required disabled={isActionPending} /></div>
@@ -311,7 +334,7 @@ export default function MembersPage() {
                 <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Loading members...</TableCell></TableRow>
               ) : filteredMembers.length > 0 ? (
                 filteredMembers.map((member) => {
-                  const currentMonthPayment = getRecentPayment(member.id);
+                  const currentMonthPayment = paidMemberStatus.get(member.id);
                   const isPaid = !!currentMonthPayment;
                   return (
                     <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
@@ -471,7 +494,7 @@ export default function MembersPage() {
       </Dialog>
 
       {/* History Dialog */}
-      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) }}>
+      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
         <DialogContent className="sm:max-w-[550px]">
           {isHistoryDialogOpen && (
             <>

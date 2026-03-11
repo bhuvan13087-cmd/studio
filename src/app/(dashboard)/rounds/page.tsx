@@ -82,6 +82,7 @@ export default function RoundsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
+  // MEMOIZED QUERIES - Crucial for performance
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
   const chitSchemes = roundsData || [];
@@ -97,6 +98,7 @@ export default function RoundsPage() {
   useEffect(() => {
     return () => {
       document.body.style.pointerEvents = 'auto'
+      document.body.style.overflow = 'auto'
     }
   }, [])
 
@@ -109,6 +111,7 @@ export default function RoundsPage() {
       return;
     }
 
+    console.log("Creating scheme started...");
     setIsActionPending(true);
     try {
       addDocumentNonBlocking(collection(db, 'chitRounds'), {
@@ -122,6 +125,7 @@ export default function RoundsPage() {
       setNewChit(INITIAL_CHIT_STATE);
       toast({ title: "Scheme Created", description: "The scheme has been added to the registry." });
     } catch (e: any) { 
+      console.error("Error creating scheme:", e);
       toast({ variant: "destructive", title: "Error", description: "Failed to create scheme." }); 
     } finally { 
       setIsActionPending(false); 
@@ -131,6 +135,8 @@ export default function RoundsPage() {
   const handleEditChit = async (e: React.FormEvent) => {
     e.preventDefault(); 
     if (!db || !editingChit || isActionPending) return;
+    
+    console.log("Updating scheme started...");
     setIsActionPending(true);
     try {
       updateDocumentNonBlocking(doc(db, 'chitRounds', editingChit.id), {
@@ -142,6 +148,7 @@ export default function RoundsPage() {
       setIsEditChitDialogOpen(false);
       toast({ title: "Scheme Updated", description: "Details saved successfully." });
     } catch (e: any) { 
+      console.error("Error updating scheme:", e);
       toast({ variant: "destructive", title: "Error", description: "Failed to update scheme." }); 
     } finally { 
       setIsActionPending(false); 
@@ -150,6 +157,8 @@ export default function RoundsPage() {
 
   const confirmDelete = async () => {
     if (!db || !chitToDelete || isActionPending) return;
+    
+    console.log("Deleting scheme started...");
     setIsActionPending(true);
     try { 
       deleteDocumentNonBlocking(doc(db, 'chitRounds', chitToDelete.id)); 
@@ -157,6 +166,7 @@ export default function RoundsPage() {
       toast({ title: "Scheme Deleted", description: "The scheme record has been removed." }); 
       setIsDeleteDialogOpen(false); 
     } catch (e: any) { 
+      console.error("Error deleting scheme:", e);
       toast({ variant: "destructive", title: "Error", description: "Failed to delete scheme." }); 
     } finally { 
       setIsActionPending(false); 
@@ -172,7 +182,7 @@ export default function RoundsPage() {
     return (
       <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1"><h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight">Chit Schemes</h2><p className="text-sm text-muted-foreground">Manage active fund schemes and collection amounts.</p></div>
+          <div className="space-y-1"><h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight">Seat Reservations</h2><p className="text-sm text-muted-foreground">Manage active fund schemes and seat availability.</p></div>
           <Button className="h-10 sm:h-11 shadow-lg w-full sm:w-auto font-bold" onClick={() => setIsAddChitDialogOpen(true)} disabled={isActionPending}><Plus className="mr-2 size-5" /> Add Scheme</Button>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -195,7 +205,7 @@ export default function RoundsPage() {
                   </DropdownMenu>
                 </div>
                 <CardTitle className="text-lg truncate font-bold">{group.name}</CardTitle>
-                <CardDescription className="text-xs">Capacity: {group.totalMembers} Members</CardDescription>
+                <CardDescription className="text-xs">Capacity: {group.totalMembers} Seats</CardDescription>
               </CardHeader>
               <CardContent className="p-4 flex-1">
                 <div className="flex justify-between text-xs font-bold">
@@ -205,7 +215,7 @@ export default function RoundsPage() {
                   <span className="text-muted-foreground">{(members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length} / {group.totalMembers} Filled</span>
                 </div>
               </CardContent>
-              <CardFooter className="p-0 border-t"><Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Round Board</Button></CardFooter>
+              <CardFooter className="p-0 border-t"><Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Reservation Board</Button></CardFooter>
             </Card>
           ))}
         </div>
@@ -213,7 +223,7 @@ export default function RoundsPage() {
         <Dialog open={isAddChitDialogOpen} onOpenChange={(o) => { if (!isActionPending) { setIsAddChitDialogOpen(o); if (!o) setNewChit(INITIAL_CHIT_STATE); } }}>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleAddChit}>
-              <DialogHeader><DialogTitle>New Scheme</DialogTitle><DialogDescription>Define a new chit fund collection cycle.</DialogDescription></DialogHeader>
+              <DialogHeader><DialogTitle>New Scheme</DialogTitle><DialogDescription>Define a new chit fund reservation cycle.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2">
                   <Label htmlFor="schemeName">Name</Label>
@@ -236,7 +246,7 @@ export default function RoundsPage() {
                       <Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} placeholder="Enter amount" />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="totalMembers">Members</Label>
+                      <Label htmlFor="totalMembers">Seats</Label>
                       <Input id="totalMembers" type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} />
                     </div>
                   </div>
@@ -270,7 +280,7 @@ export default function RoundsPage() {
                   {editingChit.collectionType && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={editingChit.monthlyAmount || ""} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
-                      <div className="grid gap-2"><Label>Members</Label><Input type="number" value={editingChit.totalMembers || ""} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                      <div className="grid gap-2"><Label>Seats</Label><Input type="number" value={editingChit.totalMembers || ""} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
                     </div>
                   )}
                 </div>
@@ -306,11 +316,11 @@ export default function RoundsPage() {
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-9 w-9" disabled={isActionPending}><ChevronLeft className="size-5" /></Button>
-        <div className="min-w-0"><h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight">{currentRound?.name}</h2><p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Round Dashboard</p></div>
+        <div className="min-w-0"><h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight">{currentRound?.name}</h2><p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Reservation Dashboard</p></div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Members</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Seats Filled</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-emerald-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Scheme Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-emerald-600">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
       </div>
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">

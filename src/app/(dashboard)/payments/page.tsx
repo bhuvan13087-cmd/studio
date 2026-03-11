@@ -54,7 +54,7 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebas
 import { collection, query, doc, serverTimestamp, orderBy, deleteDoc, updateDoc } from "firebase/firestore"
 import { addDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, startOfMonth, endOfMonth } from "date-fns"
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
 import { cn } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -80,6 +80,7 @@ export default function PaymentsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
+  // MEMOIZED QUERIES
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: paymentsData, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const payments = paymentsData || [];
@@ -92,7 +93,12 @@ export default function PaymentsPage() {
   const { data: roundsData } = useCollection(roundsQuery);
   const rounds = roundsData || [];
 
-  const [recordData, setRecordData] = useState({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "" })
+  const [recordData, setRecordData] = useState({ 
+    memberId: "", 
+    amount: 0, 
+    month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), 
+    method: "" 
+  })
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -102,6 +108,7 @@ export default function PaymentsPage() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.body.style.pointerEvents = 'auto'
+      document.body.style.overflow = 'auto'
     }
   }, []);
 
@@ -121,6 +128,8 @@ export default function PaymentsPage() {
     if (!db || isActionPending || !recordData.memberId) return;
     const member = members.find(m => m.id === recordData.memberId);
     if (!member) return;
+
+    console.log("Recording payment started...");
     setIsActionPending(true)
     const amount = Number(recordData.amount);
     try {
@@ -135,7 +144,7 @@ export default function PaymentsPage() {
         createdAt: serverTimestamp() 
       });
 
-      // Update member total paid asynchronously
+      // Update member total paid
       const memberRef = doc(db, 'members', member.id);
       updateDoc(memberRef, { 
         paymentStatus: "success", 
@@ -145,16 +154,27 @@ export default function PaymentsPage() {
       createAuditLog(db, user, `Recorded Payment ₹${amount} for ${member.name}`)
       
       setIsQuickRecordOpen(false);
-      setRecordData({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "" });
+      setRecordData({ 
+        memberId: "", 
+        amount: 0, 
+        month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), 
+        method: "" 
+      });
       setMemberSearch("");
       toast({ title: "Payment Recorded", description: `Amount ₹${amount} saved for ${member.name}.` });
     } catch (error: any) {
+      console.error("Error recording payment:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to record payment." });
-    } finally { setIsActionPending(false) }
+    } finally { 
+      setIsActionPending(false);
+      console.log("Recording payment finished.");
+    }
   }
 
   const handleDeletePayment = async () => {
     if (!db || !paymentToDelete || isActionPending) return;
+    
+    console.log("Deleting payment started...");
     setIsActionPending(true)
     try {
       const member = members.find(m => m.id === paymentToDelete.memberId);
@@ -173,8 +193,12 @@ export default function PaymentsPage() {
       setPaymentToDelete(null);
       toast({ title: "Record Deleted", description: "Payment removed successfully." });
     } catch (error: any) {
+      console.error("Error deleting payment:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to delete record." });
-    } finally { setIsActionPending(false) }
+    } finally { 
+      setIsActionPending(false);
+      console.log("Deleting payment finished.");
+    }
   }
 
   const filteredPayments = useMemo(() => {
@@ -204,10 +228,18 @@ export default function PaymentsPage() {
         return true;
       })
       .map(member => {
-        const monthlyPayments = payments.filter(p => p.memberId === member.id && (p.status === 'paid' || p.status === 'success') && parseISO(p.paymentDate) >= start && parseISO(p.paymentDate) <= end);
+        const monthlyPayments = payments.filter(p => p.memberId === member.id && (p.status === 'paid' || p.status === 'success') && p.paymentDate && isWithinInterval(parseISO(p.paymentDate), { start, end }));
         const totalPaid = monthlyPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
         const target = member.monthlyAmount || 0;
-        return { id: member.id, name: member.name, chitName: member.chitGroup || "N/A", totalAmount: target, amountPaid: totalPaid, pendingAmount: Math.max(0, target - totalPaid), status: totalPaid >= target ? "Paid" : "Pending" };
+        return { 
+          id: member.id, 
+          name: member.name, 
+          chitName: member.chitGroup || "N/A", 
+          totalAmount: target, 
+          amountPaid: totalPaid, 
+          pendingAmount: Math.max(0, target - totalPaid), 
+          status: totalPaid >= target ? "Paid" : "Pending" 
+        };
       });
   }, [members, payments, rounds, searchTerm, typeFilter]);
 
@@ -232,7 +264,7 @@ export default function PaymentsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Financial Ledger</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage and track all fund transactions.</p>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage and track all seat reservation transactions.</p>
         </div>
         <Dialog open={isQuickRecordOpen} onOpenChange={(open) => { 
           if (!isActionPending) {
@@ -240,7 +272,12 @@ export default function PaymentsPage() {
             if (!open) { 
               setMemberSearch(""); 
               setShowSuggestions(false); 
-              setRecordData({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "" });
+              setRecordData({ 
+                memberId: "", 
+                amount: 0, 
+                month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), 
+                method: "" 
+              });
             }
           }
         }}>
