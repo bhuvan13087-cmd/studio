@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
@@ -45,7 +44,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@/tabs"
+} from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
