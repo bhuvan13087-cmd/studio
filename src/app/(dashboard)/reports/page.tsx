@@ -38,7 +38,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useDoc, useUser } from "@/firebase"
-import { collection, query, orderBy, doc, setDoc, deleteDoc } from "firebase/firestore"
+import { collection, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"
 import { format, parseISO, getMonth, getYear } from "date-fns"
 import * as XLSX from 'xlsx'
 import { cn } from "@/lib/utils"
@@ -84,7 +84,7 @@ export default function ReportsPage() {
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db])
   const { data: payments, isLoading: paymentsLoading } = useCollection(paymentsQuery)
 
-  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('date', 'desc')), [db])
+  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db])
   const { data: rounds, isLoading: roundsLoading } = useCollection(roundsQuery)
 
   const targetId = `${selectedYear}-${selectedMonth}`

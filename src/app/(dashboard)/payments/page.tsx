@@ -114,11 +114,9 @@ export default function PaymentsPage() {
     }
   }, []);
 
-  const currentMonthYear = format(new Date(), 'yyyy-MM')
   const isCurrentMonthLocked = useMemo(() => {
     if (!monthLocks) return false;
     const [monthName, yearStr] = recordData.month.split(' ');
-    // Simple lookup - for real apps we'd map month names to numbers
     return monthLocks.some(l => l.year === yearStr && l.monthName === monthName);
   }, [monthLocks, recordData.month]);
 
@@ -186,7 +184,6 @@ export default function PaymentsPage() {
   const handleDeletePayment = async () => {
     if (!db || !paymentToDelete || isActionPending) return;
     
-    // Check if the payment belongs to a locked month
     const [monthName, yearStr] = paymentToDelete.month.split(' ');
     const isLocked = monthLocks?.some(l => l.year === yearStr && l.monthName === monthName);
     

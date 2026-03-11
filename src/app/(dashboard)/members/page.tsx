@@ -48,7 +48,7 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, doc, serverTimestamp, query, orderBy, addDoc, updateDoc } from "firebase/firestore"
+import { collection, doc, serverTimestamp, query, orderBy, updateDoc } from "firebase/firestore"
 import { addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
@@ -101,7 +101,7 @@ export default function MembersPage() {
     }
   }, [])
 
-  // OPTIMIZED PAID STATUS CHECK (Complexity O(N) instead of O(N*M))
+  // OPTIMIZED PAID STATUS CHECK
   const paidMemberStatus = useMemo(() => {
     if (!payments) return new Map<string, any>();
     const now = new Date();
