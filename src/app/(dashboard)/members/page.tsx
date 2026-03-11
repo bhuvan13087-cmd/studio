@@ -212,7 +212,11 @@ export default function MembersPage() {
               Add Member
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+          <DialogContent 
+            className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto"
+            onInteractOutside={(e) => e.preventDefault()}
+            onPointerDownOutside={(e) => e.preventDefault()}
+          >
             <form onSubmit={handleAddMember}>
               <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Enter member details and assign to a scheme.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
@@ -246,7 +250,7 @@ export default function MembersPage() {
                   <Label>Amount (₹)</Label>
                   <Input 
                     type="number"
-                    value={newMember.monthlyAmount || ""} 
+                    value={newMember.monthlyAmount === 0 ? "" : newMember.monthlyAmount} 
                     readOnly
                     className="bg-muted font-bold text-primary"
                     required
@@ -362,7 +366,11 @@ export default function MembersPage() {
         if (!open) setMemberToEdit(null);
         restoreInteraction(open); 
       }}>
-        <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+        <DialogContent 
+          className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
           {isEditMemberDialogOpen && (
             <form onSubmit={handleUpdateMember}>
               <DialogHeader><DialogTitle>Edit Member</DialogTitle><DialogDescription>Update details for {memberToEdit?.name}.</DialogDescription></DialogHeader>
@@ -383,7 +391,7 @@ export default function MembersPage() {
                       });
                     }}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select scheme" /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
                 </div>
@@ -391,7 +399,7 @@ export default function MembersPage() {
                   <Label>Amount (₹)</Label>
                   <Input 
                     type="number"
-                    value={memberToEdit?.monthlyAmount || ""} 
+                    value={memberToEdit?.monthlyAmount === 0 ? "" : memberToEdit?.monthlyAmount} 
                     readOnly
                     className="bg-muted font-bold"
                     required
@@ -401,7 +409,7 @@ export default function MembersPage() {
                 <div className="grid gap-2">
                   <Label>Status</Label>
                   <Select disabled={isActionPending} value={memberToEdit?.status || "active"} onValueChange={v => setMemberToEdit({...memberToEdit, status: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                     <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
                   </Select>
                 </div>

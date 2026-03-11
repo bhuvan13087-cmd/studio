@@ -89,7 +89,7 @@ export default function PaymentsPage() {
   const { data: roundsData } = useCollection(roundsQuery);
   const rounds = roundsData || [];
 
-  const [recordData, setRecordData] = useState({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "Cash" })
+  const [recordData, setRecordData] = useState({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "" })
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -146,7 +146,7 @@ export default function PaymentsPage() {
         amountPaid: amount, 
         paymentDate: new Date().toISOString(), 
         status: "paid", 
-        method: recordData.method, 
+        method: recordData.method || "Cash", 
         createdAt: serverTimestamp() 
       });
       updateDocumentNonBlocking(doc(db, 'members', member.id), { 
@@ -156,7 +156,7 @@ export default function PaymentsPage() {
       });
       setIsQuickRecordOpen(false);
       restoreInteraction(false);
-      setRecordData({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "Cash" });
+      setRecordData({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "" });
       setMemberSearch("");
       toast({ title: "Payment Recorded", description: `Amount ₹${amount} saved for ${member.name}.` });
     } catch (error: any) {
@@ -230,21 +230,39 @@ export default function PaymentsPage() {
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Financial Ledger</h2>
           <p className="text-sm sm:text-base text-muted-foreground">Manage and track all fund transactions.</p>
         </div>
-        <Dialog open={isQuickRecordOpen} onOpenChange={(open) => { setIsQuickRecordOpen(open); restoreInteraction(open); if (!open) { setMemberSearch(""); setShowSuggestions(false); } }}>
+        <Dialog open={isQuickRecordOpen} onOpenChange={(open) => { 
+          setIsQuickRecordOpen(open); 
+          restoreInteraction(open); 
+          if (!open) { 
+            setMemberSearch(""); 
+            setShowSuggestions(false); 
+            setRecordData({ memberId: "", amount: 0, month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), method: "" });
+          } 
+        }}>
           <DialogTrigger asChild>
             <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg font-bold">
               <Plus className="mr-2 size-4 sm:size-5" />
               Add Payment
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+          <DialogContent 
+            className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto"
+            onInteractOutside={(e) => e.preventDefault()}
+            onPointerDownOutside={(e) => e.preventDefault()}
+          >
             <form onSubmit={handleQuickRecord}>
               <DialogHeader><DialogTitle>Record Payment</DialogTitle><DialogDescription>Manual entry for member contributions.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2 relative">
                   <Label>Search Member</Label>
                   <div className="relative" ref={suggestionsRef}>
-                    <Input placeholder="Type member name..." value={memberSearch} onChange={(e) => { setMemberSearch(e.target.value); setShowSuggestions(true); }} onFocus={() => setShowSuggestions(true)} autoComplete="off" disabled={isActionPending} />
+                    <Input 
+                      placeholder="Type member name..." 
+                      value={memberSearch} 
+                      onChange={(e) => { setMemberSearch(e.target.value); setShowSuggestions(true); }} 
+                      autoComplete="off" 
+                      disabled={isActionPending} 
+                    />
                     {memberSearch && <button type="button" onClick={() => { setMemberSearch(""); setRecordData({ ...recordData, memberId: "", amount: 0 }); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"><X className="size-4" /></button>}
                     {showSuggestions && memberSearch.length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg overflow-hidden">
@@ -258,7 +276,7 @@ export default function PaymentsPage() {
                 <div className="grid gap-2">
                   <Label>Contribution Amount (₹)</Label>
                   <Input 
-                    value={recordData.amount} 
+                    value={recordData.amount === 0 ? "" : recordData.amount} 
                     readOnly 
                     className="bg-muted font-bold text-primary"
                   />
