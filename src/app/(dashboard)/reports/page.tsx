@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Trophy, Users, IndianRupee, TrendingUp, Calendar, Target, Save } from "lucide-react"
+import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Trophy, Users, IndianRupee, TrendingUp, Calendar, Target, Save, Pencil, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -63,6 +63,7 @@ export default function ReportsPage() {
   // Target Setting State
   const [targetInput, setTargetInput] = useState<string>("")
   const [isSavingTarget, setIsSavingTarget] = useState(false)
+  const [isEditingTarget, setIsEditingTarget] = useState(false)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -93,7 +94,8 @@ export default function ReportsPage() {
     } else {
       setTargetInput("")
     }
-  }, [targetData])
+    setIsEditingTarget(false)
+  }, [targetData, selectedYear, selectedMonth])
 
   const handleSaveTarget = async () => {
     if (!selectedMonth || selectedMonth === 'all' || !targetInput) {
@@ -117,6 +119,7 @@ export default function ReportsPage() {
         targetAmount: amount
       }, { merge: true })
 
+      setIsEditingTarget(false)
       toast({ title: "Target Saved", description: `Collection goal for ${MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} ${selectedYear} updated.` })
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save target." })
@@ -133,13 +136,10 @@ export default function ReportsPage() {
     const selectedYearNum = parseInt(selectedYear);
 
     if (selectedYearNum < currentYear) {
-      // Previous year: show all months
       return MONTHS_MASTER;
     } else if (selectedYearNum === currentYear) {
-      // Current year: show months up to current month
       return MONTHS_MASTER.filter(m => m.value === "all" || parseInt(m.value) <= currentMonth);
     } else {
-      // Future year: hide all months except "All Months" as they are in the future
       return MONTHS_MASTER.filter(m => m.value === "all");
     }
   }, [selectedYear]);
@@ -267,7 +267,6 @@ export default function ReportsPage() {
     )
   }
 
-  // Calculate Target Achievement Percentage
   const targetAmount = targetData?.targetAmount || 0
   const reachPercentage = targetAmount > 0 
     ? Math.round((filteredData.metrics.totalCollected / targetAmount) * 100) 
@@ -355,25 +354,66 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent className="pb-6">
               <div className="flex items-center gap-4">
-                <div className="relative flex-1 max-w-[300px]">
-                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                  <Input 
-                    type="number" 
-                    placeholder="Enter target amount..." 
-                    value={targetInput}
-                    onChange={(e) => setTargetInput(e.target.value)}
-                    className="pl-8 h-10 font-bold tabular-nums"
-                  />
-                </div>
-                <Button 
-                  size="sm" 
-                  onClick={handleSaveTarget} 
-                  disabled={isSavingTarget}
-                  className="h-10 px-6 font-bold uppercase tracking-wider"
-                >
-                  {isSavingTarget ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
-                  Save Target
-                </Button>
+                {!isEditingTarget && targetData ? (
+                  <div className="flex items-center justify-between flex-1 bg-white p-3 rounded-lg border border-border/50 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <IndianRupee className="size-4 text-emerald-600" />
+                      <span className="font-bold text-lg tabular-nums">
+                        {targetData.targetAmount.toLocaleString()}
+                      </span>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        setTargetInput(targetData.targetAmount.toString());
+                        setIsEditingTarget(true);
+                      }}
+                      className="h-8 px-4 font-bold text-[10px] uppercase tracking-wider"
+                    >
+                      <Pencil className="mr-2 size-3" /> Edit
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative flex-1 max-w-[300px]">
+                      <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                      <Input 
+                        type="number" 
+                        placeholder="Enter target amount..." 
+                        value={targetInput}
+                        onChange={(e) => setTargetInput(e.target.value)}
+                        className="pl-8 h-10 font-bold tabular-nums"
+                        autoFocus={isEditingTarget}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        onClick={handleSaveTarget} 
+                        disabled={isSavingTarget}
+                        className="h-10 px-6 font-bold uppercase tracking-wider"
+                      >
+                        {isSavingTarget ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                        {targetData ? "Update" : "Save"}
+                      </Button>
+                      {isEditingTarget && (
+                        <Button 
+                          variant="ghost"
+                          size="sm" 
+                          onClick={() => {
+                            setIsEditingTarget(false);
+                            setTargetInput(targetData?.targetAmount.toString() || "");
+                          }}
+                          disabled={isSavingTarget}
+                          className="h-10 px-4 font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted/50"
+                        >
+                          <X className="mr-2 size-4" /> Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
