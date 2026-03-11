@@ -1,9 +1,10 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Trophy, Users } from "lucide-react"
+import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Trophy, Users, IndianRupee, TrendingUp, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -29,12 +30,35 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, parseISO, isSameMonth, subMonths } from "date-fns"
+import { format, parseISO, isSameMonth, subMonths, isSameYear, getMonth, getYear } from "date-fns"
+import * as XLSX from 'xlsx'
 import { cn } from "@/lib/utils"
+
+const MONTHS = [
+  { value: "all", label: "All Months" },
+  { value: "0", label: "January" },
+  { value: "1", label: "February" },
+  { value: "2", label: "March" },
+  { value: "3", label: "April" },
+  { value: "4", label: "May" },
+  { value: "5", label: "June" },
+  { value: "6", label: "July" },
+  { value: "7", label: "August" },
+  { value: "8", label: "September" },
+  { value: "9", label: "October" },
+  { value: "10", label: "November" },
+  { value: "11", label: "December" },
+]
+
+const YEARS = ["2024", "2025", "2026", "2027", "2028"]
 
 export default function ReportsPage() {
   const [mounted, setMounted] = useState(false)
   const [reportType, setReportType] = useState("all")
+  const [selectedMonth, setSelectedMonth] = useState<string>("all")
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
+  const [activeTab, setActiveTab] = useState("collections")
+  
   const { toast } = useToast()
   const db = useFirestore()
 
@@ -51,9 +75,8 @@ export default function ReportsPage() {
 
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
-    const now = new Date();
     
-    // Filter members based on scheme type
+    // 1. Filter by Scheme Type
     let targetMembers = members;
     if (reportType !== "all") {
       targetMembers = members.filter(m => {
@@ -62,38 +85,95 @@ export default function ReportsPage() {
       });
     }
     const targetIds = new Set(targetMembers.map(m => m.id));
-    
-    // Filter payments for these members
-    const successPayments = payments.filter(p => (p.status === 'paid' || p.status === 'success') && targetIds.has(p.memberId));
-    
-    // Collection Data (last 6 months)
-    const last6Months = Array.from({ length: 6 }).map((_, i) => subMonths(now, i)).reverse()
-    const collectionData = last6Months.map(month => ({
-      month: format(month, 'MMMM yyyy'),
-      amount: successPayments.filter(p => p.paymentDate && isSameMonth(parseISO(p.paymentDate), month)).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
-    }))
 
-    // Pending Members (this month)
+    // 2. Filter by Date (Month/Year)
+    const isMatchingDate = (dateStr: string) => {
+      if (!dateStr) return false;
+      const d = parseISO(dateStr);
+      const matchYear = getYear(d).toString() === selectedYear;
+      const matchMonth = selectedMonth === "all" || getMonth(d).toString() === selectedMonth;
+      return matchYear && matchMonth;
+    };
+
+    const periodMembers = targetMembers.filter(m => m.joinDate && isMatchingDate(m.joinDate));
+    const successPayments = payments.filter(p => (p.status === 'paid' || p.status === 'success') && targetIds.has(p.memberId));
+    const periodPayments = successPayments.filter(p => p.paymentDate && isMatchingDate(p.paymentDate));
+
+    // Summary Metrics
+    const totalCollected = periodPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+    const membersJoined = periodMembers.length;
+    const paymentsCount = periodPayments.length;
+
+    // Table Data
+    const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
+      const monthPayments = successPayments.filter(p => {
+        const d = parseISO(p.paymentDate);
+        return getYear(d).toString() === selectedYear && getMonth(d) === i;
+      });
+      return {
+        month: format(new Date(Number(selectedYear), i), 'MMMM yyyy'),
+        amount: monthPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+      };
+    }).filter(row => selectedMonth === "all" || row.month.startsWith(MONTHS.find(m => m.value === selectedMonth)?.label || ""));
+
+    const winners = rounds.filter(r => r.winnerName && 
+      (reportType === "all" || (r.collectionType || "Monthly").toLowerCase() === reportType) &&
+      (r.date && isMatchingDate(r.date))
+    );
+
     const pendingMembers = targetMembers.filter(m => {
-      const paidThisMonth = successPayments.some(p => p.memberId === m.id && p.paymentDate && isSameMonth(parseISO(p.paymentDate), now));
-      return !paidThisMonth;
+      // Logic for "Pending" usually refers to the CURRENT selected month
+      // If selectedMonth is "all", we look at the entire year's outstanding (simplified)
+      const paidInPeriod = successPayments.some(p => p.memberId === m.id && p.paymentDate && isMatchingDate(p.paymentDate));
+      return !paidInPeriod;
     });
 
-    // Winners
-    const winners = rounds.filter(r => r.winnerName && (reportType === "all" || (r.collectionType || "Monthly").toLowerCase() === reportType));
-
     return { 
-      successPayments, 
+      successPayments: periodPayments, 
       targetMembers, 
-      collectionData, 
+      periodMembers,
+      collectionData: collectionDataByMonth, 
       pendingMembers,
       winners,
-      roundsList: rounds.filter(r => reportType === "all" || (r.collectionType || "Monthly").toLowerCase() === reportType) 
+      metrics: {
+        totalCollected,
+        membersJoined,
+        paymentsCount
+      }
     };
-  }, [mounted, reportType, members, payments, rounds]);
+  }, [mounted, reportType, selectedMonth, selectedYear, members, payments, rounds]);
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleExportExcel = () => {
+    if (!filteredData) return;
+
+    let exportData: any[] = [];
+    const fileName = `Report_${selectedYear}_${selectedMonth === 'all' ? 'FullYear' : MONTHS.find(m => m.value === selectedMonth)?.label}.xlsx`;
+
+    switch (activeTab) {
+      case "collections":
+        exportData = filteredData.collectionData.map(d => ({ Period: d.month, Amount: d.amount }));
+        break;
+      case "members":
+        exportData = filteredData.targetMembers.map(m => ({ Name: m.name, Scheme: m.chitGroup, Amount: m.monthlyAmount, Status: m.status }));
+        break;
+      case "pending":
+        exportData = filteredData.pendingMembers.map(m => ({ Name: m.name, Phone: m.phone, Due: m.monthlyAmount }));
+        break;
+      case "winners":
+        exportData = filteredData.winners.map(w => ({ Winner: w.winnerName, Scheme: w.name, Round: w.roundNumber, WinningAmount: w.winningAmount }));
+        break;
+    }
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    XLSX.writeFile(wb, fileName);
+    
+    toast({ title: "Export Successful", description: `File saved as ${fileName}` });
   };
 
   if (!mounted || membersLoading || paymentsLoading || roundsLoading) {
@@ -111,33 +191,111 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden print:p-0">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
-        <div className="space-y-1">
-          <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Financial Reports</h2>
-          <p className="text-sm text-muted-foreground">Comprehensive audit of fund collections and distributions.</p>
+      {/* Filters Section */}
+      <div className="flex flex-col gap-6 print:hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Financial Reports</h2>
+            <p className="text-sm text-muted-foreground">Comprehensive audit of fund collections and distributions.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+             <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-sm hover:bg-muted" onClick={handlePrint}>
+               <Printer className="mr-2 size-4" /> Print
+             </Button>
+             <Button size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-md" onClick={handleExportExcel}>
+               <Download className="mr-2 size-4" /> Export Excel
+             </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-           <Select value={reportType} onValueChange={setReportType}>
-             <SelectTrigger className="w-[120px] sm:w-[150px] h-10 text-[10px] font-bold uppercase tracking-wider bg-card shadow-sm">
-               <Filter className="mr-2 size-3.5 text-primary" />
-               <SelectValue placeholder="Scheme" />
-             </SelectTrigger>
-             <SelectContent>
-               <SelectItem value="all" className="text-[10px] font-bold uppercase">All Schemes</SelectItem>
-               <SelectItem value="daily" className="text-[10px] font-bold uppercase">Daily</SelectItem>
-               <SelectItem value="monthly" className="text-[10px] font-bold uppercase">Monthly</SelectItem>
-             </SelectContent>
-           </Select>
-           <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-sm hover:bg-muted" onClick={handlePrint}>
-             <Printer className="mr-2 size-4" /> Print
-           </Button>
-           <Button size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-md" onClick={() => toast({ title: "Generating Export...", description: "Your report will download shortly." })}>
-             <Download className="mr-2 size-4" /> Export
-           </Button>
+
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 bg-card p-4 rounded-xl border border-border/50 shadow-sm">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Scheme Filter</label>
+            <Select value={reportType} onValueChange={setReportType}>
+              <SelectTrigger className="w-full h-10 text-[11px] font-bold">
+                <Filter className="mr-2 size-3.5 text-primary" />
+                <SelectValue placeholder="Scheme Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Schemes</SelectItem>
+                <SelectItem value="daily">Daily Only</SelectItem>
+                <SelectItem value="monthly">Monthly Only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Report Month</label>
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-full h-10 text-[11px] font-bold">
+                <Calendar className="mr-2 size-3.5 text-primary" />
+                <SelectValue placeholder="Month" />
+              </SelectTrigger>
+              <SelectContent>
+                {MONTHS.map(m => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Report Year</label>
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="w-full h-10 text-[11px] font-bold">
+                <Calendar className="mr-2 size-3.5 text-primary" />
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                {YEARS.map(y => (
+                  <SelectItem key={y} value={y}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
-      <Tabs defaultValue="collections" className="w-full">
+      {/* Summary Metrics Grid */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Period Collections</CardTitle>
+            <IndianRupee className="size-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">₹{filteredData.metrics.totalCollected.toLocaleString()}</div>
+            <p className="text-[10px] text-muted-foreground mt-1 font-medium">{filteredData.metrics.paymentsCount} Transactions</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">New Members Joined</CardTitle>
+            <Users className="size-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{filteredData.metrics.membersJoined}</div>
+            <p className="text-[10px] text-muted-foreground mt-1 font-medium">During selected period</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Target Reach</CardTitle>
+            <TrendingUp className="size-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">
+              {filteredData.targetMembers.length > 0 ? Math.round((filteredData.metrics.membersJoined / filteredData.targetMembers.length) * 100) : 0}%
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1 font-medium">Growth vs Total Pool</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabs & Detailed Reports */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 h-auto p-1 bg-muted/50 border rounded-xl overflow-x-auto print:hidden">
           <TabsTrigger value="collections" className="py-3 text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-card data-[state=active]:shadow-sm">Collections</TabsTrigger>
           <TabsTrigger value="members" className="py-3 text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-card data-[state=active]:shadow-sm">Members</TabsTrigger>
@@ -149,7 +307,7 @@ export default function ReportsPage() {
           <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-muted/20">
               <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                <Database className="size-4 text-primary" /> Monthly Revenue Summary
+                <Database className="size-4 text-primary" /> Monthly Revenue Breakdown
               </h3>
             </div>
             <div className="overflow-x-auto">
@@ -161,12 +319,14 @@ export default function ReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredData.collectionData.map((row, i) => (
+                  {filteredData.collectionData.length > 0 ? filteredData.collectionData.map((row, i) => (
                     <TableRow key={i} className="hover:bg-muted/5 transition-colors h-14">
                       <TableCell className="font-bold text-sm pl-6">{row.month}</TableCell>
                       <TableCell className="text-right font-bold text-emerald-600 text-sm tabular-nums pr-6">₹{row.amount.toLocaleString()}</TableCell>
                     </TableRow>
-                  ))}
+                  )) : (
+                    <TableRow><TableCell colSpan={2} className="h-40 text-center text-muted-foreground italic text-sm">No collections in this period.</TableCell></TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -177,7 +337,7 @@ export default function ReportsPage() {
           <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-muted/20">
               <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                <Users className="size-4 text-primary" /> Active Member Directory
+                <Users className="size-4 text-primary" /> Member Directory View
               </h3>
             </div>
             <div className="overflow-x-auto">
@@ -204,7 +364,7 @@ export default function ReportsPage() {
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic text-sm">No member data for selected criteria.</TableCell>
+                      <TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic text-sm">No member data found.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -217,7 +377,7 @@ export default function ReportsPage() {
           <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-muted/20">
               <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                <Clock className="size-4 text-amber-500" /> Outstanding Collections
+                <Clock className="size-4 text-amber-500" /> Outstanding Collections (Selected Period)
               </h3>
             </div>
             <div className="overflow-x-auto">
@@ -240,7 +400,7 @@ export default function ReportsPage() {
                     <TableRow>
                       <TableCell colSpan={3} className="h-40 text-center text-emerald-600 font-bold text-sm">
                         <CheckCircle2 className="size-8 mx-auto mb-2 opacity-30" />
-                        All collections complete for this cycle!
+                        Zero outstanding dues for this period!
                       </TableCell>
                     </TableRow>
                   )}
@@ -254,7 +414,7 @@ export default function ReportsPage() {
           <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-muted/20">
               <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                <Trophy className="size-4 text-amber-500" /> Auction History
+                <Trophy className="size-4 text-amber-500" /> Auction History Breakdown
               </h3>
             </div>
             <div className="overflow-x-auto">
@@ -277,7 +437,7 @@ export default function ReportsPage() {
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic text-sm">No auctions completed yet.</TableCell>
+                      <TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic text-sm">No winners recorded in this period.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
