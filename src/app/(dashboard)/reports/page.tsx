@@ -28,6 +28,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useDoc } from "@/firebase"
 import { collection, query, orderBy, doc, setDoc } from "firebase/firestore"
@@ -63,7 +72,7 @@ export default function ReportsPage() {
   // Target Setting State
   const [targetInput, setTargetInput] = useState<string>("")
   const [isSavingTarget, setIsSavingTarget] = useState(false)
-  const [isEditingTarget, setIsEditingTarget] = useState(false)
+  const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -87,15 +96,12 @@ export default function ReportsPage() {
 
   useEffect(() => { setMounted(true) }, [])
 
-  // Sync target input with stored data
+  // Sync target input with stored data when dialog opens
   useEffect(() => {
-    if (targetData) {
-      setTargetInput(targetData.targetAmount.toString())
-    } else {
-      setTargetInput("")
+    if (isTargetDialogOpen) {
+      setTargetInput(targetData?.targetAmount?.toString() || "")
     }
-    setIsEditingTarget(false)
-  }, [targetData, selectedYear, selectedMonth])
+  }, [isTargetDialogOpen, targetData])
 
   const handleSaveTarget = async () => {
     if (!selectedMonth || selectedMonth === 'all' || !targetInput) {
@@ -119,7 +125,7 @@ export default function ReportsPage() {
         targetAmount: amount
       }, { merge: true })
 
-      setIsEditingTarget(false)
+      setIsTargetDialogOpen(false)
       toast({ title: "Target Saved", description: `Collection goal updated.` })
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save target." })
@@ -345,62 +351,59 @@ export default function ReportsPage() {
               </div>
             ) : (
               <div className="flex items-center gap-1.5 h-10">
-                {!isEditingTarget && targetData ? (
-                  <div className="flex-1 flex items-center justify-between bg-primary/5 px-2.5 h-full rounded-md border border-primary/20">
-                    <span className="font-bold text-xs tabular-nums text-primary">₹{targetData.targetAmount.toLocaleString()}</span>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => {
-                        setTargetInput(targetData.targetAmount.toString());
-                        setIsEditingTarget(true);
-                      }}
-                      className="h-6 w-6 text-primary hover:bg-primary/10"
-                    >
-                      <Pencil className="size-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex-1 flex items-center gap-1.5 h-full">
-                    <Input 
-                      type="number" 
-                      placeholder="Target..." 
-                      value={targetInput}
-                      onChange={(e) => setTargetInput(e.target.value)}
-                      className="h-full text-[11px] font-bold tabular-nums min-w-0"
-                      autoFocus={isEditingTarget}
-                    />
-                    <div className="flex items-center gap-1">
-                      <Button 
-                        size="icon" 
-                        onClick={handleSaveTarget} 
-                        disabled={isSavingTarget}
-                        className="h-8 w-8 shrink-0"
-                      >
-                        {isSavingTarget ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-                      </Button>
-                      {isEditingTarget && (
-                        <Button 
-                          variant="ghost"
-                          size="icon" 
-                          onClick={() => {
-                            setIsEditingTarget(false);
-                            setTargetInput(targetData?.targetAmount.toString() || "");
-                          }}
-                          disabled={isSavingTarget}
-                          className="h-8 w-8 shrink-0 text-muted-foreground"
-                        >
-                          <X className="size-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <div className="flex-1 flex items-center justify-between bg-primary/5 px-2.5 h-full rounded-md border border-primary/20">
+                  <span className="font-bold text-xs tabular-nums text-primary">
+                    {targetAmount > 0 ? `₹${targetAmount.toLocaleString()}` : "Not Set"}
+                  </span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => setIsTargetDialogOpen(true)}
+                    className="h-6 w-6 text-primary hover:bg-primary/10"
+                  >
+                    <Pencil className="size-3" />
+                  </Button>
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Target Edit Dialog */}
+      <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Update Monthly Target</DialogTitle>
+            <DialogDescription>
+              Set a collection goal for {MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} {selectedYear}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="targetAmount">Target Amount (₹)</Label>
+              <Input
+                id="targetAmount"
+                type="number"
+                placeholder="Enter amount..."
+                value={targetInput}
+                onChange={(e) => setTargetInput(e.target.value)}
+                className="font-bold"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTargetDialogOpen(false)} disabled={isSavingTarget}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveTarget} disabled={isSavingTarget}>
+              {isSavingTarget && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Save Target
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         <Card className="border-border/50 shadow-sm">
