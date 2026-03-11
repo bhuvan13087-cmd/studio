@@ -120,7 +120,7 @@ export default function ReportsPage() {
       }, { merge: true })
 
       setIsEditingTarget(false)
-      toast({ title: "Target Saved", description: `Collection goal for ${MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} ${selectedYear} updated.` })
+      toast({ title: "Target Saved", description: `Collection goal updated.` })
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save target." })
     } finally {
@@ -335,89 +335,71 @@ export default function ReportsPage() {
               </SelectContent>
             </Select>
           </div>
-        </div>
 
-        {/* Set Monthly Target Section */}
-        {selectedMonth !== 'all' && (
-          <Card className="border-border/50 shadow-sm bg-primary/5">
-            <CardHeader className="py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Target className="size-4 text-primary" />
-                  <CardTitle className="text-sm font-bold uppercase tracking-wider">Set Monthly Target</CardTitle>
-                </div>
-                <Badge variant="outline" className="bg-white text-[10px] font-bold uppercase">
-                  {MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} {selectedYear}
-                </Badge>
+          {/* Set Monthly Target Inline Section */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Monthly Target (₹)</label>
+            {selectedMonth === 'all' ? (
+              <div className="h-10 flex items-center px-3 bg-muted/30 rounded-md text-[10px] text-muted-foreground italic border border-dashed">
+                Select month to set target
               </div>
-              <CardDescription className="text-[11px]">Define a collection goal for this specific period.</CardDescription>
-            </CardHeader>
-            <CardContent className="pb-6">
-              <div className="flex items-center gap-4">
+            ) : (
+              <div className="flex items-center gap-1.5 h-10">
                 {!isEditingTarget && targetData ? (
-                  <div className="flex items-center justify-between flex-1 bg-white p-3 rounded-lg border border-border/50 shadow-sm">
-                    <div className="flex items-center gap-2">
-                      <IndianRupee className="size-4 text-emerald-600" />
-                      <span className="font-bold text-lg tabular-nums">
-                        {targetData.targetAmount.toLocaleString()}
-                      </span>
-                    </div>
+                  <div className="flex-1 flex items-center justify-between bg-primary/5 px-2.5 h-full rounded-md border border-primary/20">
+                    <span className="font-bold text-xs tabular-nums text-primary">₹{targetData.targetAmount.toLocaleString()}</span>
                     <Button 
-                      variant="outline" 
-                      size="sm" 
+                      variant="ghost" 
+                      size="icon" 
                       onClick={() => {
                         setTargetInput(targetData.targetAmount.toString());
                         setIsEditingTarget(true);
                       }}
-                      className="h-8 px-4 font-bold text-[10px] uppercase tracking-wider"
+                      className="h-6 w-6 text-primary hover:bg-primary/10"
                     >
-                      <Pencil className="mr-2 size-3" /> Edit
+                      <Pencil className="size-3" />
                     </Button>
                   </div>
                 ) : (
-                  <>
-                    <div className="relative flex-1 max-w-[300px]">
-                      <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                      <Input 
-                        type="number" 
-                        placeholder="Enter target amount..." 
-                        value={targetInput}
-                        onChange={(e) => setTargetInput(e.target.value)}
-                        className="pl-8 h-10 font-bold tabular-nums"
-                        autoFocus={isEditingTarget}
-                      />
-                    </div>
-                    <div className="flex gap-2">
+                  <div className="flex-1 flex items-center gap-1.5 h-full">
+                    <Input 
+                      type="number" 
+                      placeholder="Target..." 
+                      value={targetInput}
+                      onChange={(e) => setTargetInput(e.target.value)}
+                      className="h-full text-[11px] font-bold tabular-nums min-w-0"
+                      autoFocus={isEditingTarget}
+                    />
+                    <div className="flex items-center gap-1">
                       <Button 
-                        size="sm" 
+                        size="icon" 
                         onClick={handleSaveTarget} 
                         disabled={isSavingTarget}
-                        className="h-10 px-6 font-bold uppercase tracking-wider"
+                        className="h-8 w-8 shrink-0"
                       >
-                        {isSavingTarget ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
-                        {targetData ? "Update" : "Save"}
+                        {isSavingTarget ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
                       </Button>
                       {isEditingTarget && (
                         <Button 
                           variant="ghost"
-                          size="sm" 
+                          size="icon" 
                           onClick={() => {
                             setIsEditingTarget(false);
                             setTargetInput(targetData?.targetAmount.toString() || "");
                           }}
                           disabled={isSavingTarget}
-                          className="h-10 px-4 font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted/50"
+                          className="h-8 w-8 shrink-0 text-muted-foreground"
                         >
-                          <X className="mr-2 size-4" /> Cancel
+                          <X className="size-3.5" />
                         </Button>
                       )}
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
