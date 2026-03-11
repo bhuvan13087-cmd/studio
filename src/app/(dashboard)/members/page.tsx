@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
@@ -82,7 +81,6 @@ export default function MembersPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // FIXED: MEMOIZED QUERIES - Essential to prevent infinite re-fetching loops
   const membersQuery = useMemoFirebase(() => query(collection(db, 'members'), orderBy('name', 'asc')), [db]);
   const { data: members, isLoading: isMembersLoading } = useCollection(membersQuery);
 
@@ -94,7 +92,6 @@ export default function MembersPage() {
 
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
 
-  // FIXED: Safety cleanup for UI interactions to prevent freezing if dialogs unmount weirdly
   useEffect(() => {
     return () => {
       document.body.style.pointerEvents = 'auto'
@@ -102,8 +99,6 @@ export default function MembersPage() {
     }
   }, [])
 
-  // OPTIMIZATION: Pre-calculate current month's paid status Map
-  // This reduces complexity from O(N*M) to O(N+M) during list rendering
   const paidMemberStatus = useMemo(() => {
     if (!payments) return new Map<string, any>();
     const now = new Date();
@@ -118,9 +113,7 @@ export default function MembersPage() {
           if (isWithinInterval(d, { start, end })) {
             paidMap.set(p.memberId, p);
           }
-        } catch (e) {
-          // Skip invalid dates
-        }
+        } catch (e) {}
       }
     });
     return paidMap;
@@ -142,13 +135,12 @@ export default function MembersPage() {
         status: "active"
       })
       
-      createAuditLog(db, user, `Registered new member: ${newMember.name}`)
+      await createAuditLog(db, user, `Registered new member: ${newMember.name}`)
       
       setIsAddDialogOpen(false)
       setNewMember(INITIAL_MEMBER_STATE)
       toast({ title: "Member Added", description: `${newMember.name} registered successfully.` })
     } catch (error: any) {
-      console.error("Error adding member:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to add member." })
     } finally {
       setIsActionPending(false)
@@ -162,7 +154,7 @@ export default function MembersPage() {
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToEdit.id);
-      await updateDocumentNonBlocking(memberRef, {
+      updateDocumentNonBlocking(memberRef, {
         name: memberToEdit.name,
         phone: memberToEdit.phone,
         monthlyAmount: Number(memberToEdit.monthlyAmount),
@@ -171,13 +163,12 @@ export default function MembersPage() {
         chitGroup: memberToEdit.chitGroup
       });
       
-      createAuditLog(db, user, `Updated member details: ${memberToEdit.name}`)
+      await createAuditLog(db, user, `Updated member details: ${memberToEdit.name}`)
       
       setIsEditMemberDialogOpen(false)
       setMemberToEdit(null)
       toast({ title: "Member Updated", description: "Details saved." })
     } catch (error: any) {
-      console.error("Error updating member:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to update member." })
     } finally {
       setIsActionPending(false)
@@ -190,18 +181,17 @@ export default function MembersPage() {
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToDeactivate.id)
-      await updateDocumentNonBlocking(memberRef, {
+      updateDocumentNonBlocking(memberRef, {
         status: "inactive",
         deactivatedAt: new Date().toISOString()
       });
       
-      createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`)
+      await createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`)
       
       toast({ title: "Member Deactivated", description: "Member is now inactive." })
       setIsDeactivateMemberDialogOpen(false)
       setMemberToDeactivate(null)
     } catch (error: any) {
-      console.error("Error deactivating member:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to deactivate member." })
     } finally {
       setIsActionPending(false)
@@ -217,12 +207,6 @@ export default function MembersPage() {
         member.phone.includes(searchTerm)
       )
   }, [members, searchTerm])
-
-  const selectedSchemeType = useMemo(() => {
-    if (!newMember.chitGroup || !chitRounds) return null;
-    const scheme = chitRounds.find(r => r.name === newMember.chitGroup);
-    return scheme?.collectionType || null;
-  }, [newMember.chitGroup, chitRounds]);
 
   if (isRoleLoading) {
     return (
@@ -274,23 +258,10 @@ export default function MembersPage() {
                     <SelectTrigger><SelectValue placeholder="Select scheme" /></SelectTrigger>
                     <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
                   </Select>
-                  {selectedSchemeType && (
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Type:</span>
-                      <Badge variant="secondary" className="text-[9px] font-bold uppercase tracking-tight">{selectedSchemeType}</Badge>
-                    </div>
-                  )}
                 </div>
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>
-                  <Input 
-                    type="number"
-                    value={newMember.monthlyAmount || ""} 
-                    readOnly
-                    className="bg-muted font-bold text-primary"
-                    required
-                    disabled={isActionPending}
-                  />
+                  <Input type="number" value={newMember.monthlyAmount || ""} readOnly className="bg-muted font-bold text-primary" required disabled={isActionPending} />
                 </div>
                 <div className="grid gap-2"><Label htmlFor="joinDate">Join Date</Label><Input id="joinDate" type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required disabled={isActionPending} /></div>
               </div>
@@ -354,8 +325,7 @@ export default function MembersPage() {
                           <Popover>
                             <PopoverTrigger asChild>
                               <button className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[10px] font-bold border border-emerald-200 uppercase tracking-tight shadow-sm">
-                                <CheckCircle2 className="size-2.5" />
-                                Success
+                                <CheckCircle2 className="size-2.5" /> Success
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-3 shadow-xl text-xs" align="start">
@@ -365,8 +335,7 @@ export default function MembersPage() {
                           </Popover>
                         ) : (
                           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 uppercase tracking-tight shadow-sm w-fit">
-                            <Clock className="size-2.5" />
-                            Pending
+                            <Clock className="size-2.5" /> Pending
                           </div>
                         )}
                       </TableCell>
@@ -397,7 +366,6 @@ export default function MembersPage() {
         </div>
       </div>
 
-      {/* Edit Dialog */}
       <Dialog open={isEditMemberDialogOpen} onOpenChange={(open) => { 
         if (!isActionPending) {
           setIsEditMemberDialogOpen(open); 
@@ -431,14 +399,7 @@ export default function MembersPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>
-                  <Input 
-                    type="number"
-                    value={memberToEdit?.monthlyAmount || ""} 
-                    readOnly
-                    className="bg-muted font-bold"
-                    required
-                    disabled={isActionPending}
-                  />
+                  <Input type="number" value={memberToEdit?.monthlyAmount || ""} readOnly className="bg-muted font-bold" required disabled={isActionPending} />
                 </div>
               </div>
               <DialogFooter className="gap-2">
@@ -453,8 +414,12 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Profile Dialog */}
-      <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsProfileDialogOpen(open); if (!open) setSelectedMember(null) } }}>
+      <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { 
+        if (!isActionPending) { 
+          setIsProfileDialogOpen(open); 
+          if (!open) setSelectedMember(null) 
+        } 
+      }}>
         <DialogContent className="sm:max-w-[450px]">
           {isProfileDialogOpen && (
             <>
@@ -476,13 +441,18 @@ export default function MembersPage() {
                     setIsProfileDialogOpen(false); 
                   }}
                 >
-                  <Ban className="mr-2 size-4" />
-                  Deactivate
+                  <Ban className="mr-2 size-4" /> Deactivate
                 </Button>
                 <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                  <Button variant="outline" className="w-full sm:w-auto font-bold" onClick={() => { setIsProfileDialogOpen(false); setTimeout(() => { setHistoryMember(selectedMember); setIsHistoryDialogOpen(true); }, 300) }}>
-                    <HistoryIcon className="mr-2 size-4" />
-                    History
+                  <Button variant="outline" className="w-full sm:w-auto font-bold" onClick={() => { 
+                    const m = selectedMember;
+                    setIsProfileDialogOpen(false); 
+                    setTimeout(() => { 
+                      setHistoryMember(m); 
+                      setIsHistoryDialogOpen(true); 
+                    }, 100); 
+                  }}>
+                    <HistoryIcon className="mr-2 size-4" /> History
                   </Button>
                   <Button className="w-full sm:w-auto font-bold" onClick={() => setIsProfileDialogOpen(false)}>Close</Button>
                 </div>
@@ -492,7 +462,6 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
         <DialogContent className="sm:max-w-[550px]">
           {isHistoryDialogOpen && (
@@ -524,7 +493,6 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Deactivate Dialog */}
       <AlertDialog open={isDeactivateMemberDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeactivateMemberDialogOpen(open); if (!open) setMemberToDeactivate(null) } }}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle className="text-destructive">Deactivate Member?</AlertDialogTitle><AlertDialogDescription>This will move <strong>{memberToDeactivate?.name}</strong> to inactive status. They will no longer appear in active lists, but their payment history will be preserved.</AlertDialogDescription></AlertDialogHeader>

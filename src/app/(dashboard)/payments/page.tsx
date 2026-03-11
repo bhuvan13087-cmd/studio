@@ -50,7 +50,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, deleteDoc, updateDoc } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy, updateDoc } from "firebase/firestore"
 import { addDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
@@ -79,7 +79,6 @@ export default function PaymentsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // FIXED: MEMOIZED QUERIES - Prevents re-subscription loops
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: paymentsData, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const payments = paymentsData || [];
@@ -142,14 +141,13 @@ export default function PaymentsPage() {
         createdAt: serverTimestamp() 
       });
 
-      // Update member total paid
       const memberRef = doc(db, 'members', member.id);
       await updateDoc(memberRef, { 
         paymentStatus: "success", 
         totalPaid: (member.totalPaid || 0) + amount 
       });
       
-      createAuditLog(db, user, `Recorded Payment ₹${amount} for ${member.name}`)
+      await createAuditLog(db, user, `Recorded Payment ₹${amount} for ${member.name}`)
       
       setIsQuickRecordOpen(false);
       setRecordData({ 
@@ -161,7 +159,6 @@ export default function PaymentsPage() {
       setMemberSearch("");
       toast({ title: "Payment Recorded", description: `Amount ₹${amount} saved for ${member.name}.` });
     } catch (error: any) {
-      console.error("Error recording payment:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to record payment." });
     } finally { 
       setIsActionPending(false);
@@ -183,13 +180,12 @@ export default function PaymentsPage() {
       
       await deleteDocumentNonBlocking(doc(db, 'payments', paymentToDelete.id));
       
-      createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`)
+      await createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`)
       
       setIsDeletePaymentDialogOpen(false);
       setPaymentToDelete(null);
       toast({ title: "Record Deleted", description: "Payment removed successfully." });
     } catch (error: any) {
-      console.error("Error deleting payment:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to delete record." });
     } finally { 
       setIsActionPending(false);
@@ -278,8 +274,7 @@ export default function PaymentsPage() {
         }}>
           <DialogTrigger asChild>
             <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg font-bold">
-              <Plus className="mr-2 size-4 sm:size-5" />
-              Add Payment
+              <Plus className="mr-2 size-4 sm:size-5" /> Add Payment
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
@@ -289,13 +284,7 @@ export default function PaymentsPage() {
                 <div className="grid gap-2 relative">
                   <Label>Search Active Member</Label>
                   <div className="relative" ref={suggestionsRef}>
-                    <Input 
-                      placeholder="Type member name..." 
-                      value={memberSearch} 
-                      onChange={(e) => { setMemberSearch(e.target.value); setShowSuggestions(true); }} 
-                      autoComplete="off" 
-                      disabled={isActionPending} 
-                    />
+                    <Input placeholder="Type member name..." value={memberSearch} onChange={(e) => { setMemberSearch(e.target.value); setShowSuggestions(true); }} autoComplete="off" disabled={isActionPending} />
                     {showSuggestions && memberSearch.length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg overflow-hidden">
                         <ScrollArea className="h-[150px]">
@@ -307,11 +296,7 @@ export default function PaymentsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label>Contribution Amount (₹)</Label>
-                  <Input 
-                    value={recordData.amount || ""} 
-                    readOnly 
-                    className="bg-muted font-bold text-primary"
-                  />
+                  <Input value={recordData.amount || ""} readOnly className="bg-muted font-bold text-primary" />
                 </div>
                 <div className="grid gap-2">
                   <Label>Method</Label>
@@ -324,8 +309,7 @@ export default function PaymentsPage() {
               <DialogFooter className="flex-col sm:flex-row gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)} className="w-full sm:w-auto">Cancel</Button>
                 <Button type="submit" disabled={isActionPending || !recordData.memberId} className="w-full sm:w-auto font-bold">
-                  {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                  Save Payment
+                  {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />} Save Payment
                 </Button>
               </DialogFooter>
             </form>
@@ -373,10 +357,7 @@ export default function PaymentsPage() {
                       <TableRow key={p.id} className="hover:bg-muted/10 transition-colors">
                         <TableCell className="text-[10px] sm:text-xs font-medium tabular-nums text-muted-foreground">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : "-"}</TableCell>
                         <TableCell className="font-semibold text-xs sm:text-sm">
-                          <button 
-                            onClick={() => openAuditProfile(p.memberId)}
-                            className="hover:text-primary hover:underline transition-all text-left"
-                          >
+                          <button onClick={() => openAuditProfile(p.memberId)} className="hover:text-primary hover:underline transition-all text-left">
                             {p.memberName}
                           </button>
                         </TableCell>
@@ -441,90 +422,43 @@ export default function PaymentsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Member Audit Profile Popup */}
       <Dialog open={isAuditProfileOpen} onOpenChange={setIsAuditProfileOpen}>
         <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <User className="size-5 text-primary" />
-              Member Audit Profile
-            </DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><User className="size-5 text-primary" /> Member Audit Profile</DialogTitle></DialogHeader>
           {selectedAuditMember && (
             <div className="space-y-4 py-4">
-              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-xs font-bold uppercase text-muted-foreground">Name</span>
-                <span className="font-bold text-sm">{selectedAuditMember.name}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-xs font-bold uppercase text-muted-foreground">Status</span>
-                <Badge variant={selectedAuditMember.status === 'active' ? 'default' : 'secondary'} className="uppercase font-bold text-[9px]">
-                  {selectedAuditMember.status}
-                </Badge>
-              </div>
+              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Name</span><span className="font-bold text-sm">{selectedAuditMember.name}</span></div>
+              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Status</span><Badge variant={selectedAuditMember.status === 'active' ? 'default' : 'secondary'} className="uppercase font-bold text-[9px]">{selectedAuditMember.status}</Badge></div>
               {selectedAuditMember.status === 'inactive' ? (
                 <div className="p-4 border border-destructive/20 bg-destructive/5 rounded-lg space-y-2">
                   <span className="text-[10px] font-bold uppercase text-destructive tracking-widest block">Active Period</span>
-                  <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                    {selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}
-                    <span className="text-muted-foreground">→</span>
-                    {selectedAuditMember.deactivatedAt ? format(parseISO(selectedAuditMember.deactivatedAt), 'MMM dd, yyyy') : '-'}
-                  </div>
+                  <div className="flex items-center gap-2 font-bold text-sm text-foreground">{selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}<span className="text-muted-foreground">→</span>{selectedAuditMember.deactivatedAt ? format(parseISO(selectedAuditMember.deactivatedAt), 'MMM dd, yyyy') : '-'}</div>
                 </div>
               ) : (
-                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
-                  <span className="text-xs font-bold uppercase text-emerald-600">Joined Date</span>
-                  <span className="font-bold text-sm text-emerald-700">{selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}</span>
-                </div>
+                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg"><span className="text-xs font-bold uppercase text-emerald-600">Joined Date</span><span className="font-bold text-sm text-emerald-700">{selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
               )}
             </div>
           )}
-          <DialogFooter>
-            <Button onClick={() => setIsAuditProfileOpen(false)} className="w-full sm:w-auto font-bold uppercase text-[10px] tracking-widest">Close Audit</Button>
-          </DialogFooter>
+          <DialogFooter><Button onClick={() => setIsAuditProfileOpen(false)} className="w-full sm:w-auto font-bold uppercase text-[10px] tracking-widest">Close Audit</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Full History Dialog */}
       <Dialog open={isHistoryOpen} onOpenChange={(open) => { setIsHistoryOpen(open); if (!open) setHistoryMember(null) }}>
         <DialogContent className="sm:max-w-[500px]">
           {isHistoryOpen && (
             <>
               <DialogHeader><DialogTitle className="text-xl">History: {historyMember?.memberName}</DialogTitle></DialogHeader>
-              <div className="py-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead>
-                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Paid</TableHead>
-                      <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success')).map((e, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="text-sm font-semibold">{e.month}</TableCell>
-                        <TableCell className="text-sm font-bold text-emerald-600">₹{e.amountPaid?.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{e.paymentDate ? format(parseISO(e.paymentDate), 'MMM dd, yyyy') : "-"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <div className="py-4"><Table><TableHeader><TableRow><TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead><TableHead className="text-xs uppercase font-bold text-muted-foreground">Paid</TableHead><TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead></TableRow></TableHeader><TableBody>{payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success')).map((e, i) => (<TableRow key={i}><TableCell className="text-sm font-semibold">{e.month}</TableCell><TableCell className="text-sm font-bold text-emerald-600">₹{e.amountPaid?.toLocaleString()}</TableCell><TableCell className="text-right text-xs text-muted-foreground font-medium">{e.paymentDate ? format(parseISO(e.paymentDate), 'MMM dd, yyyy') : "-"}</TableCell></TableRow>))}</TableBody></Table></div>
               <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryOpen(false)}>Close</Button></DialogFooter>
             </>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Delete Record Dialog */}
       <AlertDialog open={isDeletePaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeletePaymentDialogOpen(open); if (!open) setPaymentToDelete(null) } }}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Transaction?</AlertDialogTitle><AlertDialogDescription>Permanently remove this payment of <strong>₹{paymentToDelete?.amountPaid?.toLocaleString()}</strong>? This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeletePayment} disabled={isActionPending}>
-            {isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-            Delete
-          </AlertDialogAction></AlertDialogFooter>
+          <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeletePayment} disabled={isActionPending}>{isActionPending && <Loader2 className="mr-2 size-4 animate-spin" />} Delete</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
