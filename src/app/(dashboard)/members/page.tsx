@@ -168,7 +168,7 @@ export default function MembersPage() {
   }
 
   const filteredMembers = (members || [])
-    .filter(member => member.status !== "inactive") // Only show active members in the directory
+    .filter(member => member.status !== "inactive") // Hide deactivated members from directory search
     .filter(member => 
       member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.phone.includes(searchTerm)
