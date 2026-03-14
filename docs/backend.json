@@ -170,6 +170,19 @@
         "actionDescription": { "type": "string" }
       },
       "required": ["timestamp", "adminEmail", "actionDescription"]
+    },
+    "MonthLock": {
+      "title": "MonthLock",
+      "type": "object",
+      "description": "Represents a locked financial period.",
+      "properties": {
+        "id": { "type": "string", "description": "Format: YYYY-MonthName" },
+        "year": { "type": "string" },
+        "monthName": { "type": "string" },
+        "lockedAt": { "type": "string", "format": "date-time" },
+        "lockedBy": { "type": "string" }
+      },
+      "required": ["id", "year", "monthName", "lockedAt", "lockedBy"]
     }
   },
   "auth": {
@@ -229,8 +242,18 @@
           },
           "description": "Stores system audit logs."
         }
+      },
+      {
+        "path": "/monthLocks/{lockId}",
+        "definition": {
+          "entityName": "MonthLock",
+          "schema": {
+            "$ref": "#/backend/entities/MonthLock"
+          },
+          "description": "Stores locked months information."
+        }
       }
     ],
-    "reasoning": "The application manages members, payments, chit rounds, collection targets, and now audit logs for full traceability."
+    "reasoning": "The application manages members, payments, chit rounds, collection targets, audit logs, and period locks."
   }
 }

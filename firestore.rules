@@ -44,5 +44,11 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if false; // Logs are immutable
     }
+
+    match /monthLocks/{lockId} {
+      allow get, list: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if false; // Locks are usually replaced or deleted
+    }
   }
 }
