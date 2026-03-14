@@ -96,13 +96,15 @@ export default function MembersPage() {
 
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
 
+  // Recovery effect to ensure UI isn't locked after dialogs close
   useEffect(() => {
-    document.body.style.pointerEvents = 'auto'
-    document.body.style.overflow = 'auto'
-    return () => {
-      document.body.style.pointerEvents = 'auto'
-      document.body.style.overflow = 'auto'
-    }
+    const recoveryInterval = setInterval(() => {
+      if (document.body.style.pointerEvents === 'none') {
+        document.body.style.pointerEvents = 'auto'
+        document.body.style.overflow = 'auto'
+      }
+    }, 1000)
+    return () => clearInterval(recoveryInterval)
   }, [])
 
   const paidMemberStatus = useMemo(() => {
@@ -355,11 +357,32 @@ export default function MembersPage() {
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" disabled={isActionPending}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isActionPending}>
+                              <MoreVertical className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem onSelect={() => { setMemberToEdit({...member}); setIsEditMemberDialogOpen(true); }}><Pencil className="mr-2 size-4" /> Edit Details</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => { 
+                              if (!isActionPending) {
+                                setMemberToEdit({...member}); 
+                                setIsEditMemberDialogOpen(true); 
+                              }
+                            }}>
+                              <Pencil className="mr-2 size-4" /> Edit Details
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => { setMemberToDeactivate(member); setIsDeactivateMemberDialogOpen(true); }}><Ban className="mr-2 size-4" /> Deactivate</DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-destructive focus:bg-destructive/10 focus:text-destructive" 
+                              onSelect={() => { 
+                                if (!isActionPending) {
+                                  setMemberToDeactivate(member); 
+                                  setIsDeactivateMemberDialogOpen(true); 
+                                }
+                              }}
+                            >
+                              <Ban className="mr-2 size-4" /> Deactivate
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -438,7 +461,14 @@ export default function MembersPage() {
         <DialogContent className="sm:max-w-[450px]">
           {isProfileDialogOpen && (
             <>
-              <DialogHeader><DialogTitle className="flex items-center gap-2"><div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">{selectedMember?.name?.split(' ').map((n: string) => n[0]).join('')}</div>Profile View</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                    {selectedMember?.name?.split(' ').map((n: string) => n[0]).join('')}
+                  </div>
+                  Profile View
+                </DialogTitle>
+              </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Phone</span><span className="font-bold">{selectedMember?.phone}</span></div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Joined</span><span className="font-bold">{selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>

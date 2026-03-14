@@ -110,13 +110,18 @@ export default function PaymentsPage() {
       if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) setShowSuggestions(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
-    document.body.style.pointerEvents = 'auto'
-    document.body.style.overflow = 'auto'
+
+    // Recovery effect to ensure UI isn't locked after dialogs close
+    const recoveryInterval = setInterval(() => {
+      if (document.body.style.pointerEvents === 'none') {
+        document.body.style.pointerEvents = 'auto'
+        document.body.style.overflow = 'auto'
+      }
+    }, 1000)
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      document.body.style.pointerEvents = 'auto'
-      document.body.style.overflow = 'auto'
+      clearInterval(recoveryInterval)
     }
   }, []);
 
@@ -411,14 +416,30 @@ export default function PaymentsPage() {
                           <TableCell className="hidden md:table-cell text-[10px] font-bold text-muted-foreground uppercase">{p.method || "Cash"}</TableCell>
                           <TableCell>
                             <DropdownMenu>
-                              <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" disabled={isActionPending}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isActionPending}>
+                                  <MoreHorizontal className="size-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44">
-                                <DropdownMenuItem onSelect={() => { setHistoryMember(p); setIsHistoryOpen(true); }}><History className="mr-2 size-4" /> Full History</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => { 
+                                  if (!isActionPending) {
+                                    setHistoryMember(p); 
+                                    setIsHistoryOpen(true); 
+                                  }
+                                }}>
+                                  <History className="mr-2 size-4" /> Full History
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
                                   disabled={isLocked || isActionPending}
                                   className={cn("text-destructive focus:bg-destructive/10 focus:text-destructive", isLocked && "opacity-50 pointer-events-none")} 
-                                  onSelect={() => { setPaymentToDelete(p); setIsDeletePaymentDialogOpen(true); }}
+                                  onSelect={() => { 
+                                    if (!isActionPending) {
+                                      setPaymentToDelete(p); 
+                                      setIsDeletePaymentDialogOpen(true); 
+                                    }
+                                  }}
                                 >
                                   <Trash2 className="mr-2 size-4" /> Delete Record
                                 </DropdownMenuItem>
