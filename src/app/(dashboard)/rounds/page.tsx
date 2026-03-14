@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
@@ -93,13 +94,15 @@ export default function RoundsPage() {
 
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
 
+  // Recovery effect to ensure UI isn't locked after dialogs close
   useEffect(() => {
-    document.body.style.pointerEvents = 'auto'
-    document.body.style.overflow = 'auto'
-    return () => {
-      document.body.style.pointerEvents = 'auto'
-      document.body.style.overflow = 'auto'
-    }
+    const recoveryInterval = setInterval(() => {
+      if (document.body.style.pointerEvents === 'none') {
+        document.body.style.pointerEvents = 'auto'
+        document.body.style.overflow = 'auto'
+      }
+    }, 1000)
+    return () => clearInterval(recoveryInterval)
   }, [])
 
   const handleAddChit = async (e: React.FormEvent) => {
@@ -138,12 +141,15 @@ export default function RoundsPage() {
     try {
       const chitRef = doc(db, 'chitRounds', editingChit.id);
       await withTimeout(updateDoc(chitRef, {
-        ...editingChit,
+        name: editingChit.name,
         monthlyAmount: Number(editingChit.monthlyAmount),
-        totalMembers: Number(editingChit.totalMembers)
+        totalMembers: Number(editingChit.totalMembers),
+        collectionType: editingChit.collectionType,
+        startDate: editingChit.startDate
       }));
       await createAuditLog(db, user, `Updated scheme details: ${editingChit.name}`)
       setIsEditChitDialogOpen(false);
+      setEditingChit(null)
       toast({ title: "Scheme Updated", description: "Details saved successfully." });
     } catch (e: any) { 
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update scheme." }); 
@@ -161,6 +167,7 @@ export default function RoundsPage() {
       await createAuditLog(db, user, `Deleted scheme: ${chitToDelete.name}`)
       toast({ title: "Scheme Deleted", description: "The scheme record has been removed." }); 
       setIsDeleteDialogOpen(false); 
+      setChitToDelete(null)
     } catch (e: any) { 
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to delete scheme." }); 
     } finally { 
@@ -168,8 +175,8 @@ export default function RoundsPage() {
     }
   }
 
-  const currentRound = chitSchemes.find(r => r.id === selectedChitId)
-  const assignedMembers = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name)
+  const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
+  const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
@@ -177,20 +184,49 @@ export default function RoundsPage() {
     return (
       <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1"><h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight">Seat Reservations</h2><p className="text-sm text-muted-foreground">Manage active fund schemes and seat availability.</p></div>
-          <Button className="h-10 sm:h-11 shadow-lg w-full sm:w-auto font-bold" onClick={() => setIsAddChitDialogOpen(true)} disabled={isActionPending}><Plus className="mr-2 size-5" /> Add Scheme</Button>
+          <div className="space-y-1">
+            <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight">Seat Reservations</h2>
+            <p className="text-sm text-muted-foreground">Manage active fund schemes and seat availability.</p>
+          </div>
+          <Button className="h-10 sm:h-11 shadow-lg w-full sm:w-auto font-bold" onClick={() => setIsAddChitDialogOpen(true)} disabled={isActionPending}>
+            <Plus className="mr-2 size-5" /> Add Scheme
+          </Button>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {chitSchemes.map((group) => (
             <Card key={group.id} className="hover:shadow-md transition-all border-border/50 overflow-hidden flex flex-col">
               <CardHeader className="bg-muted/20 p-4 space-y-2">
-                <div className="flex justify-between items-start"><Badge variant="outline" className="text-[10px] font-bold uppercase">{group.collectionType}</Badge>
-                  <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" disabled={isActionPending}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => { setEditingChit({...group}); setIsEditChitDialogOpen(true); }}><Pencil className="mr-2 size-3.5" /> Edit</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => { setChitToDelete(group); setIsDeleteDialogOpen(true); }}><Trash2 className="mr-2 size-3.5" /> Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+                <div className="flex justify-between items-start">
+                  <Badge variant="outline" className="text-[10px] font-bold uppercase">{group.collectionType}</Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isActionPending}>
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuItem onSelect={() => { if(!isActionPending) { setEditingChit({...group}); setIsEditChitDialogOpen(true); } }}>
+                        <Pencil className="mr-2 size-3.5" /> Edit Details
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => { if(!isActionPending) { setChitToDelete(group); setIsDeleteDialogOpen(true); } }}>
+                        <Trash2 className="mr-2 size-3.5" /> Delete Scheme
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <CardTitle className="text-lg truncate font-bold">{group.name}</CardTitle><CardDescription className="text-xs">Capacity: {group.totalMembers} Seats</CardDescription>
+                <CardTitle className="text-lg truncate font-bold">{group.name}</CardTitle>
+                <CardDescription className="text-xs">Capacity: {group.totalMembers} Seats</CardDescription>
               </CardHeader>
-              <CardContent className="p-4 flex-1"><div className="flex justify-between text-xs font-bold"><span className="text-emerald-600">Amount: ₹{(group.monthlyAmount || 0).toLocaleString()}</span><span className="text-muted-foreground">{(members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length} / {group.totalMembers} Filled</span></div></CardContent>
-              <CardFooter className="p-0 border-t"><Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Reservation Board</Button></CardFooter>
+              <CardContent className="p-4 flex-1">
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-emerald-600">Amount: ₹{(group.monthlyAmount || 0).toLocaleString()}</span>
+                  <span className="text-muted-foreground">{(members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length} / {group.totalMembers} Filled</span>
+                </div>
+              </CardContent>
+              <CardFooter className="p-0 border-t">
+                <Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Reservation Board</Button>
+              </CardFooter>
             </Card>
           ))}
         </div>
@@ -201,10 +237,26 @@ export default function RoundsPage() {
               <DialogHeader><DialogTitle>New Scheme</DialogTitle><DialogDescription>Define a new chit fund reservation cycle.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2"><Label htmlFor="schemeName">Name</Label><Input id="schemeName" value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required disabled={isActionPending} placeholder="e.g. Daily Silver" /></div>
-                <div className="grid gap-2"><Label>Collection Type</Label><Select value={newChit.collectionType} onValueChange={v => setNewChit({...newChit, collectionType: v})} disabled={isActionPending}><SelectTrigger><SelectValue placeholder="Select Daily/Monthly" /></SelectTrigger><SelectContent><SelectItem value="Monthly">Monthly</SelectItem><SelectItem value="Daily">Daily</SelectItem></SelectContent></Select></div>
-                {newChit.collectionType && (<div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} placeholder="Enter amount" /></div><div className="grid gap-2"><Label htmlFor="totalMembers">Seats</Label><Input id="totalMembers" type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div></div>)}
+                <div className="grid gap-2">
+                  <Label>Collection Type</Label>
+                  <Select value={newChit.collectionType} onValueChange={v => setNewChit({...newChit, collectionType: v})} disabled={isActionPending}>
+                    <SelectTrigger><SelectValue placeholder="Select Daily/Monthly" /></SelectTrigger>
+                    <SelectContent><SelectItem value="Monthly">Monthly</SelectItem><SelectItem value="Daily">Daily</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                {newChit.collectionType && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} placeholder="Enter amount" /></div>
+                    <div className="grid gap-2"><Label htmlFor="totalMembers">Seats</Label><Input id="totalMembers" type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                  </div>
+                )}
               </div>
-              <DialogFooter className="gap-2"><Button variant="outline" type="button" onClick={() => setIsAddChitDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button><Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create Scheme</Button></DialogFooter>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" type="button" onClick={() => setIsAddChitDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
+                  {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create Scheme
+                </Button>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
@@ -213,16 +265,44 @@ export default function RoundsPage() {
           <DialogContent className="sm:max-w-[425px]">
             {editingChit && (
               <form onSubmit={handleEditChit}>
-                <DialogHeader><DialogTitle>Edit Scheme</DialogTitle></DialogHeader>
-                <div className="grid gap-4 py-4"><div className="grid gap-2"><Label>Name</Label><Input value={editingChit.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required disabled={isActionPending} /></div><div className="grid gap-2"><Label>Collection Type</Label><Select value={editingChit.collectionType} onValueChange={v => setEditingChit({...editingChit, collectionType: v})} disabled={isActionPending}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Monthly">Monthly</SelectItem><SelectItem value="Daily">Daily</SelectItem></SelectContent></Select></div>{editingChit.collectionType && (<div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={editingChit.monthlyAmount || ""} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div><div className="grid gap-2"><Label>Seats</Label><Input type="number" value={editingChit.totalMembers || ""} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div></div>)}</div>
-                <DialogFooter className="gap-2"><Button variant="outline" type="button" onClick={() => setIsEditChitDialogOpen(false)} disabled={isActionPending}>Cancel</Button><Button type="submit" disabled={isActionPending} className="font-bold">{isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null} Update</Button></DialogFooter>
+                <DialogHeader><DialogTitle>Edit Scheme</DialogTitle><DialogDescription>Update the parameters for {editingChit.name}.</DialogDescription></DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2"><Label>Name</Label><Input value={editingChit.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required disabled={isActionPending} /></div>
+                  <div className="grid gap-2">
+                    <Label>Collection Type</Label>
+                    <Select value={editingChit.collectionType} onValueChange={v => setEditingChit({...editingChit, collectionType: v})} disabled={isActionPending}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="Monthly">Monthly</SelectItem><SelectItem value="Daily">Daily</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  {editingChit.collectionType && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={editingChit.monthlyAmount || ""} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                      <div className="grid gap-2"><Label>Seats</Label><Input type="number" value={editingChit.totalMembers || ""} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" type="button" onClick={() => setIsEditChitDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                  <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
+                    {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null} Update Changes
+                  </Button>
+                </DialogFooter>
               </form>
             )}
           </DialogContent>
         </Dialog>
 
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={(o) => { if (!isActionPending) { setIsDeleteDialogOpen(o); if(!o) setChitToDelete(null); } }}>
-          <AlertDialogContent><AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme <strong>{chitToDelete?.name}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={confirmDelete} disabled={isActionPending}>{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+          <AlertDialogContent>
+            <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme <strong>{chitToDelete?.name}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={confirmDelete} disabled={isActionPending}>
+                {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete Permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
         </AlertDialog>
       </div>
     )
@@ -232,7 +312,10 @@ export default function RoundsPage() {
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-9 w-9" disabled={isActionPending}><ChevronLeft className="size-5" /></Button>
-        <div className="min-w-0"><h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight">{currentRound?.name}</h2><p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Reservation Dashboard</p></div>
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight">{currentRound?.name}</h2>
+          <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Reservation Dashboard</p>
+        </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType}</div></CardContent></Card>
@@ -243,14 +326,21 @@ export default function RoundsPage() {
         <div className="p-4 border-b bg-muted/20 flex justify-between items-center"><h3 className="text-sm font-bold flex items-center gap-2 tracking-tight"><Users className="size-4 text-primary" /> Active Board</h3><Badge variant="secondary" className="text-[10px] tabular-nums font-bold uppercase tracking-tight">{assignedMembers.length} Joined</Badge></div>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow className="bg-muted/30"><TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead><TableHead className="text-[10px] uppercase font-bold tracking-wider">Payment</TableHead><TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Total Paid</TableHead><TableHead className="w-[80px] pr-6"></TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Payment</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Total Paid</TableHead>
+                <TableHead className="w-[80px] pr-6"></TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => (
                 <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
                   <TableCell className="pl-6"><div className="flex items-center gap-2"><div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">{m.name[0]}</div><span className="text-xs font-semibold truncate max-w-[120px]">{m.name}</span></div></TableCell>
                   <TableCell><Badge variant={m.paymentStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", m.paymentStatus === 'success' ? "bg-emerald-500" : "")}>{m.paymentStatus || "Pending"}</Badge></TableCell>
                   <TableCell className="text-right text-xs font-bold tabular-nums">₹{(m.totalPaid || 0).toLocaleString()}</TableCell>
-                  <TableCell className="text-right pr-6"><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => { setHistoryMember(m); setIsHistoryDialogOpen(true); }} disabled={isActionPending}><History className="size-4" /></Button></TableCell>
+                  <TableCell className="text-right pr-6"><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => { if(!isActionPending) { setHistoryMember(m); setIsHistoryDialogOpen(true); } }} disabled={isActionPending}><History className="size-4" /></Button></TableCell>
                 </TableRow>
               )) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-xs text-muted-foreground italic">No participants registered in this scheme.</TableCell></TableRow>}
             </TableBody>
@@ -263,7 +353,20 @@ export default function RoundsPage() {
           {isHistoryDialogOpen && (
             <>
               <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
-              <div className="py-4 overflow-x-auto"><Table><TableHeader><TableRow className="bg-muted/30"><TableHead className="text-xs uppercase font-bold text-muted-foreground pl-4">Month</TableHead><TableHead className="text-xs uppercase font-bold text-muted-foreground">Amount</TableHead><TableHead className="text-right text-xs uppercase font-bold text-muted-foreground pr-4">Date</TableHead></TableRow></TableHeader><TableBody>{historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (<TableRow key={i} className="hover:bg-muted/5 transition-colors"><TableCell className="text-sm font-semibold pl-4">{p.month}</TableCell><TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell><TableCell className="text-right text-xs text-muted-foreground font-medium pr-4">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : '-'}</TableCell></TableRow>))}</TableBody></Table></div>
+              <div className="py-4 overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow className="bg-muted/30"><TableHead className="text-xs uppercase font-bold text-muted-foreground pl-4">Month</TableHead><TableHead className="text-xs uppercase font-bold text-muted-foreground">Amount</TableHead><TableHead className="text-right text-xs uppercase font-bold text-muted-foreground pr-4">Date</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (
+                      <TableRow key={i} className="hover:bg-muted/5 transition-colors">
+                        <TableCell className="text-sm font-semibold pl-4">{p.month}</TableCell>
+                        <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground font-medium pr-4">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button></DialogFooter>
             </>
           )}
