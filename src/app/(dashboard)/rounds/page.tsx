@@ -552,7 +552,7 @@ export default function RoundsPage() {
                         disabled={isActionPending || m.paymentStatus === 'success'}
                         title="Add Payment"
                       >
-                        <CreditCard className="size-4" />
+                        <IndianRupee className="size-4" />
                       </Button>
                       <Button 
                         variant="ghost" 
