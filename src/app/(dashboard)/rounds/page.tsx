@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -20,6 +20,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   DropdownMenu,
@@ -65,17 +66,25 @@ const INITIAL_CHIT_STATE = {
   collectionType: "" 
 }
 
+const INITIAL_MEMBER_STATE = {
+  name: "",
+  phone: "",
+  joinDate: new Date().toISOString().split('T')[0],
+}
+
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
   const [isEditChitDialogOpen, setIsEditChitDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
+  const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
   
   const [editingChit, setEditingChit] = useState<any>(null)
   const [chitToDelete, setChitToDelete] = useState<any>(null)
   const [historyMember, setHistoryMember] = useState<any>(null)
+  const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -105,6 +114,9 @@ export default function RoundsPage() {
     return () => clearInterval(recoveryInterval)
   }, [])
 
+  const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
+  const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
+
   const handleAddChit = async (e: React.FormEvent) => {
     e.preventDefault(); 
     if (!db || isActionPending) return;
@@ -130,6 +142,34 @@ export default function RoundsPage() {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to create scheme." }); 
     } finally { 
       setIsActionPending(false); 
+    }
+  }
+
+  const handleAddMemberToScheme = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !currentRound || isActionPending) return;
+
+    setIsActionPending(true);
+    try {
+      await withTimeout(addDocumentNonBlocking(collection(db, 'members'), {
+        ...newMember,
+        chitGroup: currentRound.name,
+        monthlyAmount: currentRound.monthlyAmount,
+        status: "active",
+        paymentStatus: "pending",
+        totalPaid: 0,
+        createdAt: serverTimestamp(),
+      }));
+      
+      await createAuditLog(db, user, `Registered ${newMember.name} to scheme ${currentRound.name} via shortcut`);
+      
+      setIsAddMemberDialogOpen(false);
+      setNewMember(INITIAL_MEMBER_STATE);
+      toast({ title: "Member Registered", description: `${newMember.name} joined ${currentRound.name}.` });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to register member." });
+    } finally {
+      setIsActionPending(false);
     }
   }
 
@@ -174,9 +214,6 @@ export default function RoundsPage() {
       setIsActionPending(false); 
     }
   }
-
-  const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
-  const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
   // FEATURE 1: Monthly Collection for each group card
   const getMonthlyCollectionForScheme = useMemo(() => (schemeName: string) => {
@@ -354,13 +391,77 @@ export default function RoundsPage() {
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-9 w-9" disabled={isActionPending}><ChevronLeft className="size-5" /></Button>
-        <div className="min-w-0">
-          <h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight text-primary">{currentRound?.name}</h2>
-          <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Reservation Dashboard</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-9 w-9" disabled={isActionPending}><ChevronLeft className="size-5" /></Button>
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight text-primary">{currentRound?.name}</h2>
+            <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Reservation Dashboard</p>
+          </div>
         </div>
+        <Dialog open={isAddMemberDialogOpen} onOpenChange={(open) => { if(!isActionPending) setIsAddMemberDialogOpen(open); if(!open) setNewMember(INITIAL_MEMBER_STATE); }}>
+          <DialogTrigger asChild>
+            <Button className="h-10 sm:h-11 shadow-lg px-6 font-bold gap-2" disabled={isActionPending}>
+              <UserPlus className="size-5" />
+              Add Member
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <form onSubmit={handleAddMemberToScheme}>
+              <DialogHeader>
+                <DialogTitle>Register to {currentRound?.name}</DialogTitle>
+                <DialogDescription>Add a new participant directly to this group.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-6">
+                <div className="grid gap-2">
+                  <Label htmlFor="memberName">Member Name</Label>
+                  <Input 
+                    id="memberName" 
+                    value={newMember.name} 
+                    onChange={e => setNewMember({...newMember, name: e.target.value})} 
+                    required 
+                    disabled={isActionPending} 
+                    placeholder="Enter full name"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="memberPhone">Phone Number</Label>
+                  <Input 
+                    id="memberPhone" 
+                    value={newMember.phone} 
+                    onChange={e => setNewMember({...newMember, phone: e.target.value})} 
+                    required 
+                    disabled={isActionPending} 
+                    placeholder="Enter phone"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Group</Label>
+                  <Input value={currentRound?.name || ""} readOnly className="bg-muted font-bold text-primary" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="joinDate">Date of Joining</Label>
+                  <Input 
+                    id="joinDate" 
+                    type="date" 
+                    value={newMember.joinDate} 
+                    onChange={e => setNewMember({...newMember, joinDate: e.target.value})} 
+                    required 
+                    disabled={isActionPending} 
+                  />
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" type="button" onClick={() => setIsAddMemberDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
+                  {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Register Member
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-l-4 border-l-primary/40"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Seats Filled</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
