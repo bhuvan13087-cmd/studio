@@ -37,6 +37,19 @@
           "type": "string",
           "description": "Timestamp when the member was deactivated.",
           "format": "date-time"
+        },
+        "paymentType": {
+          "type": "string",
+          "description": "The preferred frequency of payment for this specific member (e.g., 'Daily', 'Monthly').",
+          "enum": ["Daily", "Monthly"]
+        },
+        "chitGroup": {
+          "type": "string",
+          "description": "The name of the chit scheme the member belongs to."
+        },
+        "totalPaid": {
+          "type": "number",
+          "description": "Sum of all payments made by the member."
         }
       },
       "required": [
@@ -82,6 +95,10 @@
         "status": {
           "type": "string",
           "description": "The current status of the payment."
+        },
+        "method": {
+          "type": "string",
+          "description": "Method used for payment (e.g., 'Cash', 'UPI')."
         }
       },
       "required": [
@@ -134,9 +151,17 @@
           "enum": ["Daily", "Monthly"],
           "description": "The frequency of collections for this chit round."
         },
-        "dailyAmount": {
+        "monthlyAmount": {
           "type": "number",
-          "description": "The amount collected daily if collectionType is Daily."
+          "description": "The amount collected monthly for this scheme."
+        },
+        "totalMembers": {
+          "type": "number",
+          "description": "The maximum number of members allowed in this scheme."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
         }
       },
       "required": [

@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CreditCard, CheckCircle2 } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CreditCard, CheckCircle2, User, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -70,6 +70,7 @@ const INITIAL_MEMBER_STATE = {
   name: "",
   phone: "",
   joinDate: new Date().toISOString().split('T')[0],
+  paymentType: ""
 }
 
 const INITIAL_PAYMENT_STATE = {
@@ -84,12 +85,14 @@ export default function RoundsPage() {
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false)
   const [isQuickPaymentDialogOpen, setIsQuickPaymentDialogOpen] = useState(false)
+  const [isMemberProfileDialogOpen, setIsMemberProfileDialogOpen] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
   
   const [editingChit, setEditingChit] = useState<any>(null)
   const [chitToDelete, setChitToDelete] = useState<any>(null)
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [selectedMemberForPayment, setSelectedMemberForPayment] = useState<any>(null)
+  const [selectedProfileMember, setSelectedProfileMember] = useState<any>(null)
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
   const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
   
@@ -123,6 +126,13 @@ export default function RoundsPage() {
 
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
+
+  // Automatically set default payment type when opening Add Member dialog
+  useEffect(() => {
+    if (isAddMemberDialogOpen && currentRound) {
+      setNewMember(prev => ({ ...prev, paymentType: currentRound.collectionType }));
+    }
+  }, [isAddMemberDialogOpen, currentRound]);
 
   const handleAddChit = async (e: React.FormEvent) => {
     e.preventDefault(); 
@@ -168,7 +178,7 @@ export default function RoundsPage() {
         createdAt: serverTimestamp(),
       }));
       
-      await createAuditLog(db, user, `Registered ${newMember.name} to scheme ${currentRound.name} via shortcut`);
+      await createAuditLog(db, user, `Registered ${newMember.name} to scheme ${currentRound.name} with payment type ${newMember.paymentType}`);
       
       setIsAddMemberDialogOpen(false);
       setNewMember(INITIAL_MEMBER_STATE);
@@ -189,7 +199,6 @@ export default function RoundsPage() {
     const currentMonth = format(new Date(), 'MMMM yyyy');
 
     try {
-      // 1. Create the payment record
       await withTimeout(addDocumentNonBlocking(collection(db, 'payments'), {
         memberId: selectedMemberForPayment.id,
         memberName: selectedMemberForPayment.name,
@@ -201,7 +210,6 @@ export default function RoundsPage() {
         createdAt: serverTimestamp()
       }));
 
-      // 2. Update the member's status and total paid
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       await withTimeout(updateDoc(memberRef, {
         paymentStatus: "success",
@@ -486,6 +494,20 @@ export default function RoundsPage() {
                   <Input value={currentRound?.name || ""} readOnly className="bg-muted font-bold text-primary" />
                 </div>
                 <div className="grid gap-2">
+                  <Label htmlFor="paymentType">Payment Type</Label>
+                  <Select 
+                    value={newMember.paymentType} 
+                    onValueChange={v => setNewMember({ ...newMember, paymentType: v })}
+                    disabled={isActionPending}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Daily">Daily</SelectItem>
+                      <SelectItem value="Monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
                   <Label htmlFor="joinDate">Date of Joining</Label>
                   <Input 
                     id="joinDate" 
@@ -531,7 +553,7 @@ export default function RoundsPage() {
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Payment</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Payment Status</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Total Paid</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
@@ -539,7 +561,24 @@ export default function RoundsPage() {
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => (
                 <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
-                  <TableCell className="pl-6"><div className="flex items-center gap-2"><div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">{m.name[0]}</div><span className="text-xs font-semibold truncate max-w-[120px]">{m.name}</span></div></TableCell>
+                  <TableCell className="pl-6">
+                    <div 
+                      className="flex items-center gap-2 cursor-pointer group" 
+                      onClick={() => { if(!isActionPending) { setSelectedProfileMember(m); setIsMemberProfileDialogOpen(true); } }}
+                    >
+                      <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px] group-hover:bg-primary group-hover:text-white transition-colors">
+                        {m.name[0]}
+                      </div>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold truncate max-w-[120px] group-hover:text-primary transition-colors">{m.name}</span>
+                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm bg-muted text-muted-foreground uppercase">
+                            [{m.paymentType || currentRound?.collectionType}]
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </TableCell>
                   <TableCell><Badge variant={m.paymentStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", m.paymentStatus === 'success' ? "bg-emerald-500" : "")}>{m.paymentStatus || "Pending"}</Badge></TableCell>
                   <TableCell className="text-right text-xs font-bold tabular-nums">₹{(m.totalPaid || 0).toLocaleString()}</TableCell>
                   <TableCell className="text-right pr-6">
@@ -572,6 +611,48 @@ export default function RoundsPage() {
           </Table>
         </div>
       </div>
+
+      <Dialog open={isMemberProfileDialogOpen} onOpenChange={(open) => { if(!isActionPending) setIsMemberProfileDialogOpen(open); if(!open) setSelectedProfileMember(null); }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="size-5 text-primary" />
+              Member Information
+            </DialogTitle>
+          </DialogHeader>
+          {selectedProfileMember && (
+            <div className="space-y-4 py-4">
+              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">Name</span>
+                <span className="font-bold text-sm">{selectedProfileMember.name}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">Phone Number</span>
+                <span className="font-bold text-sm">{selectedProfileMember.phone}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">Group Name</span>
+                <span className="font-bold text-sm text-primary">{currentRound?.name}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">Payment Type</span>
+                <Badge variant="outline" className="font-bold text-[9px] uppercase border-primary/20 bg-primary/5 text-primary">
+                  {selectedProfileMember.paymentType || currentRound?.collectionType}
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">Date of Joining</span>
+                <span className="font-bold text-sm">
+                  {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'MMM dd, yyyy') : '-'}
+                </span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button className="w-full sm:w-auto font-bold uppercase text-[10px] tracking-widest" onClick={() => setIsMemberProfileDialogOpen(false)}>Close Info</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsQuickPaymentDialogOpen(open); if (!open) { setSelectedMemberForPayment(null); setPaymentData(INITIAL_PAYMENT_STATE); } } }}>
         <DialogContent className="sm:max-w-[425px]">
