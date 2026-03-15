@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2 } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -53,7 +53,7 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebas
 import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc } from "firebase/firestore"
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO } from "date-fns"
+import { format, parseISO, isSameMonth } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -178,6 +178,39 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
+  // FEATURE 1: Monthly Collection for each group card
+  const getMonthlyCollectionForScheme = useMemo(() => (schemeName: string) => {
+    if (!payments || !members) return 0;
+    const now = new Date();
+    const schemeMembers = members.filter(m => m.chitGroup === schemeName);
+    const memberIds = new Set(schemeMembers.map(m => m.id));
+    
+    return payments
+      .filter(p => 
+        memberIds.has(p.memberId) && 
+        (p.status === 'paid' || p.status === 'success') &&
+        p.paymentDate && 
+        isSameMonth(parseISO(p.paymentDate), now)
+      )
+      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+  }, [payments, members]);
+
+  // FEATURE 2: Today Collection for selected scheme
+  const todayCollection = useMemo(() => {
+    if (!payments || !assignedMembers.length) return 0;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const assignedMemberIds = new Set(assignedMembers.map(m => m.id));
+
+    return payments
+      .filter(p => 
+        assignedMemberIds.has(p.memberId) && 
+        (p.status === 'paid' || p.status === 'success') &&
+        p.paymentDate && 
+        format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
+      )
+      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+  }, [payments, assignedMembers]);
+
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
   if (!selectedChitId) {
@@ -185,7 +218,7 @@ export default function RoundsPage() {
       <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight">Seat Reservations</h2>
+            <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Seat Reservations</h2>
             <p className="text-sm text-muted-foreground">Manage active fund schemes and seat availability.</p>
           </div>
           <Button className="h-10 sm:h-11 shadow-lg w-full sm:w-auto font-bold" onClick={() => setIsAddChitDialogOpen(true)} disabled={isActionPending}>
@@ -193,42 +226,53 @@ export default function RoundsPage() {
           </Button>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {chitSchemes.map((group) => (
-            <Card key={group.id} className="hover:shadow-md transition-all border-border/50 overflow-hidden flex flex-col">
-              <CardHeader className="bg-muted/20 p-4 space-y-2">
-                <div className="flex justify-between items-start">
-                  <Badge variant="outline" className="text-[10px] font-bold uppercase">{group.collectionType}</Badge>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isActionPending}>
-                        <MoreVertical className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44">
-                      <DropdownMenuItem onSelect={() => { if(!isActionPending) { setEditingChit({...group}); setIsEditChitDialogOpen(true); } }}>
-                        <Pencil className="mr-2 size-3.5" /> Edit Details
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => { if(!isActionPending) { setChitToDelete(group); setIsDeleteDialogOpen(true); } }}>
-                        <Trash2 className="mr-2 size-3.5" /> Delete Scheme
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <CardTitle className="text-lg truncate font-bold">{group.name}</CardTitle>
-                <CardDescription className="text-xs">Capacity: {group.totalMembers} Seats</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 flex-1">
-                <div className="flex justify-between text-xs font-bold">
-                  <span className="text-emerald-600">Amount: ₹{(group.monthlyAmount || 0).toLocaleString()}</span>
-                  <span className="text-muted-foreground">{(members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length} / {group.totalMembers} Filled</span>
-                </div>
-              </CardContent>
-              <CardFooter className="p-0 border-t">
-                <Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Reservation Board</Button>
-              </CardFooter>
-            </Card>
-          ))}
+          {chitSchemes.map((group) => {
+            const monthlyColl = getMonthlyCollectionForScheme(group.name);
+            return (
+              <Card key={group.id} className="hover:shadow-md transition-all border-border/50 overflow-hidden flex flex-col">
+                <CardHeader className="bg-muted/20 p-4 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <Badge variant="outline" className="text-[10px] font-bold uppercase">{group.collectionType}</Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isActionPending}>
+                          <MoreVertical className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onSelect={() => { if(!isActionPending) { setEditingChit({...group}); setIsEditChitDialogOpen(true); } }}>
+                          <Pencil className="mr-2 size-3.5" /> Edit Details
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => { if(!isActionPending) { setChitToDelete(group); setIsDeleteDialogOpen(true); } }}>
+                          <Trash2 className="mr-2 size-3.5" /> Delete Scheme
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <CardTitle className="text-lg truncate font-bold">{group.name}</CardTitle>
+                  <CardDescription className="text-xs">Capacity: {group.totalMembers} Seats</CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 flex-1 space-y-3">
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-primary/70">Scheme Amount:</span>
+                    <span className="text-primary font-bold">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-primary/70">Occupancy:</span>
+                    <span className="text-foreground">{(members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length} / {group.totalMembers}</span>
+                  </div>
+                  <div className="pt-2 border-t flex justify-between items-center">
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Monthly Collection</span>
+                    <span className="text-sm font-bold text-emerald-600">₹{monthlyColl.toLocaleString()}</span>
+                  </div>
+                </CardContent>
+                <CardFooter className="p-0 border-t">
+                  <Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Reservation Board</Button>
+                </CardFooter>
+              </Card>
+            )
+          })}
         </div>
 
         <Dialog open={isAddChitDialogOpen} onOpenChange={(o) => { if (!isActionPending) { setIsAddChitDialogOpen(o); if (!o) setNewChit(INITIAL_CHIT_STATE); } }}>
@@ -313,14 +357,26 @@ export default function RoundsPage() {
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-9 w-9" disabled={isActionPending}><ChevronLeft className="size-5" /></Button>
         <div className="min-w-0">
-          <h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight">{currentRound?.name}</h2>
+          <h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight text-primary">{currentRound?.name}</h2>
           <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Reservation Dashboard</p>
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-primary/40"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Seats Filled</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-emerald-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Scheme Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-emerald-600">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
+        
+        {/* FEATURE 2: Today Collection card */}
+        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-emerald-50/30">
+          <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Today Collection</CardTitle>
+            <CalendarDays className="size-3 text-emerald-600 opacity-60" />
+          </CardHeader>
+          <CardContent className="p-3 pt-0">
+            <div className="text-lg font-bold text-emerald-600">₹{todayCollection.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-l-4 border-l-amber-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Scheme Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-amber-600">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
       </div>
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <div className="p-4 border-b bg-muted/20 flex justify-between items-center"><h3 className="text-sm font-bold flex items-center gap-2 tracking-tight"><Users className="size-4 text-primary" /> Active Board</h3><Badge variant="secondary" className="text-[10px] tabular-nums font-bold uppercase tracking-tight">{assignedMembers.length} Joined</Badge></div>
