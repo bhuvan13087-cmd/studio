@@ -366,7 +366,7 @@ export default function RoundsPage() {
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Seats Filled</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
         
         {/* FEATURE 2: Today Collection card */}
-        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-emerald-50/30">
+        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-white">
           <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Today Collection</CardTitle>
             <CalendarDays className="size-3 text-emerald-600 opacity-60" />
