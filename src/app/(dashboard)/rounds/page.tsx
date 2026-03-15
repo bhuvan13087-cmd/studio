@@ -54,7 +54,7 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebas
 import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc } from "firebase/firestore"
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth } from "date-fns"
+import { format, parseISO, isSameMonth, differenceInCalendarDays, startOfDay } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -127,6 +127,34 @@ export default function RoundsPage() {
 
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
+
+  // Calculation logic for pending payments
+  const calculatedAmount = useMemo(() => {
+    if (!selectedMemberForPayment || !currentRound || !payments) return 0;
+    
+    // Find the last successful payment for this member
+    const memberPayments = (payments || [])
+      .filter(p => p.memberId === selectedMemberForPayment.id && (p.status === 'paid' || p.status === 'success'))
+      .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
+
+    const baseAmount = Number(currentRound.monthlyAmount) || 0;
+    const today = startOfDay(new Date());
+    
+    let lastDate: Date;
+    if (memberPayments.length > 0 && memberPayments[0].paymentDate) {
+      lastDate = startOfDay(parseISO(memberPayments[0].paymentDate));
+    } else if (selectedMemberForPayment.joinDate) {
+      lastDate = startOfDay(parseISO(selectedMemberForPayment.joinDate));
+    } else {
+      return baseAmount;
+    }
+
+    const diff = differenceInCalendarDays(today, lastDate);
+    // Logic: if paid yesterday (diff=1), amount=base. if missed yesterday (diff=2), amount=base*2.
+    const pendingDays = diff <= 0 ? 1 : diff;
+    
+    return baseAmount * pendingDays;
+  }, [selectedMemberForPayment, currentRound, payments]);
 
   useEffect(() => {
     if (isAddMemberDialogOpen && currentRound) {
@@ -221,7 +249,7 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
     setIsActionPending(true);
-    const amount = Number(currentRound.monthlyAmount);
+    const amount = calculatedAmount; // Use the calculated amount
     const currentMonth = format(new Date(), 'MMMM yyyy');
 
     try {
@@ -819,7 +847,7 @@ export default function RoundsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>
-                  <Input value={currentRound?.monthlyAmount || 0} readOnly className="bg-muted font-bold text-emerald-600" />
+                  <Input value={calculatedAmount || 0} readOnly className="bg-muted font-bold text-emerald-600" />
                 </div>
                 <div className="grid gap-2">
                   <Label>Payment Method</Label>
