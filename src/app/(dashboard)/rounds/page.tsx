@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -128,9 +128,9 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Calculation logic for pending payments
-  const calculatedAmount = useMemo(() => {
-    if (!selectedMemberForPayment || !currentRound || !payments) return 0;
+  // Calculation logic for pending payments and missed days
+  const paymentCalculation = useMemo(() => {
+    if (!selectedMemberForPayment || !currentRound || !payments) return { amount: 0, pendingDays: 1 };
     
     // Find the last successful payment for this member
     const memberPayments = (payments || [])
@@ -146,14 +146,16 @@ export default function RoundsPage() {
     } else if (selectedMemberForPayment.joinDate) {
       lastDate = startOfDay(parseISO(selectedMemberForPayment.joinDate));
     } else {
-      return baseAmount;
+      return { amount: baseAmount, pendingDays: 1 };
     }
 
     const diff = differenceInCalendarDays(today, lastDate);
-    // Logic: if paid yesterday (diff=1), amount=base. if missed yesterday (diff=2), amount=base*2.
     const pendingDays = diff <= 0 ? 1 : diff;
     
-    return baseAmount * pendingDays;
+    return {
+      amount: baseAmount * pendingDays,
+      pendingDays: pendingDays
+    };
   }, [selectedMemberForPayment, currentRound, payments]);
 
   useEffect(() => {
@@ -249,7 +251,7 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
     setIsActionPending(true);
-    const amount = calculatedAmount; // Use the calculated amount
+    const amount = paymentCalculation.amount;
     const currentMonth = format(new Date(), 'MMMM yyyy');
 
     try {
@@ -845,9 +847,20 @@ export default function RoundsPage() {
                   <Label>Group / Scheme</Label>
                   <Input value={currentRound?.name || ""} readOnly className="bg-muted font-bold" />
                 </div>
+                
+                {/* Pending Day Indication Option */}
+                {paymentCalculation.pendingDays >= 2 && (
+                  <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in slide-in-from-top-1 duration-300">
+                    <Clock className="size-4 text-amber-600" />
+                    <span className="text-xs font-bold text-amber-700">
+                      Pending: Day {paymentCalculation.pendingDays - 1}
+                    </span>
+                  </div>
+                )}
+
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>
-                  <Input value={calculatedAmount || 0} readOnly className="bg-muted font-bold text-emerald-600" />
+                  <Input value={paymentCalculation.amount || 0} readOnly className="bg-muted font-bold text-emerald-600" />
                 </div>
                 <div className="grid gap-2">
                   <Label>Payment Method</Label>
@@ -904,3 +917,4 @@ export default function RoundsPage() {
     </div>
   )
 }
+    
