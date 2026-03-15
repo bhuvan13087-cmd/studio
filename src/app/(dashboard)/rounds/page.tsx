@@ -642,7 +642,7 @@ export default function RoundsPage() {
                       }}
                     >
                       <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px] group-hover:bg-primary group-hover:text-white transition-colors">
-                        {m.name[0]}
+                        {m.name.split(' ').map((n: string) => n[0]).join('')}
                       </div>
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
@@ -698,75 +698,79 @@ export default function RoundsPage() {
           }
         }
       }}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[450px] overflow-hidden">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
-                {selectedProfileMember?.name?.[0]}
+            <DialogTitle className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shadow-sm">
+                {selectedProfileMember?.name?.split(' ').map((n: string) => n[0]).join('')}
               </div>
-              {isEditingProfile ? "Edit Member Profile" : "Member Information"}
+              <span className="font-headline tracking-tight">
+                {isEditingProfile ? "Update Member Profile" : "Member Information"}
+              </span>
             </DialogTitle>
           </DialogHeader>
 
           {selectedProfileMember && !isEditingProfile ? (
-            <div className="space-y-4 py-4">
-              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-[10px] font-bold uppercase text-muted-foreground">Name</span>
-                <span className="font-bold text-sm">{selectedProfileMember.name}</span>
+            <div className="space-y-0 py-2">
+              <div className="flex justify-between items-center p-3 border-b hover:bg-muted/30 transition-colors">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Name</span>
+                <span className="font-bold text-sm text-foreground">{selectedProfileMember.name}</span>
               </div>
-              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-[10px] font-bold uppercase text-muted-foreground">Phone Number</span>
-                <span className="font-bold text-sm">{selectedProfileMember.phone}</span>
+              <div className="flex justify-between items-center p-3 border-b hover:bg-muted/30 transition-colors">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Phone Number</span>
+                <span className="font-bold text-sm text-foreground tabular-nums">{selectedProfileMember.phone}</span>
               </div>
-              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-[10px] font-bold uppercase text-muted-foreground">Group Name</span>
+              <div className="flex justify-between items-center p-3 border-b hover:bg-muted/30 transition-colors">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Group Name</span>
                 <span className="font-bold text-sm text-primary">{currentRound?.name}</span>
               </div>
-              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-[10px] font-bold uppercase text-muted-foreground">Payment Type</span>
-                <Badge variant="outline" className="font-bold text-[9px] uppercase border-primary/20 bg-primary/5 text-primary">
+              <div className="flex justify-between items-center p-3 border-b hover:bg-muted/30 transition-colors">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Payment Type</span>
+                <Badge variant="outline" className="font-bold text-[9px] uppercase border-primary/20 bg-primary/5 text-primary py-0.5">
                   {selectedProfileMember.paymentType || currentRound?.collectionType}
                 </Badge>
               </div>
-              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-[10px] font-bold uppercase text-muted-foreground">Date of Joining</span>
-                <span className="font-bold text-sm">
+              <div className="flex justify-between items-center p-3 border-b hover:bg-muted/30 transition-colors">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Joining Date</span>
+                <span className="font-bold text-sm text-foreground">
                   {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'MMM dd, yyyy') : '-'}
                 </span>
               </div>
-              <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
-                <span className="text-[10px] font-bold uppercase text-emerald-600">Total Contribution</span>
-                <span className="font-bold text-base text-emerald-700 tabular-nums">₹{(selectedProfileMember.totalPaid || 0).toLocaleString()}</span>
+              <div className="flex justify-between items-center p-4 mt-2 bg-emerald-50 rounded-xl border border-emerald-100">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Total Contribution</span>
+                <span className="font-bold text-lg text-emerald-700 tabular-nums">₹{(selectedProfileMember.totalPaid || 0).toLocaleString()}</span>
               </div>
             </div>
           ) : selectedProfileMember && isEditingProfile ? (
             <form onSubmit={handleSaveMemberEdit} className="space-y-4 py-4">
               <div className="grid gap-2">
-                <Label>Member Name</Label>
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Member Name</Label>
                 <Input 
                   value={editFormData?.name || ""} 
                   onChange={e => setEditFormData({ ...editFormData, name: e.target.value })} 
                   required 
                   disabled={isActionPending}
+                  className="h-10"
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Phone Number</Label>
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
                 <Input 
                   value={editFormData?.phone || ""} 
                   onChange={e => setEditFormData({ ...editFormData, phone: e.target.value })} 
                   required 
                   disabled={isActionPending}
+                  className="h-10"
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Payment Type</Label>
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Type</Label>
                 <Select 
                   value={editFormData?.paymentType || ""} 
                   onValueChange={v => setEditFormData({ ...editFormData, paymentType: v })}
                   disabled={isActionPending}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Daily">Daily</SelectItem>
                     <SelectItem value="Monthly">Monthly</SelectItem>
@@ -774,28 +778,29 @@ export default function RoundsPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Joining Date</Label>
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Joining Date</Label>
                 <Input 
                   type="date" 
                   value={editFormData?.joinDate || ""} 
                   onChange={e => setEditFormData({ ...editFormData, joinDate: e.target.value })} 
                   required 
                   disabled={isActionPending}
+                  className="h-10"
                 />
               </div>
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-700 font-medium leading-relaxed">
-                <Info className="size-3 inline mr-1 -mt-0.5" />
-                Note: Editing these details will not affect existing payment records or transaction history.
+                <Info className="size-3 inline mr-2 -mt-0.5" />
+                Updating these fields will only change profile data. Existing payment history remains secure and unchanged.
               </div>
             </form>
           ) : null}
 
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2 border-t mt-2">
             {!isEditingProfile ? (
               <>
                 <Button 
                   variant="outline" 
-                  className="w-full sm:w-auto font-bold gap-2" 
+                  className="w-full sm:w-auto font-bold gap-2 h-10 px-6 uppercase text-[10px] tracking-widest" 
                   onClick={() => {
                     setEditFormData({
                       name: selectedProfileMember.name,
@@ -810,7 +815,7 @@ export default function RoundsPage() {
                   <Pencil className="size-4" /> Edit Profile
                 </Button>
                 <Button 
-                  className="w-full sm:w-auto font-bold" 
+                  className="w-full sm:w-auto font-bold h-10 px-6 uppercase text-[10px] tracking-widest" 
                   onClick={() => setIsMemberProfileDialogOpen(false)}
                   disabled={isActionPending}
                 >
@@ -821,14 +826,14 @@ export default function RoundsPage() {
               <>
                 <Button 
                   variant="outline" 
-                  className="w-full sm:w-auto font-bold gap-2" 
+                  className="w-full sm:w-auto font-bold gap-2 h-10 px-6 uppercase text-[10px] tracking-widest" 
                   onClick={() => setIsEditingProfile(false)}
                   disabled={isActionPending}
                 >
                   <X className="size-4" /> Cancel
                 </Button>
                 <Button 
-                  className="w-full sm:w-auto font-bold gap-2" 
+                  className="w-full sm:w-auto font-bold gap-2 h-10 px-6 uppercase text-[10px] tracking-widest" 
                   onClick={handleSaveMemberEdit}
                   disabled={isActionPending}
                 >
