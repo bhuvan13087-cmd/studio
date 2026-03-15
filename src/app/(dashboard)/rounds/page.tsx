@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -74,7 +74,8 @@ const INITIAL_MEMBER_STATE = {
 }
 
 const INITIAL_PAYMENT_STATE = {
-  method: "Cash"
+  method: "Cash",
+  amount: 0
 }
 
 export default function RoundsPage() {
@@ -128,11 +129,10 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Calculation logic for pending payments and missed days
+  // Smart Calculation logic for suggested payments and missed days
   const paymentCalculation = useMemo(() => {
-    if (!selectedMemberForPayment || !currentRound || !payments) return { amount: 0, pendingDays: 1 };
+    if (!selectedMemberForPayment || !currentRound || !payments) return { suggestedAmount: 0, pendingDays: 0, missedDays: 0 };
     
-    // Find the last successful payment for this member
     const memberPayments = (payments || [])
       .filter(p => p.memberId === selectedMemberForPayment.id && (p.status === 'paid' || p.status === 'success'))
       .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
@@ -146,17 +146,29 @@ export default function RoundsPage() {
     } else if (selectedMemberForPayment.joinDate) {
       lastDate = startOfDay(parseISO(selectedMemberForPayment.joinDate));
     } else {
-      return { amount: baseAmount, pendingDays: 1 };
+      return { suggestedAmount: baseAmount, pendingDays: 1, missedDays: 0 };
     }
 
     const diff = differenceInCalendarDays(today, lastDate);
     const pendingDays = diff <= 0 ? 1 : diff;
+    const missedDays = pendingDays > 1 ? pendingDays - 1 : 0;
     
     return {
-      amount: baseAmount * pendingDays,
-      pendingDays: pendingDays
+      suggestedAmount: baseAmount * pendingDays,
+      pendingDays: pendingDays,
+      missedDays: missedDays
     };
   }, [selectedMemberForPayment, currentRound, payments]);
+
+  // Auto-fill effect when payment dialog opens
+  useEffect(() => {
+    if (isQuickPaymentDialogOpen && selectedMemberForPayment && paymentCalculation) {
+      setPaymentData(prev => ({ 
+        ...prev, 
+        amount: paymentCalculation.suggestedAmount 
+      }));
+    }
+  }, [isQuickPaymentDialogOpen, selectedMemberForPayment, paymentCalculation]);
 
   useEffect(() => {
     if (isAddMemberDialogOpen && currentRound) {
@@ -251,7 +263,7 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
     setIsActionPending(true);
-    const amount = paymentCalculation.amount;
+    const amountToSave = Number(paymentData.amount);
     const currentMonth = format(new Date(), 'MMMM yyyy');
 
     try {
@@ -259,7 +271,7 @@ export default function RoundsPage() {
         memberId: selectedMemberForPayment.id,
         memberName: selectedMemberForPayment.name,
         month: currentMonth,
-        amountPaid: amount,
+        amountPaid: amountToSave,
         paymentDate: new Date().toISOString(),
         status: "paid",
         method: paymentData.method,
@@ -269,15 +281,15 @@ export default function RoundsPage() {
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       await withTimeout(updateDoc(memberRef, {
         paymentStatus: "success",
-        totalPaid: (selectedMemberForPayment.totalPaid || 0) + amount
+        totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave
       }));
 
-      await createAuditLog(db, user, `Recorded Quick Payment ₹${amount} for ${selectedMemberForPayment.name} (${currentRound.name})`);
+      await createAuditLog(db, user, `Recorded Quick Payment ₹${amountToSave} for ${selectedMemberForPayment.name} (${currentRound.name})`);
 
       setIsQuickPaymentDialogOpen(false);
       setSelectedMemberForPayment(null);
       setPaymentData(INITIAL_PAYMENT_STATE);
-      toast({ title: "Payment Recorded", description: `Success! ₹${amount} saved for ${selectedMemberForPayment.name}.` });
+      toast({ title: "Payment Recorded", description: `Success! ₹${amountToSave} saved for ${selectedMemberForPayment.name}.` });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
@@ -848,19 +860,31 @@ export default function RoundsPage() {
                   <Input value={currentRound?.name || ""} readOnly className="bg-muted font-bold" />
                 </div>
                 
-                {/* Pending Day Indication Option */}
-                {paymentCalculation.pendingDays >= 2 && (
+                {/* Pending Day Indication Indicator */}
+                {paymentCalculation.missedDays >= 1 && (
                   <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in slide-in-from-top-1 duration-300">
                     <Clock className="size-4 text-amber-600" />
                     <span className="text-xs font-bold text-amber-700">
-                      Pending: Day {paymentCalculation.pendingDays - 1}
+                      Pending: Day {paymentCalculation.missedDays}
                     </span>
                   </div>
                 )}
 
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>
-                  <Input value={paymentCalculation.amount || 0} readOnly className="bg-muted font-bold text-emerald-600" />
+                  <Input 
+                    type="number"
+                    value={paymentData.amount || ""} 
+                    onChange={e => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
+                    className="font-bold text-emerald-600" 
+                    placeholder="Enter amount"
+                    disabled={isActionPending}
+                  />
+                  {paymentCalculation.pendingDays > 1 && (
+                    <p className="text-[10px] text-muted-foreground font-medium italic">
+                      Suggested: ₹{(Number(currentRound?.monthlyAmount) * paymentCalculation.pendingDays).toLocaleString()} (₹{currentRound?.monthlyAmount} × {paymentCalculation.pendingDays} days)
+                    </p>
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <Label>Payment Method</Label>
