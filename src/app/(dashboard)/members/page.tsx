@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, UserPlus, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon, ChevronDown } from "lucide-react"
+import { Search, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -55,20 +55,10 @@ import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "da
 import { createAuditLog } from "@/firebase/logging"
 import { withTimeout } from "@/lib/utils"
 
-const INITIAL_MEMBER_STATE = {
-  name: "",
-  phone: "",
-  monthlyAmount: 0,
-  joinDate: new Date().toISOString().split('T')[0],
-  status: "active",
-  chitGroup: ""
-}
-
 const PAGE_SIZE = 50
 
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditMemberDialogOpen, setIsEditMemberDialogOpen] = useState(false)
   const [selectedMember, setSelectedMember] = useState<any>(null)
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
@@ -93,8 +83,6 @@ export default function MembersPage() {
 
   const chitRoundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: chitRounds } = useCollection(chitRoundsQuery);
-
-  const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
 
   // Recovery effect to ensure UI isn't locked after dialogs close
   useEffect(() => {
@@ -126,34 +114,6 @@ export default function MembersPage() {
     });
     return paidMap;
   }, [payments]);
-
-  const handleAddMember = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!db || isActionPending) return;
-    
-    setIsActionPending(true)
-    try {
-      await withTimeout(addDocumentNonBlocking(collection(db, 'members'), {
-        ...newMember,
-        monthlyAmount: Number(newMember.monthlyAmount),
-        createdAt: serverTimestamp(),
-        paymentStatus: "pending",
-        totalPaid: 0,
-        pendingAmount: 0,
-        status: "active"
-      }));
-      
-      await createAuditLog(db, user, `Registered new member: ${newMember.name}`);
-      
-      setIsAddDialogOpen(false)
-      setNewMember(INITIAL_MEMBER_STATE)
-      toast({ title: "Member Added", description: `${newMember.name} registered successfully.` })
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to add member." })
-    } finally {
-      setIsActionPending(false)
-    }
-  }
 
   const handleUpdateMember = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -233,58 +193,6 @@ export default function MembersPage() {
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Member Directory</h2>
           <p className="text-sm sm:text-base text-muted-foreground">Manage participants and seat reservations.</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={(open) => { 
-          if (!isActionPending) {
-            setIsAddDialogOpen(open); 
-            if (!open) setNewMember(INITIAL_MEMBER_STATE);
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg hover:shadow-xl transition-all font-bold" disabled={isActionPending}>
-              <UserPlus className="mr-2 size-4 sm:size-5" />
-              Add Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <form onSubmit={handleAddMember}>
-              <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Enter member details and assign to a reservation scheme.</DialogDescription></DialogHeader>
-              <div className="grid gap-4 py-6">
-                <div className="grid gap-2"><Label htmlFor="name">Full Name</Label><Input id="name" value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required disabled={isActionPending} /></div>
-                <div className="grid gap-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required disabled={isActionPending} /></div>
-                <div className="grid gap-2">
-                  <Label htmlFor="chitGroup">Assigned Scheme</Label>
-                  <Select 
-                    disabled={isActionPending} 
-                    value={newMember.chitGroup} 
-                    onValueChange={(v) => {
-                      const scheme = chitRounds?.find((r: any) => r.name === v);
-                      setNewMember({
-                        ...newMember, 
-                        chitGroup: v,
-                        monthlyAmount: scheme?.monthlyAmount || 0
-                      });
-                    }}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Select scheme" /></SelectTrigger>
-                    <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label>Amount (₹)</Label>
-                  <Input type="number" value={newMember.monthlyAmount || ""} readOnly className="bg-muted font-bold text-primary" required disabled={isActionPending} />
-                </div>
-                <div className="grid gap-2"><Label htmlFor="joinDate">Join Date</Label><Input id="joinDate" type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required disabled={isActionPending} /></div>
-              </div>
-              <DialogFooter className="flex-col sm:flex-row gap-2">
-                <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
-                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
-                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  Register Member
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
 
       <div className="flex items-center space-x-2 bg-card p-3 sm:p-4 rounded-xl shadow-sm border border-border/50">

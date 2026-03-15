@@ -63,7 +63,6 @@ export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [historyMember, setHistoryMember] = useState<any>(null)
-  const [isQuickRecordOpen, setIsQuickRecordOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isDeletePaymentDialogOpen, setIsDeletePaymentDialogOpen] = useState(false)
   const [paymentToDelete, setPaymentToDelete] = useState<any>(null)
@@ -71,10 +70,6 @@ export default function PaymentsPage() {
   const [historyLimit, setHistoryLimit] = useState(PAGE_SIZE)
   const [summaryLimit, setSummaryLimit] = useState(PAGE_SIZE)
   
-  const [memberSearch, setMemberSearch] = useState("")
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const suggestionsRef = useRef<HTMLDivElement>(null)
-
   const [selectedAuditMember, setSelectedAuditMember] = useState<any>(null)
   const [isAuditProfileOpen, setIsAuditProfileOpen] = useState(false)
 
@@ -98,19 +93,7 @@ export default function PaymentsPage() {
   const locksQuery = useMemoFirebase(() => collection(db, 'monthLocks'), [db]);
   const { data: monthLocks } = useCollection(locksQuery);
 
-  const [recordData, setRecordData] = useState({ 
-    memberId: "", 
-    amount: 0, 
-    month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), 
-    method: "Cash" 
-  })
-
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) setShowSuggestions(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-
     // Recovery effect to ensure UI isn't locked after dialogs close
     const recoveryInterval = setInterval(() => {
       if (document.body.style.pointerEvents === 'none') {
@@ -120,77 +103,9 @@ export default function PaymentsPage() {
     }, 1000)
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
       clearInterval(recoveryInterval)
     }
   }, []);
-
-  const isCurrentMonthLocked = useMemo(() => {
-    if (!monthLocks) return false;
-    const [monthName, yearStr] = recordData.month.split(' ');
-    return monthLocks.some(l => l.year === yearStr && l.monthName === monthName);
-  }, [monthLocks, recordData.month]);
-
-  const filteredMembersForSelection = useMemo(() => {
-    if (!memberSearch) return [];
-    return members.filter(m => m.status !== 'inactive' && m.name.toLowerCase().includes(memberSearch.toLowerCase()));
-  }, [members, memberSearch]);
-
-  const handleMemberSelect = (member: any) => {
-    setRecordData({ ...recordData, memberId: member.id, amount: member.monthlyAmount || 0 });
-    setMemberSearch(member.name);
-    setShowSuggestions(false);
-  }
-
-  const handleQuickRecord = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!db || isActionPending || !recordData.memberId) return;
-    
-    if (isCurrentMonthLocked) {
-      toast({ variant: "destructive", title: "Locked", description: "This month is locked. No new payments allowed." });
-      return;
-    }
-
-    const member = members.find(m => m.id === recordData.memberId);
-    if (!member) return;
-
-    setIsActionPending(true)
-    const amount = Number(recordData.amount);
-    try {
-      await withTimeout(addDocumentNonBlocking(collection(db, 'payments'), { 
-        memberId: member.id, 
-        memberName: member.name, 
-        month: recordData.month, 
-        amountPaid: amount, 
-        paymentDate: new Date().toISOString(), 
-        status: "paid", 
-        method: recordData.method || "Cash", 
-        createdAt: serverTimestamp() 
-      }));
-
-      const memberRef = doc(db, 'members', member.id);
-      await withTimeout(updateDoc(memberRef, { 
-        paymentStatus: "success", 
-        totalPaid: (member.totalPaid || 0) + amount 
-      }));
-      
-      await createAuditLog(db, user, `Recorded Payment ₹${amount} for ${member.name}`);
-      
-      setIsQuickRecordOpen(false);
-      setRecordData({ 
-        memberId: "", 
-        amount: 0, 
-        month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), 
-        method: "Cash" 
-      });
-      setMemberSearch("");
-      toast({ title: "Payment Recorded", description: `Amount ₹${amount} saved for ${member.name}.` });
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to record payment." })
-    } finally { 
-      setIsActionPending(false);
-    }
-  }
 
   const handleDeletePayment = async () => {
     if (!db || !paymentToDelete || isActionPending) return;
@@ -295,69 +210,6 @@ export default function PaymentsPage() {
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Financial Ledger</h2>
           <p className="text-sm sm:text-base text-muted-foreground">Manage and track all seat reservation transactions.</p>
         </div>
-        <Dialog open={isQuickRecordOpen} onOpenChange={(open) => { 
-          if (!isActionPending) {
-            setIsQuickRecordOpen(open); 
-            if (!open) { 
-              setMemberSearch(""); 
-              setShowSuggestions(false); 
-              setRecordData({ 
-                memberId: "", 
-                amount: 0, 
-                month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }), 
-                method: "Cash" 
-              });
-            }
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button className="h-10 sm:h-11 w-full sm:w-auto px-6 shadow-lg font-bold" disabled={isActionPending}>
-              <Plus className="mr-2 size-4 sm:size-5" /> Add Payment
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <form onSubmit={handleQuickRecord}>
-              <DialogHeader><DialogTitle>Record Payment</DialogTitle><DialogDescription>Manual entry for active member contributions.</DialogDescription></DialogHeader>
-              <div className="grid gap-4 py-6">
-                {isCurrentMonthLocked && (
-                  <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-center gap-2 text-amber-800 text-xs font-bold">
-                    <Lock className="size-4" /> This month is locked for financial entry.
-                  </div>
-                )}
-                <div className="grid gap-2 relative">
-                  <Label>Search Active Member</Label>
-                  <div className="relative" ref={suggestionsRef}>
-                    <Input placeholder="Type member name..." value={memberSearch} onChange={(e) => { setMemberSearch(e.target.value); setShowSuggestions(true); }} autoComplete="off" disabled={isActionPending || isCurrentMonthLocked} />
-                    {showSuggestions && memberSearch.length > 0 && (
-                      <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg overflow-hidden">
-                        <ScrollArea className="h-[150px]">
-                          <div className="p-1">{filteredMembersForSelection.length > 0 ? filteredMembersForSelection.map((m) => (<Button key={m.id} type="button" variant="ghost" className="w-full justify-start font-normal h-9 px-3 text-xs" onClick={() => handleMemberSelect(m)}>{m.name} ({m.chitGroup})</Button>)) : <div className="p-3 text-center text-xs text-muted-foreground">No active member found.</div>}</div>
-                        </ScrollArea>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label>Contribution Amount (₹)</Label>
-                  <Input value={recordData.amount || ""} readOnly className="bg-muted font-bold text-primary" />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Method</Label>
-                  <Select disabled={isActionPending || isCurrentMonthLocked} value={recordData.method} onValueChange={(v) => setRecordData({...recordData, method: v})}>
-                    <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
-                    <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="UPI">UPI</SelectItem><SelectItem value="Bank Transfer">Bank Transfer</SelectItem></SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter className="flex-col sm:flex-row gap-2">
-                <Button type="button" variant="outline" onClick={() => setIsQuickRecordOpen(false)} className="w-full sm:w-auto">Cancel</Button>
-                <Button type="submit" disabled={isActionPending || !recordData.memberId || isCurrentMonthLocked} className="w-full sm:w-auto font-bold">
-                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null} Save Payment
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
 
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 bg-card p-3 sm:p-4 rounded-xl shadow-sm border border-border/50">
