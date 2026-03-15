@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CreditCard, CheckCircle2, User, Info } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -86,6 +86,7 @@ export default function RoundsPage() {
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false)
   const [isQuickPaymentDialogOpen, setIsQuickPaymentDialogOpen] = useState(false)
   const [isMemberProfileDialogOpen, setIsMemberProfileDialogOpen] = useState(false)
+  const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
   
   const [editingChit, setEditingChit] = useState<any>(null)
@@ -93,6 +94,7 @@ export default function RoundsPage() {
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [selectedMemberForPayment, setSelectedMemberForPayment] = useState<any>(null)
   const [selectedProfileMember, setSelectedProfileMember] = useState<any>(null)
+  const [editFormData, setEditFormData] = useState<any>(null)
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
   const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
   
@@ -113,7 +115,6 @@ export default function RoundsPage() {
 
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
 
-  // Recovery effect to ensure UI isn't locked after dialogs close
   useEffect(() => {
     const recoveryInterval = setInterval(() => {
       if (document.body.style.pointerEvents === 'none') {
@@ -127,7 +128,6 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Automatically set default payment type when opening Add Member dialog
   useEffect(() => {
     if (isAddMemberDialogOpen && currentRound) {
       setNewMember(prev => ({ ...prev, paymentType: currentRound.collectionType }));
@@ -185,6 +185,32 @@ export default function RoundsPage() {
       toast({ title: "Member Registered", description: `${newMember.name} joined ${currentRound.name}.` });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to register member." });
+    } finally {
+      setIsActionPending(false);
+    }
+  }
+
+  const handleSaveMemberEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !selectedProfileMember || !editFormData || isActionPending) return;
+
+    setIsActionPending(true);
+    try {
+      const memberRef = doc(db, 'members', selectedProfileMember.id);
+      await withTimeout(updateDoc(memberRef, {
+        name: editFormData.name,
+        phone: editFormData.phone,
+        paymentType: editFormData.paymentType,
+        joinDate: editFormData.joinDate
+      }));
+
+      await createAuditLog(db, user, `Updated profile for member: ${editFormData.name}`);
+      
+      toast({ title: "Profile Updated", description: "Member details have been saved." });
+      setIsEditingProfile(false);
+      setSelectedProfileMember({ ...selectedProfileMember, ...editFormData });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update profile." });
     } finally {
       setIsActionPending(false);
     }
@@ -546,6 +572,7 @@ export default function RoundsPage() {
 
         <Card className="shadow-sm border-l-4 border-l-amber-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Scheme Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-amber-600">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
       </div>
+
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <div className="p-4 border-b bg-muted/20 flex justify-between items-center"><h3 className="text-sm font-bold flex items-center gap-2 tracking-tight"><Users className="size-4 text-primary" /> Active Board</h3><Badge variant="secondary" className="text-[10px] tabular-nums font-bold uppercase tracking-tight">{assignedMembers.length} Joined</Badge></div>
         <div className="overflow-x-auto">
@@ -564,7 +591,13 @@ export default function RoundsPage() {
                   <TableCell className="pl-6">
                     <div 
                       className="flex items-center gap-2 cursor-pointer group" 
-                      onClick={() => { if(!isActionPending) { setSelectedProfileMember(m); setIsMemberProfileDialogOpen(true); } }}
+                      onClick={() => { 
+                        if(!isActionPending) { 
+                          setSelectedProfileMember(m); 
+                          setIsEditingProfile(false);
+                          setIsMemberProfileDialogOpen(true); 
+                        } 
+                      }}
                     >
                       <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px] group-hover:bg-primary group-hover:text-white transition-colors">
                         {m.name[0]}
@@ -612,15 +645,28 @@ export default function RoundsPage() {
         </div>
       </div>
 
-      <Dialog open={isMemberProfileDialogOpen} onOpenChange={(open) => { if(!isActionPending) setIsMemberProfileDialogOpen(open); if(!open) setSelectedProfileMember(null); }}>
-        <DialogContent className="sm:max-w-[400px]">
+      {/* Member Profile & Edit Dialog */}
+      <Dialog open={isMemberProfileDialogOpen} onOpenChange={(open) => { 
+        if(!isActionPending) {
+          setIsMemberProfileDialogOpen(open); 
+          if(!open) {
+            setSelectedProfileMember(null);
+            setIsEditingProfile(false);
+            setEditFormData(null);
+          }
+        }
+      }}>
+        <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <User className="size-5 text-primary" />
-              Member Information
+              <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                {selectedProfileMember?.name?.[0]}
+              </div>
+              {isEditingProfile ? "Edit Member Profile" : "Member Information"}
             </DialogTitle>
           </DialogHeader>
-          {selectedProfileMember && (
+
+          {selectedProfileMember && !isEditingProfile ? (
             <div className="space-y-4 py-4">
               <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
                 <span className="text-[10px] font-bold uppercase text-muted-foreground">Name</span>
@@ -646,14 +692,114 @@ export default function RoundsPage() {
                   {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'MMM dd, yyyy') : '-'}
                 </span>
               </div>
+              <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
+                <span className="text-[10px] font-bold uppercase text-emerald-600">Total Contribution</span>
+                <span className="font-bold text-base text-emerald-700 tabular-nums">₹{(selectedProfileMember.totalPaid || 0).toLocaleString()}</span>
+              </div>
             </div>
-          )}
-          <DialogFooter>
-            <Button className="w-full sm:w-auto font-bold uppercase text-[10px] tracking-widest" onClick={() => setIsMemberProfileDialogOpen(false)}>Close Info</Button>
+          ) : selectedProfileMember && isEditingProfile ? (
+            <form onSubmit={handleSaveMemberEdit} className="space-y-4 py-4">
+              <div className="grid gap-2">
+                <Label>Member Name</Label>
+                <Input 
+                  value={editFormData?.name || ""} 
+                  onChange={e => setEditFormData({ ...editFormData, name: e.target.value })} 
+                  required 
+                  disabled={isActionPending}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Phone Number</Label>
+                <Input 
+                  value={editFormData?.phone || ""} 
+                  onChange={e => setEditFormData({ ...editFormData, phone: e.target.value })} 
+                  required 
+                  disabled={isActionPending}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Payment Type</Label>
+                <Select 
+                  value={editFormData?.paymentType || ""} 
+                  onValueChange={v => setEditFormData({ ...editFormData, paymentType: v })}
+                  disabled={isActionPending}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Daily">Daily</SelectItem>
+                    <SelectItem value="Monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Joining Date</Label>
+                <Input 
+                  type="date" 
+                  value={editFormData?.joinDate || ""} 
+                  onChange={e => setEditFormData({ ...editFormData, joinDate: e.target.value })} 
+                  required 
+                  disabled={isActionPending}
+                />
+              </div>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-700 font-medium leading-relaxed">
+                <Info className="size-3 inline mr-1 -mt-0.5" />
+                Note: Editing these details will not affect existing payment records or transaction history.
+              </div>
+            </form>
+          ) : null}
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            {!isEditingProfile ? (
+              <>
+                <Button 
+                  variant="outline" 
+                  className="w-full sm:w-auto font-bold gap-2" 
+                  onClick={() => {
+                    setEditFormData({
+                      name: selectedProfileMember.name,
+                      phone: selectedProfileMember.phone,
+                      paymentType: selectedProfileMember.paymentType || currentRound?.collectionType,
+                      joinDate: selectedProfileMember.joinDate
+                    });
+                    setIsEditingProfile(true);
+                  }}
+                  disabled={isActionPending}
+                >
+                  <Pencil className="size-4" /> Edit Profile
+                </Button>
+                <Button 
+                  className="w-full sm:w-auto font-bold" 
+                  onClick={() => setIsMemberProfileDialogOpen(false)}
+                  disabled={isActionPending}
+                >
+                  Close
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button 
+                  variant="outline" 
+                  className="w-full sm:w-auto font-bold gap-2" 
+                  onClick={() => setIsEditingProfile(false)}
+                  disabled={isActionPending}
+                >
+                  <X className="size-4" /> Cancel
+                </Button>
+                <Button 
+                  className="w-full sm:w-auto font-bold gap-2" 
+                  onClick={handleSaveMemberEdit}
+                  disabled={isActionPending}
+                >
+                  {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                  Save Changes
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Quick Payment Dialog */}
       <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsQuickPaymentDialogOpen(open); if (!open) { setSelectedMemberForPayment(null); setPaymentData(INITIAL_PAYMENT_STATE); } } }}>
         <DialogContent className="sm:max-w-[425px]">
           {selectedMemberForPayment && (
