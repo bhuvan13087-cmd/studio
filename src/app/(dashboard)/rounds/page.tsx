@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CreditCard, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -72,6 +72,10 @@ const INITIAL_MEMBER_STATE = {
   joinDate: new Date().toISOString().split('T')[0],
 }
 
+const INITIAL_PAYMENT_STATE = {
+  method: "Cash"
+}
+
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
@@ -79,12 +83,15 @@ export default function RoundsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false)
+  const [isQuickPaymentDialogOpen, setIsQuickPaymentDialogOpen] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
   
   const [editingChit, setEditingChit] = useState<any>(null)
   const [chitToDelete, setChitToDelete] = useState<any>(null)
   const [historyMember, setHistoryMember] = useState<any>(null)
+  const [selectedMemberForPayment, setSelectedMemberForPayment] = useState<any>(null)
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
+  const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -173,6 +180,47 @@ export default function RoundsPage() {
     }
   }
 
+  const handleQuickPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
+
+    setIsActionPending(true);
+    const amount = Number(currentRound.monthlyAmount);
+    const currentMonth = format(new Date(), 'MMMM yyyy');
+
+    try {
+      // 1. Create the payment record
+      await withTimeout(addDocumentNonBlocking(collection(db, 'payments'), {
+        memberId: selectedMemberForPayment.id,
+        memberName: selectedMemberForPayment.name,
+        month: currentMonth,
+        amountPaid: amount,
+        paymentDate: new Date().toISOString(),
+        status: "paid",
+        method: paymentData.method,
+        createdAt: serverTimestamp()
+      }));
+
+      // 2. Update the member's status and total paid
+      const memberRef = doc(db, 'members', selectedMemberForPayment.id);
+      await withTimeout(updateDoc(memberRef, {
+        paymentStatus: "success",
+        totalPaid: (selectedMemberForPayment.totalPaid || 0) + amount
+      }));
+
+      await createAuditLog(db, user, `Recorded Quick Payment ₹${amount} for ${selectedMemberForPayment.name} (${currentRound.name})`);
+
+      setIsQuickPaymentDialogOpen(false);
+      setSelectedMemberForPayment(null);
+      setPaymentData(INITIAL_PAYMENT_STATE);
+      toast({ title: "Payment Recorded", description: `Success! ₹${amount} saved for ${selectedMemberForPayment.name}.` });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
+    } finally {
+      setIsActionPending(false);
+    }
+  }
+
   const handleEditChit = async (e: React.FormEvent) => {
     e.preventDefault(); 
     if (!db || !editingChit || isActionPending) return;
@@ -215,7 +263,6 @@ export default function RoundsPage() {
     }
   }
 
-  // FEATURE 1: Monthly Collection for each group card
   const getMonthlyCollectionForScheme = useMemo(() => (schemeName: string) => {
     if (!payments || !members) return 0;
     const now = new Date();
@@ -232,7 +279,6 @@ export default function RoundsPage() {
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
   }, [payments, members]);
 
-  // FEATURE 2: Today Collection for selected scheme
   const todayCollection = useMemo(() => {
     if (!payments || !assignedMembers.length) return 0;
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -466,7 +512,6 @@ export default function RoundsPage() {
         <Card className="shadow-sm border-l-4 border-l-primary/40"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Seats Filled</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
         
-        {/* FEATURE 2: Today Collection card */}
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-white">
           <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Today Collection</CardTitle>
@@ -488,7 +533,7 @@ export default function RoundsPage() {
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Payment</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Total Paid</TableHead>
-                <TableHead className="w-[80px] pr-6"></TableHead>
+                <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -497,13 +542,85 @@ export default function RoundsPage() {
                   <TableCell className="pl-6"><div className="flex items-center gap-2"><div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">{m.name[0]}</div><span className="text-xs font-semibold truncate max-w-[120px]">{m.name}</span></div></TableCell>
                   <TableCell><Badge variant={m.paymentStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", m.paymentStatus === 'success' ? "bg-emerald-500" : "")}>{m.paymentStatus || "Pending"}</Badge></TableCell>
                   <TableCell className="text-right text-xs font-bold tabular-nums">₹{(m.totalPaid || 0).toLocaleString()}</TableCell>
-                  <TableCell className="text-right pr-6"><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => { if(!isActionPending) { setHistoryMember(m); setIsHistoryDialogOpen(true); } }} disabled={isActionPending}><History className="size-4" /></Button></TableCell>
+                  <TableCell className="text-right pr-6">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" 
+                        onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setIsQuickPaymentDialogOpen(true); } }} 
+                        disabled={isActionPending || m.paymentStatus === 'success'}
+                        title="Add Payment"
+                      >
+                        <CreditCard className="size-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-muted-foreground hover:text-primary" 
+                        onClick={() => { if(!isActionPending) { setHistoryMember(m); setIsHistoryDialogOpen(true); } }} 
+                        disabled={isActionPending}
+                        title="View History"
+                      >
+                        <History className="size-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               )) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-xs text-muted-foreground italic">No participants registered in this scheme.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
       </div>
+
+      <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsQuickPaymentDialogOpen(open); if (!open) { setSelectedMemberForPayment(null); setPaymentData(INITIAL_PAYMENT_STATE); } } }}>
+        <DialogContent className="sm:max-w-[425px]">
+          {selectedMemberForPayment && (
+            <form onSubmit={handleQuickPayment}>
+              <DialogHeader>
+                <DialogTitle>Add Payment</DialogTitle>
+                <DialogDescription>Quickly record a contribution for {selectedMemberForPayment.name}.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-6">
+                <div className="grid gap-2">
+                  <Label>Member</Label>
+                  <Input value={selectedMemberForPayment.name} readOnly className="bg-muted font-bold" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Group / Scheme</Label>
+                  <Input value={currentRound?.name || ""} readOnly className="bg-muted font-bold" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Amount (₹)</Label>
+                  <Input value={currentRound?.monthlyAmount || 0} readOnly className="bg-muted font-bold text-emerald-600" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Payment Method</Label>
+                  <Select 
+                    value={paymentData.method} 
+                    onValueChange={(v) => setPaymentData({ ...paymentData, method: v })}
+                    disabled={isActionPending}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash">Cash</SelectItem>
+                      <SelectItem value="UPI">UPI</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" type="button" onClick={() => setIsQuickPaymentDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold gap-2">
+                  {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                  Confirm Payment
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
         <DialogContent className="sm:max-w-[550px]">
