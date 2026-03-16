@@ -129,35 +129,47 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Smart Calculation logic for suggested payments and missed days
-  const paymentCalculation = useMemo(() => {
-    if (!selectedMemberForPayment || !currentRound || !payments) return { suggestedAmount: 0, pendingDays: 0, missedDays: 0 };
+  // Helper function to calculate pending dues
+  const calculatePendingDues = (member: any, scheme: any) => {
+    if (!member || !scheme || !payments) return { amount: 0, missedDays: 0 };
     
+    // Monthly schemes always show 0 pending as per requirement
+    if ((member.paymentType || scheme.collectionType) === 'Monthly') {
+      return { amount: 0, missedDays: 0 };
+    }
+
     const memberPayments = (payments || [])
-      .filter(p => p.memberId === selectedMemberForPayment.id && (p.status === 'paid' || p.status === 'success'))
+      .filter(p => p.memberId === member.id && (p.status === 'paid' || p.status === 'success'))
       .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
 
-    const baseAmount = Number(currentRound.monthlyAmount) || 800;
+    const baseAmount = Number(scheme.monthlyAmount) || 800;
     const today = startOfDay(new Date());
     
     let lastDate: Date;
     if (memberPayments.length > 0 && memberPayments[0].paymentDate) {
       lastDate = startOfDay(parseISO(memberPayments[0].paymentDate));
-    } else if (selectedMemberForPayment.joinDate) {
-      lastDate = startOfDay(parseISO(selectedMemberForPayment.joinDate));
+    } else if (member.joinDate) {
+      lastDate = startOfDay(parseISO(member.joinDate));
     } else {
-      return { suggestedAmount: baseAmount, pendingDays: 1, missedDays: 0 };
+      // If no history and no join date, default to today
+      return { amount: baseAmount, missedDays: 0 };
     }
 
-    const diff = differenceInCalendarDays(today, lastDate);
-    const pendingDays = diff <= 0 ? 1 : diff;
-    const missedDays = pendingDays > 1 ? pendingDays - 1 : 0;
-    
+    const diffDays = differenceInCalendarDays(today, lastDate);
+    // missedDays = difference between today and lastPaymentDate - 1
+    // Example: last paid yesterday (diff=1), missedDays = 0.
+    // Example: last paid day before (diff=2), missedDays = 1.
+    const missedDays = diffDays > 0 ? diffDays - 1 : 0;
+    const totalAmount = (missedDays + 1) * baseAmount;
+
     return {
-      suggestedAmount: baseAmount * pendingDays,
-      pendingDays: pendingDays,
+      amount: totalAmount,
       missedDays: missedDays
     };
+  };
+
+  const paymentCalculation = useMemo(() => {
+    return calculatePendingDues(selectedMemberForPayment, currentRound);
   }, [selectedMemberForPayment, currentRound, payments]);
 
   // Auto-fill effect when payment dialog opens
@@ -165,7 +177,7 @@ export default function RoundsPage() {
     if (isQuickPaymentDialogOpen && selectedMemberForPayment && paymentCalculation) {
       setPaymentData(prev => ({ 
         ...prev, 
-        amount: paymentCalculation.suggestedAmount 
+        amount: paymentCalculation.amount 
       }));
     }
   }, [isQuickPaymentDialogOpen, selectedMemberForPayment, paymentCalculation]);
@@ -621,7 +633,7 @@ export default function RoundsPage() {
               <TableRow className="bg-muted/30">
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Payment Status</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Total Paid</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Daily (₹)</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
             </TableHeader>
@@ -635,6 +647,9 @@ export default function RoundsPage() {
                   format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
                 );
                 const displayStatus = isPaidToday ? 'success' : 'pending';
+                
+                // Calculate dynamic pending amount for Daily scheme
+                const { amount: pendingAmount } = calculatePendingDues(m, currentRound);
 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
@@ -663,7 +678,11 @@ export default function RoundsPage() {
                       </div>
                     </TableCell>
                     <TableCell><Badge variant={displayStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", displayStatus === 'success' ? "bg-emerald-500" : "")}>{displayStatus}</Badge></TableCell>
-                    <TableCell className="text-right text-xs font-bold tabular-nums">₹{(m.totalPaid || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-xs font-bold tabular-nums">
+                      <span className={cn(pendingAmount > 0 ? "text-amber-600" : "text-muted-foreground")}>
+                        ₹{pendingAmount.toLocaleString()}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-right pr-6">
                       <div className="flex items-center justify-end gap-1">
                         <Button 
@@ -894,9 +913,9 @@ export default function RoundsPage() {
                     placeholder="Enter amount"
                     disabled={isActionPending}
                   />
-                  {paymentCalculation.pendingDays > 1 && (
+                  {paymentCalculation.missedDays >= 0 && (
                     <p className="text-[10px] text-muted-foreground font-medium italic">
-                      Suggested: ₹{(Number(currentRound?.monthlyAmount || 800) * paymentCalculation.pendingDays).toLocaleString()} (₹{currentRound?.monthlyAmount || 800} × {paymentCalculation.pendingDays} days)
+                      Suggested: ₹{paymentCalculation.amount.toLocaleString()} (₹{currentRound?.monthlyAmount || 800} × {paymentCalculation.missedDays + 1} days)
                     </p>
                   )}
                 </div>
