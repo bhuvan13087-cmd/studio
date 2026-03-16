@@ -65,7 +65,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Payment",
       "type": "object",
-      "description": "Records a single monthly payment made by a member towards the chit fund.",
+      "description": "Records a single monthly payment or a pending amount made by a member towards the chit fund.",
       "properties": {
         "id": {
           "type": "string",
@@ -83,18 +83,24 @@
           "type": "string",
           "description": "The specific month and year for which the payment is made."
         },
+        "targetDate": {
+          "type": "string",
+          "description": "The specific date for which this payment/pending entry is targeted (YYYY-MM-DD).",
+          "format": "date"
+        },
         "amountPaid": {
           "type": "number",
-          "description": "The actual amount of money paid."
+          "description": "The actual amount of money paid or recorded as pending."
         },
         "paymentDate": {
           "type": "string",
-          "description": "The date when this payment was recorded.",
+          "description": "The date when this entry was recorded.",
           "format": "date-time"
         },
         "status": {
           "type": "string",
-          "description": "The current status of the payment."
+          "description": "The current status of the entry (e.g., 'success', 'pending', 'paid').",
+          "enum": ["success", "pending", "paid"]
         },
         "method": {
           "type": "string",

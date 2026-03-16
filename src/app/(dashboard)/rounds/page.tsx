@@ -1,7 +1,8 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock, AlertCircle } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock, AlertCircle, PlusCircle, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -50,10 +51,10 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc, writeBatch } from "firebase/firestore"
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth } from "date-fns"
+import { format, parseISO, isSameMonth, startOfDay } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -77,6 +78,11 @@ const INITIAL_PAYMENT_STATE = {
   amount: 0
 }
 
+const INITIAL_PENDING_STATE = {
+  date: new Date().toISOString().split('T')[0],
+  amount: 0
+}
+
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
@@ -88,6 +94,7 @@ export default function RoundsPage() {
   const [isMemberProfileDialogOpen, setIsMemberProfileDialogOpen] = useState(false)
   const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
+  const [isAddPendingMode, setIsAddPendingMode] = useState(false)
   
   const [editingChit, setEditingChit] = useState<any>(null)
   const [chitToDelete, setChitToDelete] = useState<any>(null)
@@ -97,6 +104,7 @@ export default function RoundsPage() {
   const [editFormData, setEditFormData] = useState<any>(null)
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
   const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
+  const [pendingFormData, setPendingFormData] = useState(INITIAL_PENDING_STATE)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -111,7 +119,7 @@ export default function RoundsPage() {
   const { data: members } = useCollection(membersQuery);
 
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
-  const { data: payments } = useCollection(paymentsQuery);
+  const { data: allPayments } = useCollection(paymentsQuery);
 
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
 
@@ -129,20 +137,26 @@ export default function RoundsPage() {
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
   const analyzePaymentStatus = (member: any) => {
-    if (!member || !payments) return { amount: 0, paid: false };
+    if (!member || !allPayments) return { amount: 0, paid: false, pendingTotal: 0, pendingRecords: [] };
     
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-    const paidToday = (payments || []).some(p => 
-      p.memberId === member.id && 
+    const memberPayments = (allPayments || []).filter(p => p.memberId === member.id);
+    
+    const paidToday = memberPayments.some(p => 
       (p.status === 'success' || p.status === 'paid') &&
       p.paymentDate &&
       format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
     );
 
+    const pendingRecords = memberPayments.filter(p => p.status === 'pending');
+    const pendingTotal = pendingRecords.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+
     return { 
       amount: 0, 
-      paid: paidToday 
+      paid: paidToday,
+      pendingTotal,
+      pendingRecords
     };
   };
 
@@ -238,35 +252,85 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
     const amountToSave = Number(paymentData.amount);
-
     setIsActionPending(true);
     const currentMonth = format(new Date(), 'MMMM yyyy');
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
     try {
-      await withTimeout(addDocumentNonBlocking(collection(db, 'payments'), {
+      const batch = writeBatch(db);
+      
+      // 1. Record the success payment
+      const paymentRef = doc(collection(db, 'payments'));
+      batch.set(paymentRef, {
+        id: paymentRef.id,
         memberId: selectedMemberForPayment.id,
         memberName: selectedMemberForPayment.name,
         month: currentMonth,
+        targetDate: todayStr,
         amountPaid: amountToSave,
         paymentDate: new Date().toISOString(),
         status: "success",
         method: paymentData.method,
         createdAt: serverTimestamp()
-      }));
+      });
 
+      // 2. Clear all pending entries for this member automatically
+      const { pendingRecords } = analyzePaymentStatus(selectedMemberForPayment);
+      pendingRecords.forEach(p => {
+        const pRef = doc(db, 'payments', p.id);
+        batch.update(pRef, { status: "paid" });
+      });
+
+      // 3. Update member's total paid
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
-      await withTimeout(updateDoc(memberRef, {
+      batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave
-      }));
+      });
 
-      await createAuditLog(db, user, `Recorded Payment ₹${amountToSave} for ${selectedMemberForPayment.name}`);
+      await withTimeout(batch.commit());
+      await createAuditLog(db, user, `Recorded Payment ₹${amountToSave} and cleared pending for ${selectedMemberForPayment.name}`);
 
       setIsQuickPaymentDialogOpen(false);
       setSelectedMemberForPayment(null);
       setPaymentData(INITIAL_PAYMENT_STATE);
-      toast({ title: "Payment Recorded", description: "Ledger updated successfully." });
+      toast({ title: "Payment Recorded", description: "Ledger updated and pending cleared." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
+    } finally {
+      setIsActionPending(false);
+    }
+  }
+
+  const handleAddPending = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !selectedMemberForPayment || isActionPending) return;
+
+    setIsActionPending(true);
+    const amount = Number(pendingFormData.amount);
+    const month = format(parseISO(pendingFormData.date), 'MMMM yyyy');
+
+    try {
+      const paymentRef = doc(collection(db, 'payments'));
+      await withTimeout(addDocumentNonBlocking(collection(db, 'payments'), {
+        id: paymentRef.id,
+        memberId: selectedMemberForPayment.id,
+        memberName: selectedMemberForPayment.name,
+        month: month,
+        targetDate: pendingFormData.date,
+        amountPaid: amount,
+        paymentDate: new Date().toISOString(),
+        status: "pending",
+        method: "Manual Entry",
+        createdAt: serverTimestamp()
+      }));
+
+      await createAuditLog(db, user, `Added Manual Pending ₹${amount} for ${selectedMemberForPayment.name} on ${pendingFormData.date}`);
+      
+      setIsAddPendingMode(false);
+      setPendingFormData(INITIAL_PENDING_STATE);
+      toast({ title: "Pending Added", description: "Record stored in system database." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to add pending." });
     } finally {
       setIsActionPending(false);
     }
@@ -315,12 +379,12 @@ export default function RoundsPage() {
   }
 
   const getMonthlyCollectionForScheme = useMemo(() => (schemeName: string) => {
-    if (!payments || !members) return 0;
+    if (!allPayments || !members) return 0;
     const now = new Date();
     const schemeMembers = members.filter(m => m.chitGroup === schemeName);
     const memberIds = new Set(schemeMembers.map(m => m.id));
     
-    return payments
+    return allPayments
       .filter(p => 
         memberIds.has(p.memberId) && 
         (p.status === 'paid' || p.status === 'success') &&
@@ -328,14 +392,14 @@ export default function RoundsPage() {
         isSameMonth(parseISO(p.paymentDate), now)
       )
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-  }, [payments, members]);
+  }, [allPayments, members]);
 
   const todayCollection = useMemo(() => {
-    if (!payments || !assignedMembers.length) return 0;
+    if (!allPayments || !assignedMembers.length) return 0;
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const assignedMemberIds = new Set(assignedMembers.map(m => m.id));
 
-    return payments
+    return allPayments
       .filter(p => 
         assignedMemberIds.has(p.memberId) && 
         (p.status === 'paid' || p.status === 'success') &&
@@ -343,7 +407,7 @@ export default function RoundsPage() {
         format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
       )
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-  }, [payments, assignedMembers]);
+  }, [allPayments, assignedMembers]);
 
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
@@ -622,7 +686,7 @@ export default function RoundsPage() {
             </TableHeader>
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
-                const { paid } = analyzePaymentStatus(m);
+                const { paid, pendingTotal } = analyzePaymentStatus(m);
                 const displayStatus = paid ? 'success' : 'pending';
                 
                 return (
@@ -652,14 +716,21 @@ export default function RoundsPage() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell><Badge variant={displayStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", displayStatus === 'success' ? "bg-emerald-500" : "")}>{displayStatus}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Badge variant={displayStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5 w-fit", displayStatus === 'success' ? "bg-emerald-500" : "")}>{displayStatus}</Badge>
+                        {pendingTotal > 0 && (
+                          <span className="text-[9px] font-bold text-amber-600">Pending: ₹{pendingTotal.toLocaleString()}</span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right pr-6">
                       <div className="flex items-center justify-end gap-1">
                         <Button 
                           variant="ghost" 
                           size="icon" 
                           className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" 
-                          onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: currentRound?.monthlyAmount || 0 }); setIsQuickPaymentDialogOpen(true); } }} 
+                          onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: (currentRound?.monthlyAmount || 0) + pendingTotal }); setIsQuickPaymentDialogOpen(true); setIsAddPendingMode(false); } }} 
                           disabled={isActionPending || paid}
                           title="Record Payment"
                         >
@@ -842,78 +913,139 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsQuickPaymentDialogOpen(open); if (!open) { setSelectedMemberForPayment(null); setPaymentData(INITIAL_PAYMENT_STATE); } } }}>
-        <DialogContent className="sm:max-w-[425px]">
+      <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsQuickPaymentDialogOpen(open); if (!open) { setSelectedMemberForPayment(null); setPaymentData(INITIAL_PAYMENT_STATE); setIsAddPendingMode(false); } } }}>
+        <DialogContent className="sm:max-w-[450px]">
           {selectedMemberForPayment && (
-            <form onSubmit={handleQuickPayment}>
+            <div className="space-y-6">
               <DialogHeader>
-                <DialogTitle>Add Payment</DialogTitle>
-                <DialogDescription>Record contribution for {selectedMemberForPayment.name}.</DialogDescription>
+                <DialogTitle className="flex items-center justify-between">
+                  <span>Member Payment</span>
+                  {!isAddPendingMode && (
+                    <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold uppercase tracking-widest gap-2" onClick={() => setIsAddPendingMode(true)}>
+                      <PlusCircle className="size-3.5" /> Add Pending
+                    </Button>
+                  )}
+                </DialogTitle>
+                <DialogDescription>Process transaction or record manual pending for {selectedMemberForPayment.name}.</DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-6">
-                <div className="grid gap-2">
-                  <Label>Member</Label>
-                  <Input value={selectedMemberForPayment.name} readOnly className="bg-muted font-bold" />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Amount (₹)</Label>
-                  <Input 
-                    type="number"
-                    value={paymentData.amount || ""} 
-                    onChange={e => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
-                    className="font-bold text-emerald-600 h-11 text-lg" 
-                    placeholder="Enter amount"
-                    disabled={isActionPending}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Payment Method</Label>
-                  <Select 
-                    value={paymentData.method} 
-                    onValueChange={(v) => setPaymentData({ ...paymentData, method: v })}
-                    disabled={isActionPending}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Cash">Cash</SelectItem>
-                      <SelectItem value="UPI">UPI</SelectItem>
-                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter className="gap-2">
-                <Button variant="outline" type="button" onClick={() => setIsQuickPaymentDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
-                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold gap-2">
-                  {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                  Confirm Payment
-                </Button>
-              </DialogFooter>
-            </form>
+
+              {isAddPendingMode ? (
+                <form onSubmit={handleAddPending} className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase text-amber-700">New Pending Entry</h4>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-amber-600 hover:bg-amber-100" onClick={() => setIsAddPendingMode(false)}><X className="size-4" /></Button>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-[10px] font-bold uppercase text-amber-600 ml-1">Target Date</Label>
+                      <Input 
+                        type="date" 
+                        value={pendingFormData.date} 
+                        onChange={e => setPendingFormData({ ...pendingFormData, date: e.target.value })}
+                        className="bg-white border-amber-200"
+                        required
+                        disabled={isActionPending}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-[10px] font-bold uppercase text-amber-600 ml-1">Pending Amount (₹)</Label>
+                      <Input 
+                        type="number" 
+                        value={pendingFormData.amount || ""} 
+                        onChange={e => setPendingFormData({ ...pendingFormData, amount: Number(e.target.value) })}
+                        className="bg-white border-amber-200 font-bold"
+                        placeholder="e.g. 800"
+                        required
+                        disabled={isActionPending}
+                      />
+                    </div>
+                    <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 font-bold text-xs uppercase h-10" disabled={isActionPending}>
+                      {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                      Save Pending Entry
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleQuickPayment} className="space-y-4">
+                  <div className="grid gap-4">
+                    {analyzePaymentStatus(selectedMemberForPayment).pendingTotal > 0 && (
+                      <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs font-bold">
+                        <span className="text-amber-700 flex items-center gap-2"><Clock className="size-3.5" /> Accumulated Pending:</span>
+                        <span className="text-amber-700">₹{analyzePaymentStatus(selectedMemberForPayment).pendingTotal.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="grid gap-2">
+                      <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Member Name</Label>
+                      <Input value={selectedMemberForPayment.name} readOnly className="bg-muted font-bold" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Total To Pay (₹)</Label>
+                      <Input 
+                        type="number"
+                        value={paymentData.amount || ""} 
+                        onChange={e => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
+                        className="font-bold text-emerald-600 h-12 text-xl" 
+                        placeholder="Enter amount"
+                        disabled={isActionPending}
+                        required
+                      />
+                      <p className="text-[10px] text-muted-foreground ml-1 italic">Includes scheme amount + all previous pending.</p>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Payment Method</Label>
+                      <Select 
+                        value={paymentData.method} 
+                        onValueChange={(v) => setPaymentData({ ...paymentData, method: v })}
+                        disabled={isActionPending}
+                      >
+                        <SelectTrigger className="h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Cash">Cash</SelectItem>
+                          <SelectItem value="UPI">UPI</SelectItem>
+                          <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 pt-4 border-t">
+                    <Button variant="outline" type="button" onClick={() => setIsQuickPaymentDialogOpen(false)} disabled={isActionPending} className="flex-1 font-bold h-11">Cancel</Button>
+                    <Button type="submit" disabled={isActionPending} className="flex-1 font-bold gap-2 h-11 bg-emerald-600 hover:bg-emerald-700">
+                      {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                      Record Success
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
           )}
         </DialogContent>
       </Dialog>
 
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
-        <DialogContent className="sm:max-w-[550px]">
+        <DialogContent className="sm:max-w-[600px]">
           {isHistoryDialogOpen && (
             <>
-              <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle className="text-xl">Transaction Audit: {historyMember?.name}</DialogTitle></DialogHeader>
               <div className="py-4 overflow-x-auto">
                 <Table>
-                  <TableHeader><TableRow className="bg-muted/30"><TableHead className="text-xs uppercase font-bold text-muted-foreground pl-4">Month</TableHead><TableHead className="text-xs uppercase font-bold text-muted-foreground">Amount</TableHead><TableHead className="text-right text-xs uppercase font-bold text-muted-foreground pr-4">Date</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="bg-muted/30"><TableHead className="text-[10px] uppercase font-bold text-muted-foreground pl-4">Date</TableHead><TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Amount</TableHead><TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Status</TableHead><TableHead className="text-right text-[10px] uppercase font-bold text-muted-foreground pr-4">Recorded On</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (
+                    {historyMember && (allPayments || []).filter(p => p.memberId === historyMember.id).map((p, i) => (
                       <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                        <TableCell className="text-sm font-semibold pl-4">{p.month}</TableCell>
-                        <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground font-medium pr-4">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : '-'}</TableCell>
+                        <TableCell className="text-xs font-semibold pl-4">{p.targetDate || p.month}</TableCell>
+                        <TableCell className={cn("text-xs font-bold", p.status === 'pending' ? 'text-amber-600' : 'text-emerald-600')}>₹{p.amountPaid?.toLocaleString()}</TableCell>
+                        <TableCell>
+                          <Badge variant={p.status === 'pending' ? 'secondary' : 'default'} className={cn("text-[8px] font-bold uppercase", p.status === 'pending' ? 'bg-amber-100 text-amber-700' : (p.status === 'success' || p.status === 'paid' ? 'bg-emerald-500' : 'bg-muted text-muted-foreground'))}>
+                            {p.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-[10px] text-muted-foreground font-medium pr-4">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy HH:mm') : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button></DialogFooter>
+              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close Audit</Button></DialogFooter>
             </>
           )}
         </DialogContent>

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
@@ -69,16 +70,25 @@ export default function DashboardPage() {
       }
     }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
-    const pendingMembersList = (members || []).filter(m => {
-      if (m.status === 'inactive') return false;
-      const paidToday = (payments || []).some(p => 
-        p.memberId === m.id && 
-        (p.status === 'paid' || p.status === 'success') && 
-        p.paymentDate && 
-        format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
-      );
-      return !paidToday;
+    const pendingSummary = (members || []).filter(m => m.status !== 'inactive').map(m => {
+        const memberPayments = (payments || []).filter(p => p.memberId === m.id);
+        const hasPaidToday = memberPayments.some(p => 
+          (p.status === 'paid' || p.status === 'success') && 
+          p.paymentDate && 
+          format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
+        );
+        const pendingTotal = memberPayments
+          .filter(p => p.status === 'pending')
+          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+
+        return {
+          ...m,
+          hasPaidToday,
+          pendingTotal
+        };
     });
+
+    const pendingMembersList = pendingSummary.filter(s => !s.hasPaidToday || s.pendingTotal > 0);
 
     return {
       activeMembersCount: members?.filter(m => m.status !== 'inactive').length || 0,
@@ -147,12 +157,12 @@ export default function DashboardPage() {
 
         <Card className="hover:shadow-md transition-shadow duration-200 border-border/50">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground">Today's Unpaid</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground">Outstanding</CardTitle>
             <AlertCircle className="size-4 text-destructive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl sm:text-3xl font-bold text-destructive">{pendingMembersList.length}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Members without today's payment</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Members with dues (Today or Pending)</p>
           </CardContent>
         </Card>
       </div>
@@ -193,15 +203,16 @@ export default function DashboardPage() {
           <CardHeader className="bg-muted/10">
             <CardTitle className="flex items-center gap-2 text-lg font-bold">
                <Clock className="size-5 text-amber-500" />
-               Unpaid Members
+               Pending Dues
             </CardTitle>
-            <CardDescription className="text-xs">Awaiting today's collection.</CardDescription>
+            <CardDescription className="text-xs">Members with unpaid balances.</CardDescription>
           </CardHeader>
           <CardContent className="px-0 pt-0">
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
                   <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
+                  <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right pr-6">Due (₹)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -209,12 +220,13 @@ export default function DashboardPage() {
                   return (
                     <TableRow key={i} className="hover:bg-muted/5 transition-colors">
                       <TableCell className="text-sm font-semibold pl-6 truncate">{member.name}</TableCell>
+                      <TableCell className="text-right pr-6 text-sm font-bold text-amber-600">₹{((member.pendingTotal || 0) + (member.hasPaidToday ? 0 : (member.monthlyAmount || 0))).toLocaleString()}</TableCell>
                     </TableRow>
                   );
                 }) : (
                   <TableRow>
-                    <TableCell className="h-32 text-center text-muted-foreground italic text-xs">
-                      Zero unpaid members for today.
+                    <TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic text-xs">
+                      Zero pending members.
                     </TableCell>
                   </TableRow>
                 )}
@@ -242,7 +254,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex items-center gap-1.5 h-10">
                          <span className="font-bold text-emerald-600 text-sm tabular-nums">₹{payment.amountPaid?.toLocaleString()}</span>
-                         <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-tight">Success</span>
+                         <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-tight">{payment.status}</span>
                       </div>
                    </div>
                  ))}
