@@ -129,11 +129,11 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Enhanced calculation logic based on yesterday's payment check
+  // Enhanced calculation logic for dynamic dues
   const calculatePendingDues = (member: any, scheme: any) => {
     if (!member || !scheme || !payments) return { amount: 0, missedDays: 0 };
     
-    // Rule 2 & 6: Monthly members always show 0 pending
+    // Rule 2: Monthly members always show 0 pending for daily calculation
     if ((member.paymentType || scheme.collectionType) === 'Monthly') {
       return { amount: 0, missedDays: 0 };
     }
@@ -146,30 +146,26 @@ export default function RoundsPage() {
     const baseAmount = Number(scheme.monthlyAmount) || 800;
     const today = startOfDay(new Date());
     
-    let lastDate: Date;
-    if (memberPayments.length > 0 && memberPayments[0].paymentDate) {
-      lastDate = startOfDay(parseISO(memberPayments[0].paymentDate));
-    } else if (member.joinDate) {
-      lastDate = startOfDay(parseISO(member.joinDate));
-    } else {
-      // Default fallback
+    // Case 1: NEVER PAID (Treat as 1 pending day per special request)
+    if (memberPayments.length === 0) {
       return { amount: baseAmount, missedDays: 0 };
     }
 
-    // Difference between today and last payment date
-    // 1 day difference means they paid yesterday
-    const diffDays = differenceInCalendarDays(today, lastDate);
+    // Case 2: History exists
+    const lastDate = startOfDay(parseISO(memberPayments[0].paymentDate));
+    const pendingDays = differenceInCalendarDays(today, lastDate);
+
+    // If they already paid today, pendingDays will be 0.
+    // However, this function is used when they HAVEN'T paid today.
+    // If they paid yesterday, pendingDays = 1. Amount = 800.
+    // If they paid 2 days ago, pendingDays = 2. Amount = 1600.
     
-    // Logic Rule 4: If payment exists for yesterday (diffDays <= 1), amount = 800
-    if (diffDays <= 1) {
-      return { amount: baseAmount, missedDays: 0 };
-    }
+    const amount = Math.max(1, pendingDays) * baseAmount;
+    const missedDays = pendingDays > 1 ? pendingDays - 1 : 0;
 
-    // Logic Rule 5: If payment does NOT exist for yesterday, amount = missedDays * baseAmount
-    // Note: missedDays here refers to total days elapsed since last payment (diffDays)
     return {
-      amount: diffDays * baseAmount,
-      missedDays: diffDays - 1
+      amount,
+      missedDays
     };
   };
 
@@ -177,7 +173,7 @@ export default function RoundsPage() {
     return calculatePendingDues(selectedMemberForPayment, currentRound);
   }, [selectedMemberForPayment, currentRound, payments]);
 
-  // Auto-fill effect when payment dialog opens
+  // Auto-fill amount field when dialog opens
   useEffect(() => {
     if (isQuickPaymentDialogOpen && selectedMemberForPayment && paymentCalculation) {
       setPaymentData(prev => ({ 
@@ -638,7 +634,7 @@ export default function RoundsPage() {
               <TableRow className="bg-muted/30">
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Payment Status</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Daily (₹)</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Pending Due (₹)</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
             </TableHeader>
@@ -653,8 +649,8 @@ export default function RoundsPage() {
                 );
                 const displayStatus = isPaidToday ? 'success' : 'pending';
                 
-                // Optimized logic for dynamic calculation
-                const { amount: pendingAmount } = calculatePendingDues(m, currentRound);
+                // Calculate dynamic pending dues for display in list
+                const { amount: pendingAmountDisplay } = calculatePendingDues(m, currentRound);
 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
@@ -684,8 +680,8 @@ export default function RoundsPage() {
                     </TableCell>
                     <TableCell><Badge variant={displayStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", displayStatus === 'success' ? "bg-emerald-500" : "")}>{displayStatus}</Badge></TableCell>
                     <TableCell className="text-right text-xs font-bold tabular-nums">
-                      <span className={cn(pendingAmount > 0 ? "text-amber-600" : "text-muted-foreground")}>
-                        ₹{pendingAmount.toLocaleString()}
+                      <span className={cn(pendingAmountDisplay > 0 && !isPaidToday ? "text-amber-600" : "text-muted-foreground")}>
+                        ₹{(isPaidToday ? 0 : pendingAmountDisplay).toLocaleString()}
                       </span>
                     </TableCell>
                     <TableCell className="text-right pr-6">

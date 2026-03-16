@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Users, IndianRupee, AlertCircle, Calendar, Clock, CheckCircle2, Loader2, Database } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO } from "date-fns"
+import { format, isSameMonth, parseISO, startOfDay, differenceInCalendarDays } from "date-fns"
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
@@ -41,7 +41,83 @@ export default function DashboardPage() {
     setMounted(true)
   }, [])
 
-  if (!mounted || membersLoading || paymentsLoading || roundsLoading) {
+  // Optimized Helper for Dynamic Pending Dues inside Dashboard
+  const getPendingAmount = (member: any) => {
+    if (!member || !payments || !rounds) return 0;
+    
+    // Monthly members always show 0 pending dues in the daily list
+    if (member.paymentType === 'Monthly') return 0;
+    
+    const scheme = rounds.find(r => r.name === member.chitGroup);
+    const baseAmount = Number(scheme?.monthlyAmount) || 800;
+    const today = startOfDay(new Date());
+
+    const memberPayments = (payments || [])
+      .filter(p => p.memberId === member.id && (p.status === 'paid' || p.status === 'success'))
+      .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
+
+    if (memberPayments.length === 0) {
+      return baseAmount; // Default 1 pending day for never paid
+    }
+
+    const lastDate = startOfDay(parseISO(memberPayments[0].paymentDate));
+    const pendingDays = differenceInCalendarDays(today, lastDate);
+    
+    // Multiply base amount by total pending days (missed days + today)
+    return Math.max(1, pendingDays) * baseAmount;
+  };
+
+  const dashboardData = useMemo(() => {
+    if (!mounted || membersLoading || paymentsLoading || roundsLoading) return null;
+
+    const now = new Date()
+    const todayStr = format(now, 'yyyy-MM-dd')
+
+    const currentMonthPayments = (payments || []).filter(p => {
+      if (!p.paymentDate) return false;
+      try {
+        return isSameMonth(parseISO(p.paymentDate), now);
+      } catch {
+        return false;
+      }
+    })
+    
+    const collectedThisMonth = currentMonthPayments
+      .filter(p => p.status === 'paid' || p.status === 'success')
+      .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+    
+    const collectedToday = (payments || []).filter(p => {
+      if (!p.paymentDate) return false;
+      try {
+        return format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr && 
+               (p.status === 'paid' || p.status === 'success');
+      } catch {
+        return false;
+      }
+    }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+
+    const pendingMembersList = (members || []).filter(m => {
+      if (m.status === 'inactive') return false;
+      const paidToday = (payments || []).some(p => 
+        p.memberId === m.id && 
+        (p.status === 'paid' || p.status === 'success') && 
+        p.paymentDate && 
+        format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
+      );
+      return !paidToday;
+    });
+
+    return {
+      activeMembersCount: members?.filter(m => m.status !== 'inactive').length || 0,
+      collectedThisMonth,
+      collectedToday,
+      pendingMembersList,
+      recentWinners: (rounds || []).filter(r => r.winnerName).slice(0, 4),
+      recentPaymentsList: (payments || []).filter(p => p.status === 'paid' || p.status === 'success').slice(0, 5)
+    }
+  }, [mounted, members, payments, rounds, membersLoading, paymentsLoading, roundsLoading])
+
+  if (!mounted || !dashboardData) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
         <Loader2 className="size-8 animate-spin text-primary" />
@@ -49,64 +125,7 @@ export default function DashboardPage() {
     )
   }
 
-  const noData = (!members || members.length === 0) && (!payments || payments.length === 0) && (!rounds || rounds.length === 0)
-
-  if (noData) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4 p-4 text-center">
-        <Database className="size-16 text-muted-foreground/20" />
-        <h2 className="text-xl font-semibold">No data available.</h2>
-        <p className="text-muted-foreground max-w-sm">
-          Start by adding members or recording payments to see your dashboard insights.
-        </p>
-      </div>
-    )
-  }
-
-  // --- Calculations ---
-  const now = new Date()
-  const todayStr = format(now, 'yyyy-MM-dd')
-
-  const currentMonthPayments = (payments || []).filter(p => {
-    if (!p.paymentDate) return false;
-    try {
-      return isSameMonth(parseISO(p.paymentDate), now);
-    } catch {
-      return false;
-    }
-  })
-  
-  const collectedThisMonth = currentMonthPayments
-    .filter(p => p.status === 'paid' || p.status === 'success')
-    .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
-  
-  const collectedToday = (payments || []).filter(p => {
-    if (!p.paymentDate) return false;
-    try {
-      return format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr && 
-             (p.status === 'paid' || p.status === 'success');
-    } catch {
-      return false;
-    }
-  }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
-
-  // Dynamic Pending Logic: SUCCESS if paid today, else PENDING
-  const pendingMembers = (members || []).filter(m => {
-    if (m.status === 'inactive') return false;
-    const paidToday = (payments || []).some(p => 
-      p.memberId === m.id && 
-      (p.status === 'paid' || p.status === 'success') && 
-      p.paymentDate && 
-      format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
-    );
-    return !paidToday;
-  });
-
-  const pendingPaymentsCount = pendingMembers.length
-  
-  const recentWinners = (rounds || []).filter(r => r.winnerName).slice(0, 4)
-  const recentPaymentsList = (payments || []).filter(p => p.status === 'paid' || p.status === 'success').slice(0, 5)
-  const pendingMembersList = pendingMembers.slice(0, 4)
+  const { activeMembersCount, collectedThisMonth, collectedToday, pendingMembersList, recentWinners, recentPaymentsList } = dashboardData;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 overflow-x-hidden">
@@ -122,7 +141,7 @@ export default function DashboardPage() {
             <Users className="size-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl sm:text-3xl font-bold">{members?.filter(m => m.status !== 'inactive').length || 0}</div>
+            <div className="text-2xl sm:text-3xl font-bold">{activeMembersCount}</div>
             <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Active participants</p>
           </CardContent>
         </Card>
@@ -159,7 +178,7 @@ export default function DashboardPage() {
             <AlertCircle className="size-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl sm:text-3xl font-bold text-destructive">{pendingPaymentsCount}</div>
+            <div className="text-2xl sm:text-3xl font-bold text-destructive">{pendingMembersList.length}</div>
             <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Awaiting today's payment</p>
           </CardContent>
         </Card>
@@ -210,16 +229,19 @@ export default function DashboardPage() {
               <TableHeader className="bg-muted/30">
                 <TableRow>
                   <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
-                  <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider pr-6">Daily (₹)</TableHead>
+                  <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider pr-6">Due (₹)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pendingMembersList.length > 0 ? pendingMembersList.map((member, i) => (
-                  <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                    <TableCell className="text-sm font-semibold pl-6 truncate max-w-[120px]">{member.name}</TableCell>
-                    <TableCell className="text-right font-bold text-amber-600 pr-6 tabular-nums">₹{(member.monthlyAmount || 800).toLocaleString()}</TableCell>
-                  </TableRow>
-                )) : (
+                {pendingMembersList.length > 0 ? pendingMembersList.slice(0, 5).map((member, i) => {
+                  const pendingAmount = getPendingAmount(member);
+                  return (
+                    <TableRow key={i} className="hover:bg-muted/5 transition-colors">
+                      <TableCell className="text-sm font-semibold pl-6 truncate max-w-[120px]">{member.name}</TableCell>
+                      <TableCell className="text-right font-bold text-amber-600 pr-6 tabular-nums">₹{pendingAmount.toLocaleString()}</TableCell>
+                    </TableRow>
+                  );
+                }) : (
                   <TableRow>
                     <TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic text-xs">
                       Zero pending dues for today.
