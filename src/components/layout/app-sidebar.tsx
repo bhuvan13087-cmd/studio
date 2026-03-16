@@ -1,8 +1,7 @@
-
 "use client"
 
 import * as React from "react"
-import { LayoutDashboard, Users, CreditCard, History, BarChart3, LogOut, FileText } from "lucide-react"
+import { LayoutDashboard, Users, CreditCard, History, BarChart3, LogOut } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/firebase"
@@ -28,7 +27,6 @@ const navItems = [
   { title: "Payments", url: "/payments", icon: CreditCard, roles: ['admin', 'member'] },
   { title: "Chit Rounds", url: "/rounds", icon: History, roles: ['admin', 'member'] },
   { title: "Reports", url: "/reports", icon: BarChart3, roles: ['admin'] },
-  { title: "Audit Logs", url: "/audit-logs", icon: FileText, roles: ['admin'] },
 ]
 
 export function AppSidebar() {
