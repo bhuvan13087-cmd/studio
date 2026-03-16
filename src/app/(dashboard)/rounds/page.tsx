@@ -129,15 +129,16 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Helper function to calculate pending dues
+  // Enhanced calculation logic based on yesterday's payment check
   const calculatePendingDues = (member: any, scheme: any) => {
     if (!member || !scheme || !payments) return { amount: 0, missedDays: 0 };
     
-    // Monthly schemes always show 0 pending as per requirement
+    // Rule 2 & 6: Monthly members always show 0 pending
     if ((member.paymentType || scheme.collectionType) === 'Monthly') {
       return { amount: 0, missedDays: 0 };
     }
 
+    // Filter successful payments for this member
     const memberPayments = (payments || [])
       .filter(p => p.memberId === member.id && (p.status === 'paid' || p.status === 'success'))
       .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
@@ -151,20 +152,24 @@ export default function RoundsPage() {
     } else if (member.joinDate) {
       lastDate = startOfDay(parseISO(member.joinDate));
     } else {
-      // If no history and no join date, default to today
+      // Default fallback
       return { amount: baseAmount, missedDays: 0 };
     }
 
+    // Difference between today and last payment date
+    // 1 day difference means they paid yesterday
     const diffDays = differenceInCalendarDays(today, lastDate);
-    // missedDays = difference between today and lastPaymentDate - 1
-    // Example: last paid yesterday (diff=1), missedDays = 0.
-    // Example: last paid day before (diff=2), missedDays = 1.
-    const missedDays = diffDays > 0 ? diffDays - 1 : 0;
-    const totalAmount = (missedDays + 1) * baseAmount;
+    
+    // Logic Rule 4: If payment exists for yesterday (diffDays <= 1), amount = 800
+    if (diffDays <= 1) {
+      return { amount: baseAmount, missedDays: 0 };
+    }
 
+    // Logic Rule 5: If payment does NOT exist for yesterday, amount = missedDays * baseAmount
+    // Note: missedDays here refers to total days elapsed since last payment (diffDays)
     return {
-      amount: totalAmount,
-      missedDays: missedDays
+      amount: diffDays * baseAmount,
+      missedDays: diffDays - 1
     };
   };
 
@@ -648,7 +653,7 @@ export default function RoundsPage() {
                 );
                 const displayStatus = isPaidToday ? 'success' : 'pending';
                 
-                // Calculate dynamic pending amount for Daily scheme
+                // Optimized logic for dynamic calculation
                 const { amount: pendingAmount } = calculatePendingDues(m, currentRound);
 
                 return (
@@ -726,73 +731,81 @@ export default function RoundsPage() {
           }
         }
       }}>
-        <DialogContent className="sm:max-w-[450px] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shadow-sm">
+        <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="p-6 bg-gradient-to-br from-primary/10 to-transparent border-b">
+            <DialogTitle className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shadow-md ring-2 ring-white/20">
                 {selectedProfileMember?.name?.split(' ').map((n: string) => n[0]).join('')}
               </div>
-              <span className="font-headline tracking-tight">
-                {isEditingProfile ? "Update Member Profile" : "Member Information"}
-              </span>
+              <div className="flex flex-col">
+                <span className="font-headline tracking-tight text-xl">
+                  {isEditingProfile ? "Update Profile" : "Member Profile"}
+                </span>
+                {!isEditingProfile && <span className="text-[10px] uppercase font-bold tracking-widest text-primary/70">Registry #M-{selectedProfileMember?.id?.slice(0, 4)}</span>}
+              </div>
             </DialogTitle>
           </DialogHeader>
 
           {selectedProfileMember && !isEditingProfile ? (
-            <div className="space-y-0 py-2">
-              <div className="flex justify-between items-center p-3 border-b hover:bg-muted/30 transition-colors">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Name</span>
+            <div className="px-6 py-2">
+              <div className="flex justify-between items-center py-4 border-b">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Full Name</span>
                 <span className="font-bold text-sm text-foreground">{selectedProfileMember.name}</span>
               </div>
-              <div className="flex justify-between items-center p-3 border-b hover:bg-muted/30 transition-colors">
+              <div className="flex justify-between items-center py-4 border-b">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Phone Number</span>
                 <span className="font-bold text-sm text-foreground tabular-nums">{selectedProfileMember.phone}</span>
               </div>
-              <div className="flex justify-between items-center p-3 border-b hover:bg-muted/30 transition-colors">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Group Name</span>
+              <div className="flex justify-between items-center py-4 border-b">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Assigned Group</span>
                 <span className="font-bold text-sm text-primary">{currentRound?.name}</span>
               </div>
-              <div className="flex justify-between items-center p-3 border-b hover:bg-muted/30 transition-colors">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Payment Type</span>
-                <Badge variant="outline" className="font-bold text-[9px] uppercase border-primary/20 bg-primary/5 text-primary py-0.5">
+              <div className="flex justify-between items-center py-4 border-b">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Payment Mode</span>
+                <Badge variant="secondary" className="font-bold text-[10px] uppercase bg-primary/5 text-primary border-primary/20">
                   {selectedProfileMember.paymentType || currentRound?.collectionType}
                 </Badge>
               </div>
-              <div className="flex justify-between items-center p-3 border-b hover:bg-muted/30 transition-colors">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Joining Date</span>
+              <div className="flex justify-between items-center py-4 border-b">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Registration Date</span>
                 <span className="font-bold text-sm text-foreground">
                   {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'MMM dd, yyyy') : '-'}
                 </span>
               </div>
-              <div className="flex justify-between items-center p-4 mt-2 bg-emerald-50 rounded-xl border border-emerald-100">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Total Contribution</span>
-                <span className="font-bold text-lg text-emerald-700 tabular-nums">₹{(selectedProfileMember.totalPaid || 0).toLocaleString()}</span>
+              <div className="my-6 p-4 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center justify-between shadow-sm">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-1">Total Contribution</span>
+                  <span className="font-bold text-2xl text-emerald-700 tabular-nums">₹{(selectedProfileMember.totalPaid || 0).toLocaleString()}</span>
+                </div>
+                <div className="h-10 w-10 bg-emerald-600/10 rounded-full flex items-center justify-center">
+                  <IndianRupee className="size-5 text-emerald-600" />
+                </div>
               </div>
             </div>
           ) : selectedProfileMember && isEditingProfile ? (
-            <form onSubmit={handleSaveMemberEdit} className="space-y-4 py-4">
+            <form onSubmit={handleSaveMemberEdit} className="px-6 py-6 space-y-5">
               <div className="grid gap-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Member Name</Label>
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Member Name</Label>
                 <Input 
                   value={editFormData?.name || ""} 
                   onChange={e => setEditFormData({ ...editFormData, name: e.target.value })} 
                   required 
                   disabled={isActionPending}
-                  className="h-10"
+                  className="h-10 focus-visible:ring-primary/20"
                 />
               </div>
               <div className="grid gap-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
                 <Input 
                   value={editFormData?.phone || ""} 
                   onChange={e => setEditFormData({ ...editFormData, phone: e.target.value })} 
                   required 
                   disabled={isActionPending}
-                  className="h-10"
+                  className="h-10 focus-visible:ring-primary/20"
                 />
               </div>
               <div className="grid gap-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Type</Label>
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Type</Label>
                 <Select 
                   value={editFormData?.paymentType || ""} 
                   onValueChange={v => setEditFormData({ ...editFormData, paymentType: v })}
@@ -806,29 +819,25 @@ export default function RoundsPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Joining Date</Label>
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Joining Date</Label>
                 <Input 
                   type="date" 
                   value={editFormData?.joinDate || ""} 
                   onChange={e => setEditFormData({ ...editFormData, joinDate: e.target.value })} 
                   required 
                   disabled={isActionPending}
-                  className="h-10"
+                  className="h-10 focus-visible:ring-primary/20"
                 />
-              </div>
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-700 font-medium leading-relaxed">
-                <Info className="size-3 inline mr-2 -mt-0.5" />
-                Updating these fields will only change profile data. Existing payment history remains secure and unchanged.
               </div>
             </form>
           ) : null}
 
-          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2 border-t mt-2">
+          <DialogFooter className="p-6 bg-muted/30 flex flex-col sm:flex-row gap-3">
             {!isEditingProfile ? (
               <>
                 <Button 
                   variant="outline" 
-                  className="w-full sm:w-auto font-bold gap-2 h-10 px-6 uppercase text-[10px] tracking-widest" 
+                  className="w-full sm:w-auto font-bold gap-2 h-10 px-8 uppercase text-[10px] tracking-widest shadow-sm" 
                   onClick={() => {
                     setEditFormData({
                       name: selectedProfileMember.name,
@@ -843,30 +852,30 @@ export default function RoundsPage() {
                   <Pencil className="size-4" /> Edit Profile
                 </Button>
                 <Button 
-                  className="w-full sm:w-auto font-bold h-10 px-6 uppercase text-[10px] tracking-widest" 
+                  className="w-full sm:w-auto font-bold h-10 px-8 uppercase text-[10px] tracking-widest shadow-sm" 
                   onClick={() => setIsMemberProfileDialogOpen(false)}
                   disabled={isActionPending}
                 >
-                  Close
+                  Close Profile
                 </Button>
               </>
             ) : (
               <>
                 <Button 
                   variant="outline" 
-                  className="w-full sm:w-auto font-bold gap-2 h-10 px-6 uppercase text-[10px] tracking-widest" 
+                  className="w-full sm:w-auto font-bold gap-2 h-10 px-8 uppercase text-[10px] tracking-widest" 
                   onClick={() => setIsEditingProfile(false)}
                   disabled={isActionPending}
                 >
                   <X className="size-4" /> Cancel
                 </Button>
                 <Button 
-                  className="w-full sm:w-auto font-bold gap-2 h-10 px-6 uppercase text-[10px] tracking-widest" 
+                  className="w-full sm:w-auto font-bold gap-2 h-10 px-8 uppercase text-[10px] tracking-widest shadow-md" 
                   onClick={handleSaveMemberEdit}
                   disabled={isActionPending}
                 >
                   {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                  Save Changes
+                  Save Profile
                 </Button>
               </>
             )}
@@ -895,11 +904,16 @@ export default function RoundsPage() {
                 
                 {/* Pending Day Indication Indicator */}
                 {paymentCalculation.missedDays >= 1 && (
-                  <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in slide-in-from-top-1 duration-300">
-                    <Clock className="size-4 text-amber-600" />
-                    <span className="text-xs font-bold text-amber-700">
-                      Pending: Day {paymentCalculation.missedDays}
-                    </span>
+                  <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in slide-in-from-top-1 duration-300">
+                    <div className="flex items-center gap-2">
+                      <Clock className="size-4 text-amber-600" />
+                      <span className="text-xs font-bold text-amber-700">
+                        Pending: Day {paymentCalculation.missedDays}
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="text-[9px] border-amber-300 bg-amber-100 text-amber-700">
+                      ₹{(currentRound?.monthlyAmount || 800)} × {paymentCalculation.missedDays + 1}
+                    </Badge>
                   </div>
                 )}
 
@@ -909,13 +923,13 @@ export default function RoundsPage() {
                     type="number"
                     value={paymentData.amount || ""} 
                     onChange={e => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
-                    className="font-bold text-emerald-600" 
+                    className="font-bold text-emerald-600 h-11 text-lg" 
                     placeholder="Enter amount"
                     disabled={isActionPending}
                   />
                   {paymentCalculation.missedDays >= 0 && (
-                    <p className="text-[10px] text-muted-foreground font-medium italic">
-                      Suggested: ₹{paymentCalculation.amount.toLocaleString()} (₹{currentRound?.monthlyAmount || 800} × {paymentCalculation.missedDays + 1} days)
+                    <p className="text-[10px] text-muted-foreground font-medium italic flex items-center gap-1">
+                      <Info className="size-3" /> Suggested: ₹{paymentCalculation.amount.toLocaleString()} for {paymentCalculation.missedDays + 1} day(s)
                     </p>
                   )}
                 </div>
