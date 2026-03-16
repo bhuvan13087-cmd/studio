@@ -234,15 +234,9 @@ export default function ReportsPage() {
       (r.date && isMatchingDate(r.date))
     );
 
-    const pendingMembers = targetMembers.filter(m => m.status !== 'inactive').filter(m => {
-      const paidInPeriod = payments.some(p => p.memberId === m.id && (p.status === 'paid' || p.status === 'success') && p.paymentDate && isMatchingDate(p.paymentDate));
-      return !paidInPeriod;
-    });
-
     return { 
       collectionData: collectionDataByMonth, 
       targetMembers,
-      pendingMembers,
       winners,
       metrics: {
         totalCollected,
@@ -262,7 +256,6 @@ export default function ReportsPage() {
     switch (activeTab) {
       case "collections": exportData = filteredData.collectionData.map(d => ({ Period: d.month, Amount: d.amount })); break;
       case "members": exportData = filteredData.targetMembers.map(m => ({ Name: m.name, Scheme: m.chitGroup, Amount: m.monthlyAmount, Status: m.status })); break;
-      case "pending": exportData = filteredData.pendingMembers.map(m => ({ Name: m.name, Phone: m.phone, Due: m.monthlyAmount })); break;
       case "winners": exportData = filteredData.winners.map(w => ({ Winner: w.winnerName, Scheme: w.name, Round: w.roundNumber, WinningAmount: w.winningAmount })); break;
     }
 
@@ -378,10 +371,9 @@ export default function ReportsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 h-auto p-1 bg-muted/50 border rounded-xl overflow-x-auto print:hidden">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3 h-auto p-1 bg-muted/50 border rounded-xl overflow-x-auto print:hidden">
           <TabsTrigger value="collections" className="py-3 text-[10px] font-bold uppercase tracking-widest">Collections</TabsTrigger>
           <TabsTrigger value="members" className="py-3 text-[10px] font-bold uppercase tracking-widest">Members</TabsTrigger>
-          <TabsTrigger value="pending" className="py-3 text-[10px] font-bold uppercase tracking-widest">Pending Dues</TabsTrigger>
           <TabsTrigger value="winners" className="py-3 text-[10px] font-bold uppercase tracking-widest">Winners</TabsTrigger>
         </TabsList>
         <TabsContent value="collections" className="mt-8">
@@ -405,19 +397,6 @@ export default function ReportsPage() {
                 <TableHeader className="bg-muted/30"><TableRow><TableHead className="text-[10px] uppercase font-bold tracking-widest h-12 pl-6">Member Name</TableHead><TableHead className="text-[10px] uppercase font-bold tracking-widest h-12">Scheme</TableHead><TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-12">Monthly Due</TableHead><TableHead className="text-center text-[10px] uppercase font-bold tracking-widest h-12 pr-6">Status</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {filteredData!.targetMembers.length > 0 ? filteredData!.targetMembers.map((m, i) => (<TableRow key={i} className="hover:bg-muted/5 transition-colors h-14"><TableCell className="font-bold text-sm pl-6">{m.name}</TableCell><TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup || "N/A"}</TableCell><TableCell className="text-right font-bold text-sm tabular-nums">₹{m.monthlyAmount?.toLocaleString()}</TableCell><TableCell className="text-center pr-6"><Badge variant={m.status === 'active' ? 'default' : 'secondary'} className="text-[8px] font-bold uppercase">{m.status}</Badge></TableCell></TableRow>)) : (<TableRow><TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic text-sm">No member data found.</TableCell></TableRow>)}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
-        </TabsContent>
-        <TabsContent value="pending" className="mt-8">
-          <Card className="border-border/50 overflow-hidden shadow-sm">
-            <div className="p-4 border-b bg-muted/20"><h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2"><Clock className="size-4 text-amber-500" /> Outstanding Collections</h3></div>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-muted/30"><TableRow><TableHead className="text-[10px] uppercase font-bold tracking-widest h-12 pl-6">Member</TableHead><TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-12 pr-6">Amount Due</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {filteredData!.pendingMembers.length > 0 ? filteredData!.pendingMembers.map((m, i) => (<TableRow key={i} className="hover:bg-muted/5 transition-colors h-14"><TableCell className="font-bold text-sm pl-6">{m.name}</TableCell><TableCell className="text-right font-bold text-amber-600 text-sm tabular-nums pr-6">₹{m.monthlyAmount?.toLocaleString()}</TableCell></TableRow>)) : (<TableRow><TableCell colSpan={2} className="h-40 text-center text-emerald-600 font-bold text-sm"><CheckCircle2 className="size-8 mx-auto mb-2 opacity-30" />Zero outstanding dues!</TableCell></TableRow>)}
                 </TableBody>
               </Table>
             </div>

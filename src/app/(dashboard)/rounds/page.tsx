@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -129,11 +128,6 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  /**
-   * PRODUCTION SAFE PENDING CALCULATION
-   * Checks if the member has paid for the current day cycle.
-   * Auto-calculation, multi-day merging, and date increment logic removed.
-   */
   const analyzePaymentStatus = (member: any) => {
     if (!member || !payments) return { amount: 0, paid: false };
     
@@ -146,23 +140,11 @@ export default function RoundsPage() {
       format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
     );
 
-    const schemeAmount = Number(member.monthlyAmount) || 800;
-
     return { 
-      amount: paidToday ? 0 : schemeAmount, 
+      amount: 0, 
       paid: paidToday 
     };
   };
-
-  useEffect(() => {
-    if (isQuickPaymentDialogOpen && selectedMemberForPayment) {
-      const { amount } = analyzePaymentStatus(selectedMemberForPayment);
-      setPaymentData(prev => ({ 
-        ...prev, 
-        amount: amount 
-      }));
-    }
-  }, [isQuickPaymentDialogOpen, selectedMemberForPayment]);
 
   useEffect(() => {
     if (isAddMemberDialogOpen && currentRound) {
@@ -616,13 +598,12 @@ export default function RoundsPage() {
               <TableRow className="bg-muted/30">
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Today Due (₹)</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
-                const { amount, paid } = analyzePaymentStatus(m);
+                const { paid } = analyzePaymentStatus(m);
                 const displayStatus = paid ? 'success' : 'pending';
                 
                 return (
@@ -648,11 +629,6 @@ export default function RoundsPage() {
                       </div>
                     </TableCell>
                     <TableCell><Badge variant={displayStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", displayStatus === 'success' ? "bg-emerald-500" : "")}>{displayStatus}</Badge></TableCell>
-                    <TableCell className="text-right text-xs font-bold tabular-nums">
-                      <span className={cn(!paid ? "text-amber-600" : "text-muted-foreground")}>
-                        ₹{amount.toLocaleString()}
-                      </span>
-                    </TableCell>
                     <TableCell className="text-right pr-6">
                       <div className="flex items-center justify-end gap-1">
                         <Button 
@@ -679,13 +655,12 @@ export default function RoundsPage() {
                     </TableCell>
                   </TableRow>
                 )
-              }) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-xs text-muted-foreground italic">No participants registered in this scheme.</TableCell></TableRow>}
+              }) : <TableRow><TableCell colSpan={3} className="h-32 text-center text-xs text-muted-foreground italic">No participants registered in this scheme.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
       </div>
 
-      {/* Member Profile & Edit Dialog */}
       <Dialog open={isMemberProfileDialogOpen} onOpenChange={(open) => { 
         if(!isActionPending) {
           setIsMemberProfileDialogOpen(open); 
@@ -848,7 +823,6 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Quick Payment Dialog */}
       <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsQuickPaymentDialogOpen(open); if (!open) { setSelectedMemberForPayment(null); setPaymentData(INITIAL_PAYMENT_STATE); } } }}>
         <DialogContent className="sm:max-w-[425px]">
           {selectedMemberForPayment && (

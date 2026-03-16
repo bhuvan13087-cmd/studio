@@ -179,8 +179,7 @@ export default function PaymentsPage() {
           chitName: member.chitGroup || "N/A", 
           totalAmount: target, 
           amountPaid: totalPaid, 
-          pendingAmount: Math.max(0, target - totalPaid), 
-          status: totalPaid >= target ? "Paid" : "Pending" 
+          status: totalPaid >= target ? "Paid" : "Unpaid" 
         };
       });
   }, [members, payments, rounds, searchTerm, typeFilter]);
@@ -326,7 +325,6 @@ export default function PaymentsPage() {
                     <TableHead className="font-bold text-xs uppercase tracking-wider">Member</TableHead>
                     <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Target</TableHead>
                     <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Paid</TableHead>
-                    <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Due</TableHead>
                     <TableHead className="font-bold text-xs uppercase tracking-wider text-center">Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -339,14 +337,13 @@ export default function PaymentsPage() {
                         <TableCell className="font-semibold text-xs sm:text-sm">{s.name}</TableCell>
                         <TableCell className="text-right text-xs font-medium tabular-nums">₹{s.totalAmount.toLocaleString()}</TableCell>
                         <TableCell className="text-right text-xs font-bold text-emerald-600 tabular-nums">₹{s.amountPaid.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-xs font-bold text-amber-600 tabular-nums">₹{s.pendingAmount.toLocaleString()}</TableCell>
                         <TableCell className="text-center">
                           <Badge variant={s.status === 'Paid' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-2", s.status === 'Paid' ? "bg-emerald-500" : "bg-amber-100 text-amber-700")}>{s.status}</Badge>
                         </TableCell>
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic text-xs">No active members found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={4} className="h-32 text-center text-muted-foreground italic text-xs">No active members found.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>

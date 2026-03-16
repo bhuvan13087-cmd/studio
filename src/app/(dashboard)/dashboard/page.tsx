@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
@@ -40,27 +39,6 @@ export default function DashboardPage() {
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  /**
-   * PRODUCTION SAFE PENDING CALCULATION
-   * Logic: Checks if a successful payment exists for the current day.
-   * Auto-calculation logic and rolling multi-day merging removed per request.
-   */
-  const getPendingAmount = (member: any) => {
-    if (!member || !payments) return 0;
-    
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-
-    const paidToday = (payments || []).some(p => 
-      p.memberId === member.id && 
-      (p.status === 'success' || p.status === 'paid') &&
-      p.paymentDate &&
-      format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
-    );
-
-    if (paidToday) return 0;
-    return Number(member.monthlyAmount) || 800;
-  };
 
   const dashboardData = useMemo(() => {
     if (!mounted || membersLoading || paymentsLoading || roundsLoading) return null;
@@ -169,12 +147,12 @@ export default function DashboardPage() {
 
         <Card className="hover:shadow-md transition-shadow duration-200 border-border/50">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground">Today's Pending</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground">Today's Unpaid</CardTitle>
             <AlertCircle className="size-4 text-destructive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl sm:text-3xl font-bold text-destructive">{pendingMembersList.length}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Awaiting today's payment</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Members without today's payment</p>
           </CardContent>
         </Card>
       </div>
@@ -215,7 +193,7 @@ export default function DashboardPage() {
           <CardHeader className="bg-muted/10">
             <CardTitle className="flex items-center gap-2 text-lg font-bold">
                <Clock className="size-5 text-amber-500" />
-               Pending Members
+               Unpaid Members
             </CardTitle>
             <CardDescription className="text-xs">Awaiting today's collection.</CardDescription>
           </CardHeader>
@@ -224,22 +202,19 @@ export default function DashboardPage() {
               <TableHeader className="bg-muted/30">
                 <TableRow>
                   <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
-                  <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider pr-6">Due (₹)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pendingMembersList.length > 0 ? pendingMembersList.slice(0, 5).map((member, i) => {
-                  const pendingAmount = getPendingAmount(member);
                   return (
                     <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                      <TableCell className="text-sm font-semibold pl-6 truncate max-w-[120px]">{member.name}</TableCell>
-                      <TableCell className="text-right font-bold text-amber-600 pr-6 tabular-nums">₹{pendingAmount.toLocaleString()}</TableCell>
+                      <TableCell className="text-sm font-semibold pl-6 truncate">{member.name}</TableCell>
                     </TableRow>
                   );
                 }) : (
                   <TableRow>
-                    <TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic text-xs">
-                      Zero pending dues for today.
+                    <TableCell className="h-32 text-center text-muted-foreground italic text-xs">
+                      Zero unpaid members for today.
                     </TableCell>
                   </TableRow>
                 )}
