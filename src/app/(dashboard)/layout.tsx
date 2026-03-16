@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { useUser } from "@/firebase"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
+import { Clock } from "lucide-react"
 
 export default function DashboardLayout({
   children,
@@ -46,9 +47,14 @@ export default function DashboardLayout({
           <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 sm:px-6 sticky top-0 bg-background/80 backdrop-blur-md z-40">
             <div className="flex items-center gap-2 sm:gap-4">
               <SidebarTrigger className="-ml-1" />
-              <h1 className="font-headline font-semibold text-base sm:text-lg hidden xs:block text-primary truncate max-w-[150px] sm:max-w-none">
-                Admin Panel
-              </h1>
+              <div className="flex flex-col">
+                <h1 className="font-headline font-semibold text-base sm:text-lg text-primary truncate max-w-[150px] sm:max-w-none">
+                  Admin Panel
+                </h1>
+                <div className="hidden xs:flex items-center gap-1 text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                  <Clock className="size-2.5" /> 12:00 AM - 11:59 PM
+                </div>
+              </div>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
                <div className="flex items-center gap-1.5 sm:gap-2 bg-muted/50 px-2.5 sm:px-4 py-1.5 rounded-full border shadow-sm transition-all hover:bg-muted/70">

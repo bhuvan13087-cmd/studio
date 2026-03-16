@@ -54,7 +54,7 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebas
 import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc } from "firebase/firestore"
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth, subDays } from "date-fns"
+import { format, parseISO, isSameMonth } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -130,49 +130,39 @@ export default function RoundsPage() {
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
   /**
-   * PRODUCTION SAFE ANALYSIS LOGIC
-   * Goal: Identify members who did NOT pay yesterday.
+   * PRODUCTION SAFE PENDING CALCULATION
+   * Checks if the member has paid for the current day cycle.
+   * Auto-calculation, multi-day merging, and date increment logic removed.
    */
   const analyzePaymentStatus = (member: any) => {
-    if (!member || !payments) return { amount: 0, pending: 0, missedYesterday: false };
+    if (!member || !payments) return { amount: 0, paid: false };
     
-    // Step 4: Monthly Members
-    if (member.paymentType === 'Monthly') return { amount: 0, pending: 0, missedYesterday: false };
-    
-    // Step 1: Get Yesterday Date
-    const today = new Date();
-    const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-    // Step 2: Check payment record for yesterday
-    const paidYesterday = (payments || []).some(p => 
+    const paidToday = (payments || []).some(p => 
       p.memberId === member.id && 
       (p.status === 'success' || p.status === 'paid') &&
       p.paymentDate &&
-      format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr
+      format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
     );
 
     const schemeAmount = Number(member.monthlyAmount) || 800;
 
-    // Step 3: Result
-    if (paidYesterday) {
-      return { amount: schemeAmount, pending: 0, missedYesterday: false }; // ₹800
-    } else {
-      return { amount: schemeAmount * 2, pending: schemeAmount, missedYesterday: true }; // ₹1600
-    }
+    return { 
+      amount: paidToday ? 0 : schemeAmount, 
+      paid: paidToday 
+    };
   };
 
-  const paymentAnalysis = useMemo(() => {
-    return analyzePaymentStatus(selectedMemberForPayment);
-  }, [selectedMemberForPayment, payments]);
-
   useEffect(() => {
-    if (isQuickPaymentDialogOpen && selectedMemberForPayment && paymentAnalysis) {
+    if (isQuickPaymentDialogOpen && selectedMemberForPayment) {
+      const { amount } = analyzePaymentStatus(selectedMemberForPayment);
       setPaymentData(prev => ({ 
         ...prev, 
-        amount: paymentAnalysis.amount 
+        amount: amount 
       }));
     }
-  }, [isQuickPaymentDialogOpen, selectedMemberForPayment, paymentAnalysis]);
+  }, [isQuickPaymentDialogOpen, selectedMemberForPayment]);
 
   useEffect(() => {
     if (isAddMemberDialogOpen && currentRound) {
@@ -223,7 +213,7 @@ export default function RoundsPage() {
         createdAt: serverTimestamp(),
       }));
       
-      await createAuditLog(db, user, `Registered ${newMember.name} to scheme ${currentRound.name} with payment type ${newMember.paymentType}`);
+      await createAuditLog(db, user, `Registered ${newMember.name} to scheme ${currentRound.name}`);
       
       setIsAddMemberDialogOpen(false);
       setNewMember(INITIAL_MEMBER_STATE);
@@ -287,12 +277,12 @@ export default function RoundsPage() {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave
       }));
 
-      await createAuditLog(db, user, `Recorded Quick Payment ₹${amountToSave} for ${selectedMemberForPayment.name} (${currentRound.name})`);
+      await createAuditLog(db, user, `Recorded Payment ₹${amountToSave} for ${selectedMemberForPayment.name}`);
 
       setIsQuickPaymentDialogOpen(false);
       setSelectedMemberForPayment(null);
       setPaymentData(INITIAL_PAYMENT_STATE);
-      toast({ title: "Payment Recorded", description: `Success! ₹${amountToSave} saved for ${selectedMemberForPayment.name}.` });
+      toast({ title: "Payment Recorded", description: "Ledger updated successfully." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
@@ -625,25 +615,16 @@ export default function RoundsPage() {
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Payment Status</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Payable (₹)</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Today Due (₹)</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
-                const todayStr = format(new Date(), 'yyyy-MM-dd');
-                const isPaidToday = (payments || []).some(p => 
-                  p.memberId === m.id && 
-                  (p.status === 'paid' || p.status === 'success') && 
-                  p.paymentDate && 
-                  format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
-                );
-                const displayStatus = isPaidToday ? 'success' : 'pending';
+                const { amount, paid } = analyzePaymentStatus(m);
+                const displayStatus = paid ? 'success' : 'pending';
                 
-                // PRODUCTION SAFE ANALYSIS LOGIC
-                const { amount } = analyzePaymentStatus(m);
-
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
                     <TableCell className="pl-6">
@@ -661,19 +642,15 @@ export default function RoundsPage() {
                           {m.name.split(' ').map((n: string) => n[0]).join('')}
                         </div>
                         <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold truncate max-w-[120px] group-hover:text-primary transition-colors">{m.name}</span>
-                            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm bg-muted text-muted-foreground uppercase">
-                              [{m.paymentType || currentRound?.collectionType}]
-                            </span>
-                          </div>
+                          <span className="text-xs font-semibold truncate max-w-[120px] group-hover:text-primary transition-colors">{m.name}</span>
+                          <span className="text-[8px] font-bold text-muted-foreground uppercase">{m.phone}</span>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell><Badge variant={displayStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", displayStatus === 'success' ? "bg-emerald-500" : "")}>{displayStatus}</Badge></TableCell>
                     <TableCell className="text-right text-xs font-bold tabular-nums">
-                      <span className={cn(amount > 0 && !isPaidToday ? "text-amber-600" : "text-muted-foreground")}>
-                        ₹{(isPaidToday ? 0 : amount).toLocaleString()}
+                      <span className={cn(!paid ? "text-amber-600" : "text-muted-foreground")}>
+                        ₹{amount.toLocaleString()}
                       </span>
                     </TableCell>
                     <TableCell className="text-right pr-6">
@@ -683,8 +660,8 @@ export default function RoundsPage() {
                           size="icon" 
                           className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" 
                           onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setIsQuickPaymentDialogOpen(true); } }} 
-                          disabled={isActionPending || displayStatus === 'success'}
-                          title="Add Payment"
+                          disabled={isActionPending || paid}
+                          title="Record Payment"
                         >
                           <IndianRupee className="size-4" />
                         </Button>
@@ -878,7 +855,7 @@ export default function RoundsPage() {
             <form onSubmit={handleQuickPayment}>
               <DialogHeader>
                 <DialogTitle>Add Payment</DialogTitle>
-                <DialogDescription>Quickly record a contribution for {selectedMemberForPayment.name}.</DialogDescription>
+                <DialogDescription>Record contribution for {selectedMemberForPayment.name}.</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-6">
                 <div className="grid gap-2">
@@ -886,41 +863,15 @@ export default function RoundsPage() {
                   <Input value={selectedMemberForPayment.name} readOnly className="bg-muted font-bold" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Group / Scheme</Label>
-                  <Input value={currentRound?.name || ""} readOnly className="bg-muted font-bold" />
-                </div>
-                
-                {/* PRODUCTION SAFE ANALYSIS INDICATOR */}
-                {paymentAnalysis.missedYesterday && (
-                  <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in slide-in-from-top-1 duration-300">
-                    <div className="flex items-center gap-2">
-                      <Clock className="size-4 text-amber-600" />
-                      <span className="text-xs font-bold text-amber-700">
-                        Pending: Yesterday
-                      </span>
-                    </div>
-                    <Badge variant="outline" className="text-[9px] border-amber-300 bg-amber-100 text-amber-700">
-                      ₹{paymentAnalysis.pending.toLocaleString()} Due
-                    </Badge>
-                  </div>
-                )}
-
-                <div className="grid gap-2">
                   <Label>Amount (₹)</Label>
                   <Input 
                     type="number"
                     value={paymentData.amount || ""} 
-                    onChange={e => {
-                      const val = Number(e.target.value);
-                      setPaymentData({ ...paymentData, amount: val });
-                    }}
+                    onChange={e => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
                     className="font-bold text-emerald-600 h-11 text-lg" 
                     placeholder="Enter amount"
                     disabled={isActionPending}
                   />
-                  <p className="text-[10px] text-muted-foreground font-medium italic flex items-center gap-1">
-                    <Info className="size-3" /> Suggested: ₹{paymentAnalysis.amount.toLocaleString()}
-                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label>Payment Method</Label>

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO, startOfDay, subDays } from "date-fns"
+import { format, isSameMonth, parseISO, startOfDay } from "date-fns"
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
@@ -42,35 +42,24 @@ export default function DashboardPage() {
   }, [])
 
   /**
-   * PRODUCTION SAFE ANALYSIS LOGIC
-   * Goal: Identify members who did NOT pay yesterday.
+   * PRODUCTION SAFE PENDING CALCULATION
+   * Logic: Checks if a successful payment exists for the current day.
+   * Auto-calculation logic and rolling multi-day merging removed per request.
    */
   const getPendingAmount = (member: any) => {
     if (!member || !payments) return 0;
     
-    // Step 4: Monthly Members
-    if (member.paymentType === 'Monthly') return 0;
-    
-    // Step 1: Get Yesterday Date
-    const today = new Date();
-    const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-    // Step 2: Check payment record for yesterday
-    const paidYesterday = (payments || []).some(p => 
+    const paidToday = (payments || []).some(p => 
       p.memberId === member.id && 
       (p.status === 'success' || p.status === 'paid') &&
       p.paymentDate &&
-      format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr
+      format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
     );
 
-    const schemeAmount = Number(member.monthlyAmount) || 800;
-
-    // Step 3: Result
-    if (paidYesterday) {
-      return schemeAmount; // ₹800
-    } else {
-      return schemeAmount * 2; // ₹1600
-    }
+    if (paidToday) return 0;
+    return Number(member.monthlyAmount) || 800;
   };
 
   const dashboardData = useMemo(() => {
