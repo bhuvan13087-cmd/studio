@@ -28,7 +28,6 @@ export default function DashboardPage() {
   const [revenueView, setRevenueView] = useState<'month' | 'today'>('month')
   const db = useFirestore()
 
-  // FIXED: MEMOIZED QUERIES
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
   const { data: members, isLoading: membersLoading } = useCollection(membersQuery)
 
@@ -66,6 +65,8 @@ export default function DashboardPage() {
 
   // --- Calculations ---
   const now = new Date()
+  const todayStr = format(now, 'yyyy-MM-dd')
+
   const currentMonthPayments = (payments || []).filter(p => {
     if (!p.paymentDate) return false;
     try {
@@ -82,18 +83,25 @@ export default function DashboardPage() {
   const collectedToday = (payments || []).filter(p => {
     if (!p.paymentDate) return false;
     try {
-      return format(parseISO(p.paymentDate), 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd') && 
+      return format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr && 
              (p.status === 'paid' || p.status === 'success');
     } catch {
       return false;
     }
   }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
+  // Dynamic Pending Logic: SUCCESS if paid today, else PENDING
   const pendingMembers = (members || []).filter(m => {
     if (m.status === 'inactive') return false;
-    const paidThisMonth = currentMonthPayments.some(p => p.memberId === m.id && (p.status === 'paid' || p.status === 'success'));
-    return !paidThisMonth;
+    const paidToday = (payments || []).some(p => 
+      p.memberId === m.id && 
+      (p.status === 'paid' || p.status === 'success') && 
+      p.paymentDate && 
+      format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
+    );
+    return !paidToday;
   });
+
   const pendingPaymentsCount = pendingMembers.length
   
   const recentWinners = (rounds || []).filter(r => r.winnerName).slice(0, 4)
@@ -147,12 +155,12 @@ export default function DashboardPage() {
 
         <Card className="hover:shadow-md transition-shadow duration-200 border-border/50">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground">Pending Payments</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground">Today's Pending</CardTitle>
             <AlertCircle className="size-4 text-destructive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl sm:text-3xl font-bold text-destructive">{pendingPaymentsCount}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Outstanding dues</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Awaiting today's payment</p>
           </CardContent>
         </Card>
       </div>
@@ -195,26 +203,26 @@ export default function DashboardPage() {
                <Clock className="size-5 text-amber-500" />
                Pending Members
             </CardTitle>
-            <CardDescription className="text-xs">Awaiting current cycle payment.</CardDescription>
+            <CardDescription className="text-xs">Awaiting today's collection.</CardDescription>
           </CardHeader>
           <CardContent className="px-0 pt-0">
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
                   <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
-                  <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider pr-6">Due (₹)</TableHead>
+                  <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider pr-6">Daily (₹)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pendingMembersList.length > 0 ? pendingMembersList.map((member, i) => (
                   <TableRow key={i} className="hover:bg-muted/5 transition-colors">
                     <TableCell className="text-sm font-semibold pl-6 truncate max-w-[120px]">{member.name}</TableCell>
-                    <TableCell className="text-right font-bold text-amber-600 pr-6 tabular-nums">₹{member.monthlyAmount?.toLocaleString()}</TableCell>
+                    <TableCell className="text-right font-bold text-amber-600 pr-6 tabular-nums">₹{(member.monthlyAmount || 800).toLocaleString()}</TableCell>
                   </TableRow>
                 )) : (
                   <TableRow>
                     <TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic text-xs">
-                      Zero pending dues.
+                      Zero pending dues for today.
                     </TableCell>
                   </TableRow>
                 )}

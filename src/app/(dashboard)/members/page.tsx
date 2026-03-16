@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
@@ -97,16 +98,14 @@ export default function MembersPage() {
 
   const paidMemberStatus = useMemo(() => {
     if (!payments) return new Map<string, any>();
-    const now = new Date();
-    const start = startOfMonth(now);
-    const end = endOfMonth(now);
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     
     const paidMap = new Map<string, any>();
     payments.forEach(p => {
       if ((p.status === 'paid' || p.status === 'success') && p.paymentDate) {
         try {
-          const d = parseISO(p.paymentDate);
-          if (isWithinInterval(d, { start, end })) {
+          const pDateStr = format(parseISO(p.paymentDate), 'yyyy-MM-dd');
+          if (pDateStr === todayStr) {
             paidMap.set(p.memberId, p);
           }
         } catch (e) {}
@@ -222,8 +221,8 @@ export default function MembersPage() {
                 <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Loading members...</TableCell></TableRow>
               ) : visibleMembers.length > 0 ? (
                 visibleMembers.map((member) => {
-                  const currentMonthPayment = paidMemberStatus.get(member.id);
-                  const isPaid = !!currentMonthPayment;
+                  const todayPayment = paidMemberStatus.get(member.id);
+                  const isPaidToday = !!todayPayment;
                   return (
                     <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
                       <TableCell>
@@ -239,7 +238,7 @@ export default function MembersPage() {
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-xs text-muted-foreground tabular-nums">{member.phone}</TableCell>
                       <TableCell>
-                        {isPaid ? (
+                        {isPaidToday ? (
                           <Popover>
                             <PopoverTrigger asChild>
                               <button className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[10px] font-bold border border-emerald-200 uppercase tracking-tight shadow-sm">
@@ -247,8 +246,8 @@ export default function MembersPage() {
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-3 shadow-xl text-xs" align="start">
-                               <div className="font-bold text-emerald-600 mb-1">Paid: ₹{currentMonthPayment?.amountPaid?.toLocaleString()}</div>
-                               <div className="text-[10px] text-muted-foreground uppercase font-semibold">Date: {currentMonthPayment.paymentDate ? format(parseISO(currentMonthPayment.paymentDate), 'MMM dd, yyyy') : '-'}</div>
+                               <div className="font-bold text-emerald-600 mb-1">Paid: ₹{todayPayment?.amountPaid?.toLocaleString()}</div>
+                               <div className="text-[10px] text-muted-foreground uppercase font-semibold">Date: {todayPayment.paymentDate ? format(parseISO(todayPayment.paymentDate), 'MMM dd, yyyy') : '-'}</div>
                             </PopoverContent>
                           </Popover>
                         ) : (

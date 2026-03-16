@@ -137,7 +137,7 @@ export default function RoundsPage() {
       .filter(p => p.memberId === selectedMemberForPayment.id && (p.status === 'paid' || p.status === 'success'))
       .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
 
-    const baseAmount = Number(currentRound.monthlyAmount) || 0;
+    const baseAmount = Number(currentRound.monthlyAmount) || 800;
     const today = startOfDay(new Date());
     
     let lastDate: Date;
@@ -215,7 +215,6 @@ export default function RoundsPage() {
         chitGroup: currentRound.name,
         monthlyAmount: currentRound.monthlyAmount,
         status: "active",
-        paymentStatus: "pending",
         totalPaid: 0,
         createdAt: serverTimestamp(),
       }));
@@ -273,14 +272,13 @@ export default function RoundsPage() {
         month: currentMonth,
         amountPaid: amountToSave,
         paymentDate: new Date().toISOString(),
-        status: "paid",
+        status: "success",
         method: paymentData.method,
         createdAt: serverTimestamp()
       }));
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       await withTimeout(updateDoc(memberRef, {
-        paymentStatus: "success",
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave
       }));
 
@@ -415,7 +413,7 @@ export default function RoundsPage() {
                 <CardContent className="p-4 flex-1 space-y-3">
                   <div className="flex justify-between text-xs font-bold">
                     <span className="text-primary/70">Scheme Amount:</span>
-                    <span className="text-primary font-bold">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
+                    <span className="text-primary font-bold">₹{(group.monthlyAmount || 800).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs font-bold">
                     <span className="text-primary/70">Occupancy:</span>
@@ -612,7 +610,7 @@ export default function RoundsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border-l-4 border-l-amber-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Scheme Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-amber-600">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-amber-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Scheme Amount</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-amber-600">₹{(currentRound?.monthlyAmount || 800).toLocaleString()}</div></CardContent></Card>
       </div>
 
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -628,60 +626,71 @@ export default function RoundsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {assignedMembers.length > 0 ? assignedMembers.map((m) => (
-                <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
-                  <TableCell className="pl-6">
-                    <div 
-                      className="flex items-center gap-2 cursor-pointer group" 
-                      onClick={() => { 
-                        if(!isActionPending) { 
-                          setSelectedProfileMember(m); 
-                          setIsEditingProfile(false);
-                          setIsMemberProfileDialogOpen(true); 
-                        } 
-                      }}
-                    >
-                      <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px] group-hover:bg-primary group-hover:text-white transition-colors">
-                        {m.name.split(' ').map((n: string) => n[0]).join('')}
-                      </div>
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold truncate max-w-[120px] group-hover:text-primary transition-colors">{m.name}</span>
-                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm bg-muted text-muted-foreground uppercase">
-                            [{m.paymentType || currentRound?.collectionType}]
-                          </span>
+              {assignedMembers.length > 0 ? assignedMembers.map((m) => {
+                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                const isPaidToday = (payments || []).some(p => 
+                  p.memberId === m.id && 
+                  (p.status === 'paid' || p.status === 'success') && 
+                  p.paymentDate && 
+                  format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
+                );
+                const displayStatus = isPaidToday ? 'success' : 'pending';
+
+                return (
+                  <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
+                    <TableCell className="pl-6">
+                      <div 
+                        className="flex items-center gap-2 cursor-pointer group" 
+                        onClick={() => { 
+                          if(!isActionPending) { 
+                            setSelectedProfileMember(m); 
+                            setIsEditingProfile(false);
+                            setIsMemberProfileDialogOpen(true); 
+                          } 
+                        }}
+                      >
+                        <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px] group-hover:bg-primary group-hover:text-white transition-colors">
+                          {m.name.split(' ').map((n: string) => n[0]).join('')}
+                        </div>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold truncate max-w-[120px] group-hover:text-primary transition-colors">{m.name}</span>
+                            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm bg-muted text-muted-foreground uppercase">
+                              [{m.paymentType || currentRound?.collectionType}]
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell><Badge variant={m.paymentStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", m.paymentStatus === 'success' ? "bg-emerald-500" : "")}>{m.paymentStatus || "Pending"}</Badge></TableCell>
-                  <TableCell className="text-right text-xs font-bold tabular-nums">₹{(m.totalPaid || 0).toLocaleString()}</TableCell>
-                  <TableCell className="text-right pr-6">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" 
-                        onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setIsQuickPaymentDialogOpen(true); } }} 
-                        disabled={isActionPending || m.paymentStatus === 'success'}
-                        title="Add Payment"
-                      >
-                        <IndianRupee className="size-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-muted-foreground hover:text-primary" 
-                        onClick={() => { if(!isActionPending) { setHistoryMember(m); setIsHistoryDialogOpen(true); } }} 
-                        disabled={isActionPending}
-                        title="View History"
-                      >
-                        <History className="size-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-xs text-muted-foreground italic">No participants registered in this scheme.</TableCell></TableRow>}
+                    </TableCell>
+                    <TableCell><Badge variant={displayStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", displayStatus === 'success' ? "bg-emerald-500" : "")}>{displayStatus}</Badge></TableCell>
+                    <TableCell className="text-right text-xs font-bold tabular-nums">₹{(m.totalPaid || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right pr-6">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" 
+                          onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setIsQuickPaymentDialogOpen(true); } }} 
+                          disabled={isActionPending || displayStatus === 'success'}
+                          title="Add Payment"
+                        >
+                          <IndianRupee className="size-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-muted-foreground hover:text-primary" 
+                          onClick={() => { if(!isActionPending) { setHistoryMember(m); setIsHistoryDialogOpen(true); } }} 
+                          disabled={isActionPending}
+                          title="View History"
+                        >
+                          <History className="size-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              }) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-xs text-muted-foreground italic">No participants registered in this scheme.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
@@ -887,7 +896,7 @@ export default function RoundsPage() {
                   />
                   {paymentCalculation.pendingDays > 1 && (
                     <p className="text-[10px] text-muted-foreground font-medium italic">
-                      Suggested: ₹{(Number(currentRound?.monthlyAmount) * paymentCalculation.pendingDays).toLocaleString()} (₹{currentRound?.monthlyAmount} × {paymentCalculation.pendingDays} days)
+                      Suggested: ₹{(Number(currentRound?.monthlyAmount || 800) * paymentCalculation.pendingDays).toLocaleString()} (₹{currentRound?.monthlyAmount || 800} × {paymentCalculation.pendingDays} days)
                     </p>
                   )}
                 </div>
@@ -946,4 +955,3 @@ export default function RoundsPage() {
     </div>
   )
 }
-    
