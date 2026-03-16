@@ -129,16 +129,19 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Enhanced calculation logic for dynamic dues
+  /**
+   * Safe Pending Amount Calculation for Daily Members
+   * missed_days = today_date - last_payment_date - 1
+   * total_payable = Daily Amount + (missed_days * Daily Amount)
+   */
   const calculatePendingDues = (member: any, scheme: any) => {
-    if (!member || !scheme || !payments) return { amount: 0, missedDays: 0 };
+    if (!member || !scheme || !payments) return { amount: 0, missedDays: 0, totalPayable: 0 };
     
-    // Rule 2: Monthly members always show 0 pending for daily calculation
+    // Monthly members always show 0 pending in this context
     if ((member.paymentType || scheme.collectionType) === 'Monthly') {
-      return { amount: 0, missedDays: 0 };
+      return { amount: 0, missedDays: 0, totalPayable: 0 };
     }
 
-    // Filter successful payments for this member
     const memberPayments = (payments || [])
       .filter(p => p.memberId === member.id && (p.status === 'paid' || p.status === 'success'))
       .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
@@ -146,26 +149,24 @@ export default function RoundsPage() {
     const baseAmount = Number(scheme.monthlyAmount) || 800;
     const today = startOfDay(new Date());
     
-    // Case 1: NEVER PAID (Treat as 1 pending day per special request)
-    if (memberPayments.length === 0) {
-      return { amount: baseAmount, missedDays: 0 };
-    }
+    // Use last payment date, or fallback to join date if never paid
+    const referenceDateStr = memberPayments.length > 0 
+      ? memberPayments[0].paymentDate 
+      : member.joinDate;
 
-    // Case 2: History exists
-    const lastDate = startOfDay(parseISO(memberPayments[0].paymentDate));
-    const pendingDays = differenceInCalendarDays(today, lastDate);
+    if (!referenceDateStr) return { amount: baseAmount, missedDays: 0, totalPayable: baseAmount };
 
-    // If they already paid today, pendingDays will be 0.
-    // However, this function is used when they HAVEN'T paid today.
-    // If they paid yesterday, pendingDays = 1. Amount = 800.
-    // If they paid 2 days ago, pendingDays = 2. Amount = 1600.
-    
-    const amount = Math.max(1, pendingDays) * baseAmount;
-    const missedDays = pendingDays > 1 ? pendingDays - 1 : 0;
+    const lastDate = startOfDay(parseISO(referenceDateStr));
+    const diffDays = differenceInCalendarDays(today, lastDate);
+
+    // Logic: missed_days = today - last_payment - 1
+    const missedDays = Math.max(0, diffDays - 1);
+    const totalPayable = baseAmount + (missedDays * baseAmount);
 
     return {
-      amount,
-      missedDays
+      amount: baseAmount,
+      missedDays: missedDays,
+      totalPayable: totalPayable
     };
   };
 
@@ -178,7 +179,7 @@ export default function RoundsPage() {
     if (isQuickPaymentDialogOpen && selectedMemberForPayment && paymentCalculation) {
       setPaymentData(prev => ({ 
         ...prev, 
-        amount: paymentCalculation.amount 
+        amount: paymentCalculation.totalPayable 
       }));
     }
   }, [isQuickPaymentDialogOpen, selectedMemberForPayment, paymentCalculation]);
@@ -274,8 +275,19 @@ export default function RoundsPage() {
     e.preventDefault();
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
-    setIsActionPending(true);
     const amountToSave = Number(paymentData.amount);
+
+    // Validation: Cannot exceed total payable calculated
+    if (amountToSave > paymentCalculation.totalPayable) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: `Amount cannot exceed the total payable of ₹${paymentCalculation.totalPayable.toLocaleString()}.`
+      });
+      return;
+    }
+
+    setIsActionPending(true);
     const currentMonth = format(new Date(), 'MMMM yyyy');
 
     try {
@@ -634,7 +646,7 @@ export default function RoundsPage() {
               <TableRow className="bg-muted/30">
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Payment Status</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Pending Due (₹)</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right">Payable (₹)</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
             </TableHeader>
@@ -649,8 +661,8 @@ export default function RoundsPage() {
                 );
                 const displayStatus = isPaidToday ? 'success' : 'pending';
                 
-                // Calculate dynamic pending dues for display in list
-                const { amount: pendingAmountDisplay } = calculatePendingDues(m, currentRound);
+                // Calculate dynamic payable for display
+                const { totalPayable } = calculatePendingDues(m, currentRound);
 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
@@ -680,8 +692,8 @@ export default function RoundsPage() {
                     </TableCell>
                     <TableCell><Badge variant={displayStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", displayStatus === 'success' ? "bg-emerald-500" : "")}>{displayStatus}</Badge></TableCell>
                     <TableCell className="text-right text-xs font-bold tabular-nums">
-                      <span className={cn(pendingAmountDisplay > 0 && !isPaidToday ? "text-amber-600" : "text-muted-foreground")}>
-                        ₹{(isPaidToday ? 0 : pendingAmountDisplay).toLocaleString()}
+                      <span className={cn(totalPayable > 0 && !isPaidToday ? "text-amber-600" : "text-muted-foreground")}>
+                        ₹{(isPaidToday ? 0 : totalPayable).toLocaleString()}
                       </span>
                     </TableCell>
                     <TableCell className="text-right pr-6">
@@ -908,7 +920,7 @@ export default function RoundsPage() {
                       </span>
                     </div>
                     <Badge variant="outline" className="text-[9px] border-amber-300 bg-amber-100 text-amber-700">
-                      ₹{(currentRound?.monthlyAmount || 800)} × {paymentCalculation.missedDays + 1}
+                      ₹{currentRound?.monthlyAmount || 800} × {paymentCalculation.missedDays + 1}
                     </Badge>
                   </div>
                 )}
@@ -918,16 +930,18 @@ export default function RoundsPage() {
                   <Input 
                     type="number"
                     value={paymentData.amount || ""} 
-                    onChange={e => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
+                    max={paymentCalculation.totalPayable}
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      setPaymentData({ ...paymentData, amount: val });
+                    }}
                     className="font-bold text-emerald-600 h-11 text-lg" 
                     placeholder="Enter amount"
                     disabled={isActionPending}
                   />
-                  {paymentCalculation.missedDays >= 0 && (
-                    <p className="text-[10px] text-muted-foreground font-medium italic flex items-center gap-1">
-                      <Info className="size-3" /> Suggested: ₹{paymentCalculation.amount.toLocaleString()} for {paymentCalculation.missedDays + 1} day(s)
-                    </p>
-                  )}
+                  <p className="text-[10px] text-muted-foreground font-medium italic flex items-center gap-1">
+                    <Info className="size-3" /> Max Payable: ₹{paymentCalculation.totalPayable.toLocaleString()}
+                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label>Payment Method</Label>

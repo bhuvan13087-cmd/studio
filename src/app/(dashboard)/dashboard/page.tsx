@@ -41,11 +41,15 @@ export default function DashboardPage() {
     setMounted(true)
   }, [])
 
-  // Optimized Helper for Dynamic Pending Dues inside Dashboard
+  /**
+   * Safe Pending Amount Calculation for Dashboard
+   * missed_days = today_date - last_payment_date - 1
+   * total_payable = Daily Amount + (missed_days * Daily Amount)
+   */
   const getPendingAmount = (member: any) => {
     if (!member || !payments || !rounds) return 0;
     
-    // Monthly members always show 0 pending dues in the daily list
+    // Monthly members always show 0 pending in this specific context
     if (member.paymentType === 'Monthly') return 0;
     
     const scheme = rounds.find(r => r.name === member.chitGroup);
@@ -56,15 +60,18 @@ export default function DashboardPage() {
       .filter(p => p.memberId === member.id && (p.status === 'paid' || p.status === 'success'))
       .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
 
-    if (memberPayments.length === 0) {
-      return baseAmount; // Default 1 pending day for never paid
-    }
+    const referenceDateStr = memberPayments.length > 0 
+      ? memberPayments[0].paymentDate 
+      : member.joinDate;
 
-    const lastDate = startOfDay(parseISO(memberPayments[0].paymentDate));
-    const pendingDays = differenceInCalendarDays(today, lastDate);
+    if (!referenceDateStr) return baseAmount;
+
+    const lastDate = startOfDay(parseISO(referenceDateStr));
+    const diffDays = differenceInCalendarDays(today, lastDate);
     
-    // Multiply base amount by total pending days (missed days + today)
-    return Math.max(1, pendingDays) * baseAmount;
+    // missed_days = diffDays - 1
+    const missedDays = Math.max(0, diffDays - 1);
+    return baseAmount + (missedDays * baseAmount);
   };
 
   const dashboardData = useMemo(() => {
@@ -270,7 +277,7 @@ export default function DashboardPage() {
                          <span className="font-bold text-sm truncate">{payment.memberName}</span>
                          <span className="text-[10px] text-muted-foreground font-medium">{payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd, yyyy') : '-'}</span>
                       </div>
-                      <div className="flex flex-col items-end shrink-0 pl-2">
+                      <div className="flex items-center gap-1.5 h-10">
                          <span className="font-bold text-emerald-600 text-sm tabular-nums">₹{payment.amountPaid?.toLocaleString()}</span>
                          <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-tight">Success</span>
                       </div>
