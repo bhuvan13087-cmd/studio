@@ -54,7 +54,7 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebas
 import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc } from "firebase/firestore"
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth, differenceInCalendarDays, startOfDay } from "date-fns"
+import { format, parseISO, isSameMonth, subDays } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -130,59 +130,49 @@ export default function RoundsPage() {
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
   /**
-   * Safe Pending Amount Calculation for Daily Members
-   * missed_days = today_date - last_payment_date - 1
-   * total_payable = Daily Amount + (missed_days * Daily Amount)
+   * PRODUCTION SAFE ANALYSIS LOGIC
+   * Goal: Identify members who did NOT pay yesterday.
    */
-  const calculatePendingDues = (member: any, scheme: any) => {
-    if (!member || !scheme || !payments) return { amount: 0, missedDays: 0, totalPayable: 0 };
+  const analyzePaymentStatus = (member: any) => {
+    if (!member || !payments) return { amount: 0, pending: 0, missedYesterday: false };
     
-    // Monthly members always show 0 pending in this context
-    if ((member.paymentType || scheme.collectionType) === 'Monthly') {
-      return { amount: 0, missedDays: 0, totalPayable: 0 };
+    // Step 4: Monthly Members
+    if (member.paymentType === 'Monthly') return { amount: 0, pending: 0, missedYesterday: false };
+    
+    // Step 1: Get Yesterday Date
+    const today = new Date();
+    const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+
+    // Step 2: Check payment record for yesterday
+    const paidYesterday = (payments || []).some(p => 
+      p.memberId === member.id && 
+      (p.status === 'success' || p.status === 'paid') &&
+      p.paymentDate &&
+      format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr
+    );
+
+    const schemeAmount = Number(member.monthlyAmount) || 800;
+
+    // Step 3: Result
+    if (paidYesterday) {
+      return { amount: schemeAmount, pending: 0, missedYesterday: false }; // ₹800
+    } else {
+      return { amount: schemeAmount * 2, pending: schemeAmount, missedYesterday: true }; // ₹1600
     }
-
-    const memberPayments = (payments || [])
-      .filter(p => p.memberId === member.id && (p.status === 'paid' || p.status === 'success'))
-      .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
-
-    const baseAmount = Number(scheme.monthlyAmount) || 800;
-    const today = startOfDay(new Date());
-    
-    // Use last payment date, or fallback to join date if never paid
-    const referenceDateStr = memberPayments.length > 0 
-      ? memberPayments[0].paymentDate 
-      : member.joinDate;
-
-    if (!referenceDateStr) return { amount: baseAmount, missedDays: 0, totalPayable: baseAmount };
-
-    const lastDate = startOfDay(parseISO(referenceDateStr));
-    const diffDays = differenceInCalendarDays(today, lastDate);
-
-    // Logic: missed_days = today - last_payment - 1
-    const missedDays = Math.max(0, diffDays - 1);
-    const totalPayable = baseAmount + (missedDays * baseAmount);
-
-    return {
-      amount: baseAmount,
-      missedDays: missedDays,
-      totalPayable: totalPayable
-    };
   };
 
-  const paymentCalculation = useMemo(() => {
-    return calculatePendingDues(selectedMemberForPayment, currentRound);
-  }, [selectedMemberForPayment, currentRound, payments]);
+  const paymentAnalysis = useMemo(() => {
+    return analyzePaymentStatus(selectedMemberForPayment);
+  }, [selectedMemberForPayment, payments]);
 
-  // Auto-fill amount field when dialog opens
   useEffect(() => {
-    if (isQuickPaymentDialogOpen && selectedMemberForPayment && paymentCalculation) {
+    if (isQuickPaymentDialogOpen && selectedMemberForPayment && paymentAnalysis) {
       setPaymentData(prev => ({ 
         ...prev, 
-        amount: paymentCalculation.totalPayable 
+        amount: paymentAnalysis.amount 
       }));
     }
-  }, [isQuickPaymentDialogOpen, selectedMemberForPayment, paymentCalculation]);
+  }, [isQuickPaymentDialogOpen, selectedMemberForPayment, paymentAnalysis]);
 
   useEffect(() => {
     if (isAddMemberDialogOpen && currentRound) {
@@ -276,16 +266,6 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
     const amountToSave = Number(paymentData.amount);
-
-    // Validation: Cannot exceed total payable calculated
-    if (amountToSave > paymentCalculation.totalPayable) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: `Amount cannot exceed the total payable of ₹${paymentCalculation.totalPayable.toLocaleString()}.`
-      });
-      return;
-    }
 
     setIsActionPending(true);
     const currentMonth = format(new Date(), 'MMMM yyyy');
@@ -661,8 +641,8 @@ export default function RoundsPage() {
                 );
                 const displayStatus = isPaidToday ? 'success' : 'pending';
                 
-                // Calculate dynamic payable for display
-                const { totalPayable } = calculatePendingDues(m, currentRound);
+                // PRODUCTION SAFE ANALYSIS LOGIC
+                const { amount } = analyzePaymentStatus(m);
 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
@@ -692,8 +672,8 @@ export default function RoundsPage() {
                     </TableCell>
                     <TableCell><Badge variant={displayStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5", displayStatus === 'success' ? "bg-emerald-500" : "")}>{displayStatus}</Badge></TableCell>
                     <TableCell className="text-right text-xs font-bold tabular-nums">
-                      <span className={cn(totalPayable > 0 && !isPaidToday ? "text-amber-600" : "text-muted-foreground")}>
-                        ₹{(isPaidToday ? 0 : totalPayable).toLocaleString()}
+                      <span className={cn(amount > 0 && !isPaidToday ? "text-amber-600" : "text-muted-foreground")}>
+                        ₹{(isPaidToday ? 0 : amount).toLocaleString()}
                       </span>
                     </TableCell>
                     <TableCell className="text-right pr-6">
@@ -910,17 +890,17 @@ export default function RoundsPage() {
                   <Input value={currentRound?.name || ""} readOnly className="bg-muted font-bold" />
                 </div>
                 
-                {/* Pending Day Indication Indicator */}
-                {paymentCalculation.missedDays >= 1 && (
+                {/* PRODUCTION SAFE ANALYSIS INDICATOR */}
+                {paymentAnalysis.missedYesterday && (
                   <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in slide-in-from-top-1 duration-300">
                     <div className="flex items-center gap-2">
                       <Clock className="size-4 text-amber-600" />
                       <span className="text-xs font-bold text-amber-700">
-                        Pending: Day {paymentCalculation.missedDays}
+                        Pending: Yesterday
                       </span>
                     </div>
                     <Badge variant="outline" className="text-[9px] border-amber-300 bg-amber-100 text-amber-700">
-                      ₹{currentRound?.monthlyAmount || 800} × {paymentCalculation.missedDays + 1}
+                      ₹{paymentAnalysis.pending.toLocaleString()} Due
                     </Badge>
                   </div>
                 )}
@@ -930,7 +910,6 @@ export default function RoundsPage() {
                   <Input 
                     type="number"
                     value={paymentData.amount || ""} 
-                    max={paymentCalculation.totalPayable}
                     onChange={e => {
                       const val = Number(e.target.value);
                       setPaymentData({ ...paymentData, amount: val });
@@ -940,7 +919,7 @@ export default function RoundsPage() {
                     disabled={isActionPending}
                   />
                   <p className="text-[10px] text-muted-foreground font-medium italic flex items-center gap-1">
-                    <Info className="size-3" /> Max Payable: ₹{paymentCalculation.totalPayable.toLocaleString()}
+                    <Info className="size-3" /> Suggested: ₹{paymentAnalysis.amount.toLocaleString()}
                   </p>
                 </div>
                 <div className="grid gap-2">

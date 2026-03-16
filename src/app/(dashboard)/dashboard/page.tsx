@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO, startOfDay, differenceInCalendarDays } from "date-fns"
+import { format, isSameMonth, parseISO, startOfDay, subDays } from "date-fns"
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
@@ -42,36 +42,35 @@ export default function DashboardPage() {
   }, [])
 
   /**
-   * Safe Pending Amount Calculation for Dashboard
-   * missed_days = today_date - last_payment_date - 1
-   * total_payable = Daily Amount + (missed_days * Daily Amount)
+   * PRODUCTION SAFE ANALYSIS LOGIC
+   * Goal: Identify members who did NOT pay yesterday.
    */
   const getPendingAmount = (member: any) => {
-    if (!member || !payments || !rounds) return 0;
+    if (!member || !payments) return 0;
     
-    // Monthly members always show 0 pending in this specific context
+    // Step 4: Monthly Members
     if (member.paymentType === 'Monthly') return 0;
     
-    const scheme = rounds.find(r => r.name === member.chitGroup);
-    const baseAmount = Number(scheme?.monthlyAmount) || 800;
-    const today = startOfDay(new Date());
+    // Step 1: Get Yesterday Date
+    const today = new Date();
+    const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
 
-    const memberPayments = (payments || [])
-      .filter(p => p.memberId === member.id && (p.status === 'paid' || p.status === 'success'))
-      .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
+    // Step 2: Check payment record for yesterday
+    const paidYesterday = (payments || []).some(p => 
+      p.memberId === member.id && 
+      (p.status === 'success' || p.status === 'paid') &&
+      p.paymentDate &&
+      format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr
+    );
 
-    const referenceDateStr = memberPayments.length > 0 
-      ? memberPayments[0].paymentDate 
-      : member.joinDate;
+    const schemeAmount = Number(member.monthlyAmount) || 800;
 
-    if (!referenceDateStr) return baseAmount;
-
-    const lastDate = startOfDay(parseISO(referenceDateStr));
-    const diffDays = differenceInCalendarDays(today, lastDate);
-    
-    // missed_days = diffDays - 1
-    const missedDays = Math.max(0, diffDays - 1);
-    return baseAmount + (missedDays * baseAmount);
+    // Step 3: Result
+    if (paidYesterday) {
+      return schemeAmount; // ₹800
+    } else {
+      return schemeAmount * 2; // ₹1600
+    }
   };
 
   const dashboardData = useMemo(() => {
