@@ -643,7 +643,12 @@ export default function RoundsPage() {
                         </div>
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold truncate max-w-[120px] group-hover:text-primary transition-colors">{m.name}</span>
-                          <span className="text-[8px] font-bold text-muted-foreground uppercase">{m.phone}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[8px] font-bold text-muted-foreground uppercase">{m.phone}</span>
+                            <span className="text-[7px] font-extrabold text-primary/60 border border-primary/20 px-1 rounded bg-primary/5 uppercase tracking-tighter">
+                              {m.paymentType || currentRound?.collectionType}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </TableCell>
