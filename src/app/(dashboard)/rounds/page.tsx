@@ -654,7 +654,7 @@ export default function RoundsPage() {
                           variant="ghost" 
                           size="icon" 
                           className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" 
-                          onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setIsQuickPaymentDialogOpen(true); } }} 
+                          onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: currentRound?.monthlyAmount || 0 }); setIsQuickPaymentDialogOpen(true); } }} 
                           disabled={isActionPending || paid}
                           title="Record Payment"
                         >
