@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock, AlertCircle, PlusCircle, Calendar } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock, AlertCircle, PlusCircle, Calendar as CalendarIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -54,7 +54,7 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebas
 import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc, writeBatch } from "firebase/firestore"
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth, startOfDay } from "date-fns"
+import { format, parseISO, isSameMonth, startOfDay, eachDayOfInterval, differenceInDays, isValid } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -79,8 +79,9 @@ const INITIAL_PAYMENT_STATE = {
 }
 
 const INITIAL_PENDING_STATE = {
-  date: new Date().toISOString().split('T')[0],
-  amount: 0
+  fromDate: new Date().toISOString().split('T')[0],
+  toDate: new Date().toISOString().split('T')[0],
+  amountPerDay: 0
 }
 
 export default function RoundsPage() {
@@ -159,6 +160,17 @@ export default function RoundsPage() {
       pendingRecords
     };
   };
+
+  const pendingTotalDays = useMemo(() => {
+    try {
+      const from = parseISO(pendingFormData.fromDate);
+      const to = parseISO(pendingFormData.toDate);
+      if (isValid(from) && isValid(to) && to >= from) {
+        return differenceInDays(to, from) + 1;
+      }
+    } catch {}
+    return 0;
+  }, [pendingFormData.fromDate, pendingFormData.toDate]);
 
   useEffect(() => {
     if (isAddMemberDialogOpen && currentRound) {
@@ -259,7 +271,6 @@ export default function RoundsPage() {
     try {
       const batch = writeBatch(db);
       
-      // 1. Record the success payment
       const paymentRef = doc(collection(db, 'payments'));
       batch.set(paymentRef, {
         id: paymentRef.id,
@@ -274,14 +285,12 @@ export default function RoundsPage() {
         createdAt: serverTimestamp()
       });
 
-      // 2. Clear all pending entries for this member automatically
       const { pendingRecords } = analyzePaymentStatus(selectedMemberForPayment);
       pendingRecords.forEach(p => {
         const pRef = doc(db, 'payments', p.id);
         batch.update(pRef, { status: "paid" });
       });
 
-      // 3. Update member's total paid
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave
@@ -305,30 +314,67 @@ export default function RoundsPage() {
     e.preventDefault();
     if (!db || !selectedMemberForPayment || isActionPending) return;
 
+    const fromDate = parseISO(pendingFormData.fromDate);
+    const toDate = parseISO(pendingFormData.toDate);
+    
+    if (!isValid(fromDate) || !isValid(toDate) || toDate < fromDate) {
+      toast({ variant: "destructive", title: "Invalid Range", description: "Check your date selection." });
+      return;
+    }
+
+    // Production safety: No future dates
+    const today = startOfDay(new Date());
+    if (toDate > today) {
+       toast({ variant: "destructive", title: "Constraint Error", description: "Cannot add pending for future dates." });
+       return;
+    }
+
     setIsActionPending(true);
-    const amount = Number(pendingFormData.amount);
-    const month = format(parseISO(pendingFormData.date), 'MMMM yyyy');
-
+    
     try {
-      const paymentRef = doc(collection(db, 'payments'));
-      await withTimeout(addDocumentNonBlocking(collection(db, 'payments'), {
-        id: paymentRef.id,
-        memberId: selectedMemberForPayment.id,
-        memberName: selectedMemberForPayment.name,
-        month: month,
-        targetDate: pendingFormData.date,
-        amountPaid: amount,
-        paymentDate: new Date().toISOString(),
-        status: "pending",
-        method: "Manual Entry",
-        createdAt: serverTimestamp()
-      }));
+      const days = eachDayOfInterval({ start: fromDate, end: toDate });
+      let addedCount = 0;
+      let skippedCount = 0;
 
-      await createAuditLog(db, user, `Added Manual Pending ₹${amount} for ${selectedMemberForPayment.name} on ${pendingFormData.date}`);
+      for (const day of days) {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        
+        // Duplicate check: Prevent double entry for the same date/member
+        const exists = (allPayments || []).some(p => 
+          p.memberId === selectedMemberForPayment.id && 
+          p.targetDate === dateStr
+        );
+
+        if (exists) {
+          skippedCount++;
+          continue;
+        }
+
+        const amount = Number(pendingFormData.amountPerDay);
+        const month = format(day, 'MMMM yyyy');
+
+        await addDocumentNonBlocking(collection(db, 'payments'), {
+          memberId: selectedMemberForPayment.id,
+          memberName: selectedMemberForPayment.name,
+          month: month,
+          targetDate: dateStr,
+          amountPaid: amount,
+          paymentDate: new Date().toISOString(),
+          status: "pending",
+          method: "Manual Entry",
+          createdAt: serverTimestamp()
+        });
+        addedCount++;
+      }
+
+      await createAuditLog(db, user, `Added ${addedCount} pending entries for ${selectedMemberForPayment.name} (${pendingFormData.fromDate} to ${pendingFormData.toDate})`);
       
       setIsAddPendingMode(false);
       setPendingFormData(INITIAL_PENDING_STATE);
-      toast({ title: "Pending Added", description: "Record stored in system database." });
+      toast({ 
+        title: "Process Complete", 
+        description: `Added ${addedCount} entries. ${skippedCount > 0 ? `Skipped ${skippedCount} duplicates.` : ""}` 
+      });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to add pending." });
     } finally {
@@ -921,7 +967,13 @@ export default function RoundsPage() {
                 <DialogTitle className="flex items-center justify-between">
                   <span>Member Payment</span>
                   {!isAddPendingMode && (
-                    <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold uppercase tracking-widest gap-2" onClick={() => setIsAddPendingMode(true)}>
+                    <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold uppercase tracking-widest gap-2" onClick={() => {
+                        setIsAddPendingMode(true);
+                        setPendingFormData({
+                          ...INITIAL_PENDING_STATE,
+                          amountPerDay: currentRound?.monthlyAmount || 0
+                        });
+                    }}>
                       <PlusCircle className="size-3.5" /> Add Pending
                     </Button>
                   )}
@@ -936,32 +988,50 @@ export default function RoundsPage() {
                       <h4 className="text-xs font-bold uppercase text-amber-700">New Pending Entry</h4>
                       <Button variant="ghost" size="icon" className="h-6 w-6 text-amber-600 hover:bg-amber-100" onClick={() => setIsAddPendingMode(false)}><X className="size-4" /></Button>
                     </div>
-                    <div className="grid gap-2">
-                      <Label className="text-[10px] font-bold uppercase text-amber-600 ml-1">Target Date</Label>
-                      <Input 
-                        type="date" 
-                        value={pendingFormData.date} 
-                        onChange={e => setPendingFormData({ ...pendingFormData, date: e.target.value })}
-                        className="bg-white border-amber-200"
-                        required
-                        disabled={isActionPending}
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label className="text-[10px] font-bold uppercase text-amber-600 ml-1">From Date</Label>
+                        <Input 
+                          type="date" 
+                          value={pendingFormData.fromDate} 
+                          onChange={e => setPendingFormData({ ...pendingFormData, fromDate: e.target.value })}
+                          className="bg-white border-amber-200"
+                          required
+                          disabled={isActionPending}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-[10px] font-bold uppercase text-amber-600 ml-1">To Date</Label>
+                        <Input 
+                          type="date" 
+                          value={pendingFormData.toDate} 
+                          onChange={e => setPendingFormData({ ...pendingFormData, toDate: e.target.value })}
+                          className="bg-white border-amber-200"
+                          required
+                          disabled={isActionPending}
+                        />
+                      </div>
                     </div>
                     <div className="grid gap-2">
-                      <Label className="text-[10px] font-bold uppercase text-amber-600 ml-1">Pending Amount (₹)</Label>
+                      <Label className="text-[10px] font-bold uppercase text-amber-600 ml-1">Amount Per Day (₹)</Label>
                       <Input 
                         type="number" 
-                        value={pendingFormData.amount || ""} 
-                        onChange={e => setPendingFormData({ ...pendingFormData, amount: Number(e.target.value) })}
+                        value={pendingFormData.amountPerDay || ""} 
+                        onChange={e => setPendingFormData({ ...pendingFormData, amountPerDay: Number(e.target.value) })}
                         className="bg-white border-amber-200 font-bold"
                         placeholder="e.g. 800"
                         required
                         disabled={isActionPending}
                       />
                     </div>
+                    {pendingTotalDays > 0 && (
+                        <div className="text-[10px] font-bold text-amber-700 bg-amber-100/50 p-2 rounded">
+                            Adding {pendingTotalDays} days. Total Pending: ₹{(pendingTotalDays * pendingFormData.amountPerDay).toLocaleString()}
+                        </div>
+                    )}
                     <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 font-bold text-xs uppercase h-10" disabled={isActionPending}>
                       {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
-                      Save Pending Entry
+                      Save Pending Entries
                     </Button>
                   </div>
                 </form>
