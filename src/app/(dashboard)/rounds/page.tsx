@@ -733,7 +733,7 @@ export default function RoundsPage() {
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
                 const { paid, pendingTotal } = analyzePaymentStatus(m);
-                const displayStatus = paid ? 'success' : 'pending';
+                const displayStatus = paid ? 'paid' : 'pending';
                 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
@@ -764,7 +764,7 @@ export default function RoundsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        <Badge variant={displayStatus === 'success' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5 w-fit", displayStatus === 'success' ? "bg-emerald-500" : "")}>{displayStatus}</Badge>
+                        <Badge variant={displayStatus === 'paid' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5 w-fit", displayStatus === 'paid' ? "bg-emerald-500" : "")}>{displayStatus}</Badge>
                         {pendingTotal > 0 && (
                           <span className="text-[9px] font-bold text-amber-600">Pending: ₹{pendingTotal.toLocaleString()}</span>
                         )}
@@ -776,7 +776,7 @@ export default function RoundsPage() {
                           variant="ghost" 
                           size="icon" 
                           className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" 
-                          onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: (currentRound?.monthlyAmount || 0) + pendingTotal }); setIsQuickPaymentDialogOpen(true); setIsAddPendingMode(false); } }} 
+                          onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: currentRound?.monthlyAmount || 0 }); setIsQuickPaymentDialogOpen(true); setIsAddPendingMode(false); } }} 
                           disabled={isActionPending || paid}
                           title="Record Payment"
                         >
@@ -1081,7 +1081,7 @@ export default function RoundsPage() {
                     <Button variant="outline" type="button" onClick={() => setIsQuickPaymentDialogOpen(false)} disabled={isActionPending} className="flex-1 font-bold h-11">Cancel</Button>
                     <Button type="submit" disabled={isActionPending} className="flex-1 font-bold gap-2 h-11 bg-emerald-600 hover:bg-emerald-700">
                       {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                      Record Success
+                      Record Paid
                     </Button>
                   </div>
                 </form>
@@ -1106,7 +1106,7 @@ export default function RoundsPage() {
                         <TableCell className={cn("text-xs font-bold", p.status === 'pending' ? 'text-amber-600' : 'text-emerald-600')}>₹{p.amountPaid?.toLocaleString()}</TableCell>
                         <TableCell>
                           <Badge variant={p.status === 'pending' ? 'secondary' : 'default'} className={cn("text-[8px] font-bold uppercase", p.status === 'pending' ? 'bg-amber-100 text-amber-700' : (p.status === 'success' || p.status === 'paid' ? 'bg-emerald-500' : 'bg-muted text-muted-foreground'))}>
-                            {p.status}
+                            {p.status === 'success' || p.status === 'paid' ? 'paid' : p.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right text-[10px] text-muted-foreground font-medium pr-4">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy HH:mm') : '-'}</TableCell>

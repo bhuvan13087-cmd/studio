@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
@@ -340,8 +341,8 @@ export default function PaymentsPage() {
                           </TableCell>
                           <TableCell className={cn("font-bold text-xs sm:text-sm tabular-nums", isCorrected ? "text-muted-foreground" : "text-emerald-600")}>₹{p.amountPaid?.toLocaleString()}</TableCell>
                           <TableCell className="hidden md:table-cell">
-                            <Badge variant={isCorrected ? "secondary" : "outline"} className={cn("text-[8px] uppercase font-bold", isCorrected && "bg-amber-50 text-amber-700")}>
-                              {isCorrected ? "Corrected" : "Success"}
+                            <Badge variant={isCorrected ? "secondary" : "outline"} className={cn("text-[8px] uppercase font-bold", isCorrected ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700 border-emerald-200")}>
+                              {isCorrected ? "Corrected" : "Paid"}
                             </Badge>
                           </TableCell>
                           <TableCell>
