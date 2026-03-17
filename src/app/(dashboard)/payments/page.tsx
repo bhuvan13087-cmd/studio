@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo, useEffect, useRef } from "react"
-import { Search, CheckCircle2, Clock, MoreHorizontal, History, Plus, Loader2, Calendar, Trash2, X, LayoutList, FileText, User, Lock, ChevronDown } from "lucide-react"
+import { useState, useMemo, useEffect } from "react"
+import { Search, CheckCircle2, Clock, MoreHorizontal, History, Plus, Loader2, Calendar, Trash2, X, LayoutList, FileText, User, Lock, ChevronDown, Edit3, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -26,7 +26,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
 import {
@@ -45,13 +44,11 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc } from "firebase/firestore"
-import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
+import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc, writeBatch } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
@@ -72,6 +69,15 @@ export default function PaymentsPage() {
   
   const [selectedAuditMember, setSelectedAuditMember] = useState<any>(null)
   const [isAuditProfileOpen, setIsAuditProfileOpen] = useState(false)
+
+  // Correction State
+  const [isCorrectionOpen, setIsCorrectionOpen] = useState(false)
+  const [paymentToCorrect, setPaymentToCorrect] = useState<any>(null)
+  const [correctionData, setCorrectionData] = useState({
+    memberId: "",
+    amount: 0,
+    date: ""
+  })
 
   const { toast } = useToast()
   const db = useFirestore()
@@ -94,18 +100,86 @@ export default function PaymentsPage() {
   const { data: monthLocks } = useCollection(locksQuery);
 
   useEffect(() => {
-    // Recovery effect to ensure UI isn't locked after dialogs close
     const recoveryInterval = setInterval(() => {
       if (document.body.style.pointerEvents === 'none') {
         document.body.style.pointerEvents = 'auto'
         document.body.style.overflow = 'auto'
       }
     }, 1000)
-
-    return () => {
-      clearInterval(recoveryInterval)
-    }
+    return () => clearInterval(recoveryInterval)
   }, []);
+
+  const handleCorrectPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !paymentToCorrect || isActionPending) return;
+
+    const newMember = members.find(m => m.id === correctionData.memberId);
+    if (!newMember) {
+      toast({ variant: "destructive", title: "Member Required", description: "Please select a valid member." });
+      return;
+    }
+
+    setIsActionPending(true);
+    try {
+      const batch = writeBatch(db);
+      const originalPaymentRef = doc(db, 'payments', paymentToCorrect.id);
+      const newPaymentRef = doc(collection(db, 'payments'));
+      
+      const [monthName, yearStr] = format(parseISO(correctionData.date), 'MMMM yyyy').split(' ');
+      const isLocked = monthLocks?.some(l => l.year === yearStr && l.monthName === monthName);
+      if (isLocked) throw new Error("Target month is locked.");
+
+      // 1. Mark original as corrected
+      batch.update(originalPaymentRef, {
+        status: 'corrected',
+        correctedAt: new Date().toISOString(),
+        correctedToId: newPaymentRef.id
+      });
+
+      // 2. Adjust original member's balance (subtract old amount)
+      const oldMember = members.find(m => m.id === paymentToCorrect.memberId);
+      if (oldMember) {
+        const oldMemberRef = doc(db, 'members', oldMember.id);
+        batch.update(oldMemberRef, {
+          totalPaid: Math.max(0, (oldMember.totalPaid || 0) - (paymentToCorrect.amountPaid || 0))
+        });
+      }
+
+      // 3. Create new correct payment record
+      batch.set(newPaymentRef, {
+        id: newPaymentRef.id,
+        memberId: newMember.id,
+        memberName: newMember.name,
+        month: format(parseISO(correctionData.date), 'MMMM yyyy'),
+        targetDate: correctionData.date,
+        amountPaid: Number(correctionData.amount),
+        paymentDate: new Date().toISOString(),
+        status: "success",
+        method: paymentToCorrect.method || "Cash",
+        originalPaymentId: paymentToCorrect.id,
+        createdAt: serverTimestamp()
+      });
+
+      // 4. Adjust new member's balance (add new amount)
+      const newMemberRef = doc(db, 'members', newMember.id);
+      batch.update(newMemberRef, {
+        totalPaid: (newMember.id === oldMember?.id 
+          ? Math.max(0, (oldMember.totalPaid || 0) - (paymentToCorrect.amountPaid || 0)) 
+          : (newMember.totalPaid || 0)) + Number(correctionData.amount)
+      });
+
+      await withTimeout(batch.commit());
+      await createAuditLog(db, user, `Corrected payment for ${paymentToCorrect.memberName} (₹${paymentToCorrect.amountPaid}) to ${newMember.name} (₹${correctionData.amount})`);
+
+      setIsCorrectionOpen(false);
+      setPaymentToCorrect(null);
+      toast({ title: "Payment Corrected", description: "Record updated and balances re-calculated." });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Correction Failed", description: error.message || "An error occurred." });
+    } finally {
+      setIsActionPending(false);
+    }
+  };
 
   const handleDeletePayment = async () => {
     if (!db || !paymentToDelete || isActionPending) return;
@@ -142,7 +216,7 @@ export default function PaymentsPage() {
   }
 
   const filteredPayments = useMemo(() => {
-    let list = payments.filter(p => p.status === 'paid' || p.status === 'success');
+    let list = payments.filter(p => p.status === 'paid' || p.status === 'success' || p.status === 'corrected');
     if (searchTerm) list = list.filter(p => p.memberName?.toLowerCase().includes(searchTerm.toLowerCase()));
     if (typeFilter !== "all") {
       list = list.filter(p => {
@@ -239,7 +313,7 @@ export default function PaymentsPage() {
                     <TableHead className="font-bold text-xs uppercase tracking-wider">Date</TableHead>
                     <TableHead className="font-bold text-xs uppercase tracking-wider">Member</TableHead>
                     <TableHead className="font-bold text-xs uppercase tracking-wider">Amount (₹)</TableHead>
-                    <TableHead className="font-bold text-xs uppercase tracking-wider hidden md:table-cell">Method</TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider hidden md:table-cell">Status</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -250,21 +324,26 @@ export default function PaymentsPage() {
                     visiblePayments.map((p) => {
                       const [m, y] = p.month.split(' ');
                       const isLocked = monthLocks?.some(l => l.year === y && l.monthName === m);
+                      const isCorrected = p.status === 'corrected';
                       return (
-                        <TableRow key={p.id} className="hover:bg-muted/10 transition-colors">
+                        <TableRow key={p.id} className={cn("hover:bg-muted/10 transition-colors", isCorrected && "opacity-60 bg-muted/5")}>
                           <TableCell className="text-[10px] sm:text-xs font-medium tabular-nums text-muted-foreground">
                             <div className="flex items-center gap-1.5">
                               {isLocked && <Lock className="size-2.5 text-amber-600" title="Month Locked" />}
-                              {p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : "-"}
+                              {p.targetDate || (p.paymentDate ? format(parseISO(p.paymentDate), 'yyyy-MM-dd') : "-")}
                             </div>
                           </TableCell>
-                          <TableCell className="font-semibold text-xs sm:text-sm">
+                          <TableCell className={cn("font-semibold text-xs sm:text-sm", isCorrected && "line-through")}>
                             <button onClick={() => openAuditProfile(p.memberId)} className="hover:text-primary hover:underline transition-all text-left">
                               {p.memberName}
                             </button>
                           </TableCell>
-                          <TableCell className="font-bold text-emerald-600 text-xs sm:text-sm tabular-nums">₹{p.amountPaid?.toLocaleString()}</TableCell>
-                          <TableCell className="hidden md:table-cell text-[10px] font-bold text-muted-foreground uppercase">{p.method || "Cash"}</TableCell>
+                          <TableCell className={cn("font-bold text-xs sm:text-sm tabular-nums", isCorrected ? "text-muted-foreground" : "text-emerald-600")}>₹{p.amountPaid?.toLocaleString()}</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <Badge variant={isCorrected ? "secondary" : "outline"} className={cn("text-[8px] uppercase font-bold", isCorrected && "bg-amber-50 text-amber-700")}>
+                              {isCorrected ? "Corrected" : "Success"}
+                            </Badge>
+                          </TableCell>
                           <TableCell>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -281,10 +360,28 @@ export default function PaymentsPage() {
                                 }}>
                                   <History className="mr-2 size-4" /> Full History
                                 </DropdownMenuItem>
+                                {!isCorrected && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onSelect={() => {
+                                      if (!isActionPending) {
+                                        setPaymentToCorrect(p);
+                                        setCorrectionData({
+                                          memberId: p.memberId,
+                                          amount: p.amountPaid,
+                                          date: p.targetDate || format(new Date(), 'yyyy-MM-dd')
+                                        });
+                                        setIsCorrectionOpen(true);
+                                      }
+                                    }}>
+                                      <Edit3 className="mr-2 size-4 text-primary" /> Correct Payment
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
                                   disabled={isLocked || isActionPending}
-                                  className={cn("text-destructive focus:bg-destructive/10 focus:text-destructive", isLocked && "opacity-50 pointer-events-none")} 
+                                  className={cn("text-destructive focus:bg-destructive/10 focus:text-destructive", (isLocked || isCorrected) && "opacity-50 pointer-events-none")} 
                                   onSelect={() => { 
                                     if (!isActionPending) {
                                       setPaymentToDelete(p); 
@@ -358,6 +455,65 @@ export default function PaymentsPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Correction Dialog */}
+      <Dialog open={isCorrectionOpen} onOpenChange={(o) => { if(!isActionPending) { setIsCorrectionOpen(o); if(!o) setPaymentToCorrect(null); } }}>
+        <DialogContent className="sm:max-w-[450px]">
+          {paymentToCorrect && (
+            <form onSubmit={handleCorrectPayment} className="space-y-6">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Edit3 className="size-5 text-primary" /> Payment Correction
+                </DialogTitle>
+                <DialogDescription>Rectify mistakes in member, amount, or date. Original data remains as an audit record.</DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="p-3 bg-muted/30 rounded-lg space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Original Record</Label>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold">{paymentToCorrect.memberName}</span>
+                    <span className="font-bold text-emerald-600">₹{paymentToCorrect.amountPaid?.toLocaleString()}</span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">{paymentToCorrect.targetDate || "No target date"}</div>
+                </div>
+
+                <div className="flex justify-center"><ArrowRight className="size-5 text-primary/30" /></div>
+
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Correct Member</Label>
+                    <Select value={correctionData.memberId} onValueChange={(v) => setCorrectionData({...correctionData, memberId: v})} disabled={isActionPending}>
+                      <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
+                      <SelectContent>
+                        {members.filter(m => m.status !== 'inactive').map(m => (
+                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Correct Amount (₹)</Label>
+                    <Input type="number" value={correctionData.amount || ""} onChange={e => setCorrectionData({...correctionData, amount: Number(e.target.value)})} required disabled={isActionPending} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Correct Date</Label>
+                    <Input type="date" value={correctionData.date} onChange={e => setCorrectionData({...correctionData, date: e.target.value})} required disabled={isActionPending} />
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button variant="outline" type="button" onClick={() => setIsCorrectionOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold gap-2">
+                  {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                  Apply Correction
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Member Audit Profile Modal */}
       <Dialog open={isAuditProfileOpen} onOpenChange={setIsAuditProfileOpen}>
