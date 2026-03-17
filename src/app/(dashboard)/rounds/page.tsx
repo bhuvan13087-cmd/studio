@@ -141,7 +141,6 @@ export default function RoundsPage() {
     if (!member || !allPayments) return { amount: 0, paid: false, pendingTotal: 0, pendingRecords: [] };
     
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-
     const memberPayments = (allPayments || []).filter(p => p.memberId === member.id);
     
     const paidToday = memberPayments.some(p => 
@@ -151,7 +150,13 @@ export default function RoundsPage() {
     );
 
     const pendingRecords = memberPayments.filter(p => p.status === 'pending');
-    const pendingTotal = pendingRecords.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+    const successPayments = memberPayments.filter(p => p.status === 'success' || p.status === 'paid');
+
+    const totalDebts = pendingRecords.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+    const totalCredits = successPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+    
+    // Dynamic pending logic: Debts minus unapplied credits
+    const pendingTotal = Math.max(0, totalDebts - totalCredits);
 
     return { 
       amount: 0, 
@@ -322,7 +327,6 @@ export default function RoundsPage() {
       return;
     }
 
-    // Production safety: No future dates
     const today = startOfDay(new Date());
     if (toDate > today) {
        toast({ variant: "destructive", title: "Constraint Error", description: "Cannot add pending for future dates." });
@@ -338,8 +342,6 @@ export default function RoundsPage() {
 
       for (const day of days) {
         const dateStr = format(day, 'yyyy-MM-dd');
-        
-        // Duplicate check: Prevent double entry for the same date/member
         const exists = (allPayments || []).some(p => 
           p.memberId === selectedMemberForPayment.id && 
           p.targetDate === dateStr
@@ -1040,7 +1042,7 @@ export default function RoundsPage() {
                   <div className="grid gap-4">
                     {analyzePaymentStatus(selectedMemberForPayment).pendingTotal > 0 && (
                       <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs font-bold">
-                        <span className="text-amber-700 flex items-center gap-2"><Clock className="size-3.5" /> Accumulated Pending:</span>
+                        <span className="text-amber-700 flex items-center gap-2"><Clock className="size-3.5" /> Total Outstanding:</span>
                         <span className="text-amber-700">₹{analyzePaymentStatus(selectedMemberForPayment).pendingTotal.toLocaleString()}</span>
                       </div>
                     )}
@@ -1049,7 +1051,7 @@ export default function RoundsPage() {
                       <Input value={selectedMemberForPayment.name} readOnly className="bg-muted font-bold" />
                     </div>
                     <div className="grid gap-2">
-                      <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Total To Pay (₹)</Label>
+                      <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Payment Amount (₹)</Label>
                       <Input 
                         type="number"
                         value={paymentData.amount || ""} 
@@ -1059,7 +1061,7 @@ export default function RoundsPage() {
                         disabled={isActionPending}
                         required
                       />
-                      <p className="text-[10px] text-muted-foreground ml-1 italic">Includes scheme amount + all previous pending.</p>
+                      <p className="text-[10px] text-muted-foreground ml-1 italic">Will be subtracted from total outstanding.</p>
                     </div>
                     <div className="grid gap-2">
                       <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Payment Method</Label>

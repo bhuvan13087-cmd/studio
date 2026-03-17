@@ -77,9 +77,17 @@ export default function DashboardPage() {
           p.paymentDate && 
           format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
         );
-        const pendingTotal = memberPayments
+        
+        // Dynamic dynamic outstanding: Debts - Credits
+        const totalDebt = memberPayments
           .filter(p => p.status === 'pending')
           .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+        
+        const totalCredit = memberPayments
+          .filter(p => p.status === 'success' || p.status === 'paid')
+          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+
+        const pendingTotal = Math.max(0, totalDebt - totalCredit);
 
         return {
           ...m,
@@ -88,7 +96,7 @@ export default function DashboardPage() {
         };
     });
 
-    const pendingMembersList = pendingSummary.filter(s => !s.hasPaidToday || s.pendingTotal > 0);
+    const pendingMembersList = pendingSummary.filter(s => s.pendingTotal > 0 || !s.hasPaidToday);
 
     return {
       activeMembersCount: members?.filter(m => m.status !== 'inactive').length || 0,
@@ -162,7 +170,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl sm:text-3xl font-bold text-destructive">{pendingMembersList.length}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Members with dues (Today or Pending)</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Members with dues (Total Outstanding)</p>
           </CardContent>
         </Card>
       </div>
@@ -220,7 +228,7 @@ export default function DashboardPage() {
                   return (
                     <TableRow key={i} className="hover:bg-muted/5 transition-colors">
                       <TableCell className="text-sm font-semibold pl-6 truncate">{member.name}</TableCell>
-                      <TableCell className="text-right pr-6 text-sm font-bold text-amber-600">₹{((member.pendingTotal || 0) + (member.hasPaidToday ? 0 : (member.monthlyAmount || 0))).toLocaleString()}</TableCell>
+                      <TableCell className="text-right pr-6 text-sm font-bold text-amber-600">₹{member.pendingTotal.toLocaleString()}</TableCell>
                     </TableRow>
                   );
                 }) : (

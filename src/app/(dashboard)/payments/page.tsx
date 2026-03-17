@@ -245,16 +245,31 @@ export default function PaymentsPage() {
         return true;
       })
       .map(member => {
-        const monthlyPayments = payments.filter(p => p.memberId === member.id && (p.status === 'paid' || p.status === 'success') && p.paymentDate && isWithinInterval(parseISO(p.paymentDate), { start, end }));
-        const totalPaid = monthlyPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-        const target = member.monthlyAmount || 0;
+        const memberPayments = payments.filter(p => p.memberId === member.id);
+        
+        // Dynamic outstanding calculation
+        const totalDebt = memberPayments
+          .filter(p => p.status === 'pending')
+          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+        
+        const totalCredit = memberPayments
+          .filter(p => p.status === 'success' || p.status === 'paid')
+          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+
+        const amountPaidInMonth = memberPayments
+          .filter(p => (p.status === 'paid' || p.status === 'success') && p.paymentDate && isWithinInterval(parseISO(p.paymentDate), { start, end }))
+          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+
+        const outstanding = Math.max(0, totalDebt - totalCredit);
+        
         return { 
           id: member.id, 
           name: member.name, 
           chitName: member.chitGroup || "N/A", 
-          totalAmount: target, 
-          amountPaid: totalPaid, 
-          status: totalPaid >= target ? "Paid" : "Unpaid" 
+          totalAmount: member.monthlyAmount || 0, 
+          amountPaid: amountPaidInMonth, 
+          outstanding,
+          status: outstanding <= 0 ? "Paid" : "Unpaid" 
         };
       });
   }, [members, payments, rounds, searchTerm, typeFilter]);
@@ -421,8 +436,8 @@ export default function PaymentsPage() {
                 <TableHeader className="bg-muted/30">
                   <TableRow>
                     <TableHead className="font-bold text-xs uppercase tracking-wider">Member</TableHead>
-                    <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Target</TableHead>
-                    <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Paid</TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Paid (Month)</TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Outstanding (Total)</TableHead>
                     <TableHead className="font-bold text-xs uppercase tracking-wider text-center">Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -433,8 +448,8 @@ export default function PaymentsPage() {
                     visibleSummaries.map((s) => (
                       <TableRow key={s.id} className="hover:bg-muted/10 transition-colors">
                         <TableCell className="font-semibold text-xs sm:text-sm">{s.name}</TableCell>
-                        <TableCell className="text-right text-xs font-medium tabular-nums">₹{s.totalAmount.toLocaleString()}</TableCell>
                         <TableCell className="text-right text-xs font-bold text-emerald-600 tabular-nums">₹{s.amountPaid.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-xs font-bold text-amber-600 tabular-nums">₹{s.outstanding.toLocaleString()}</TableCell>
                         <TableCell className="text-center">
                           <Badge variant={s.status === 'Paid' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-2", s.status === 'Paid' ? "bg-emerald-500" : "bg-amber-100 text-amber-700")}>{s.status}</Badge>
                         </TableCell>
