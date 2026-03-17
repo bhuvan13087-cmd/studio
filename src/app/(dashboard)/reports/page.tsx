@@ -478,7 +478,14 @@ export default function ReportsPage() {
                   <TableBody>
                     {filteredData!.unpaidYesterday.length > 0 ? filteredData!.unpaidYesterday.map((m, i) => (
                       <TableRow key={i} className="hover:bg-muted/5 transition-colors h-12">
-                        <TableCell className="font-semibold text-sm pl-6">{m.name}</TableCell>
+                        <TableCell className="pl-6">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-sm">{m.name}</span>
+                            <span className="text-[8px] font-bold text-muted-foreground uppercase">
+                              {m.paymentType || (rounds.find(r => r.name === m.chitGroup)?.collectionType) || 'N/A'}
+                            </span>
+                          </div>
+                        </TableCell>
                         <TableCell className="text-right text-[10px] font-bold text-primary uppercase pr-6">{m.chitGroup}</TableCell>
                       </TableRow>
                     )) : (
@@ -513,7 +520,14 @@ export default function ReportsPage() {
                   <TableBody>
                     {filteredData!.unpaidToday.length > 0 ? filteredData!.unpaidToday.map((m, i) => (
                       <TableRow key={i} className="hover:bg-muted/5 transition-colors h-12">
-                        <TableCell className="font-semibold text-sm pl-6">{m.name}</TableCell>
+                        <TableCell className="pl-6">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-sm">{m.name}</span>
+                            <span className="text-[8px] font-bold text-muted-foreground uppercase">
+                              {m.paymentType || (rounds.find(r => r.name === m.chitGroup)?.collectionType) || 'N/A'}
+                            </span>
+                          </div>
+                        </TableCell>
                         <TableCell className="text-right text-[10px] font-bold text-primary uppercase pr-6">{m.chitGroup}</TableCell>
                       </TableRow>
                     )) : (
