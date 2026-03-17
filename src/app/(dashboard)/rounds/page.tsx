@@ -96,7 +96,6 @@ export default function RoundsPage() {
   const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
   const [isAddPendingMode, setIsAddPendingMode] = useState(false)
-  const [isDeleteRecordConfirmOpen, setIsDeleteRecordConfirmOpen] = useState(false)
   
   const [editingChit, setEditingChit] = useState<any>(null)
   const [chitToDelete, setChitToDelete] = useState<any>(null)
@@ -107,7 +106,6 @@ export default function RoundsPage() {
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
   const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
   const [pendingFormData, setPendingFormData] = useState(INITIAL_PENDING_STATE)
-  const [recordToDelete, setRecordToDelete] = useState<any>(null)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -380,38 +378,6 @@ export default function RoundsPage() {
       });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to add pending." });
-    } finally {
-      setIsActionPending(false);
-    }
-  }
-
-  const handleDeletePaymentRecord = async (payment: any) => {
-    if (!db || !payment || isActionPending) return;
-    
-    setIsActionPending(true);
-    try {
-      const batch = writeBatch(db);
-      
-      if (payment.status === 'success' || payment.status === 'paid') {
-        const member = members?.find(m => m.id === payment.memberId);
-        if (member) {
-          const memberRef = doc(db, 'members', member.id);
-          batch.update(memberRef, {
-            totalPaid: Math.max(0, (member.totalPaid || 0) - (payment.amountPaid || 0))
-          });
-        }
-      }
-      
-      batch.delete(doc(db, 'payments', payment.id));
-      
-      await withTimeout(batch.commit());
-      await createAuditLog(db, user, `Deleted payment record of ₹${payment.amountPaid} for ${payment.memberName}`);
-      
-      toast({ title: "Record Deleted", description: "Member outstanding recalculated." });
-      setIsDeleteRecordConfirmOpen(false);
-      setRecordToDelete(null);
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to delete record." });
     } finally {
       setIsActionPending(false);
     }
@@ -1133,7 +1099,7 @@ export default function RoundsPage() {
               <DialogHeader><DialogTitle className="text-xl">Transaction Audit: {historyMember?.name}</DialogTitle></DialogHeader>
               <div className="py-4 overflow-x-auto">
                 <Table>
-                  <TableHeader><TableRow className="bg-muted/30"><TableHead className="text-[10px] uppercase font-bold text-muted-foreground pl-4">Date</TableHead><TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Amount</TableHead><TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Status</TableHead><TableHead className="text-right text-[10px] uppercase font-bold text-muted-foreground pr-4">Recorded On</TableHead><TableHead className="w-[50px]"></TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="bg-muted/30"><TableHead className="text-[10px] uppercase font-bold text-muted-foreground pl-4">Date</TableHead><TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Amount</TableHead><TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Status</TableHead><TableHead className="text-right text-[10px] uppercase font-bold text-muted-foreground pr-4">Recorded On</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {historyMember && (allPayments || []).filter(p => p.memberId === historyMember.id).map((p, i) => (
                       <TableRow key={i} className="hover:bg-muted/5 transition-colors">
@@ -1145,20 +1111,6 @@ export default function RoundsPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right text-[10px] text-muted-foreground font-medium pr-4">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy HH:mm') : '-'}</TableCell>
-                        <TableCell className="text-right pr-4">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                            disabled={isActionPending}
-                            onClick={() => {
-                              setRecordToDelete(p);
-                              setIsDeleteRecordConfirmOpen(true);
-                            }}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1169,24 +1121,6 @@ export default function RoundsPage() {
           )}
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={isDeleteRecordConfirmOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeleteRecordConfirmOpen(open); if (!open) setRecordToDelete(null) } }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-destructive">Delete Audit Record?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Permanently remove this {recordToDelete?.status} record of <strong>₹{recordToDelete?.amountPaid?.toLocaleString()}</strong> for {recordToDelete?.targetDate || recordToDelete?.month}? 
-              This will update the member's outstanding balance.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={() => handleDeletePaymentRecord(recordToDelete)} disabled={isActionPending}>
-              {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete Record
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }
