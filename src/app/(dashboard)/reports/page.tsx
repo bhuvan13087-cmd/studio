@@ -1,7 +1,8 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Users, IndianRupee, TrendingUp, Calendar, Lock, AlertCircle, LayoutList, FileText, LayoutDashboard, FileSpreadsheet } from "lucide-react"
+import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Users, IndianRupee, TrendingUp, Calendar, Lock, AlertCircle, LayoutList, FileText, LayoutDashboard, History, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -69,7 +70,6 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState("collections")
   const [isActionPending, setIsActionPending] = useState(false)
   
-  // Print Modal State
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false)
   const [printReportType, setPrintReportType] = useState<'daily' | 'monthly'>('daily')
   
@@ -127,6 +127,7 @@ export default function ReportsPage() {
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
+    // Core members based on the top filter
     const targetMembers = members.filter(m => {
       if (m.status === 'inactive') return false;
       const round = rounds.find(r => r.name === m.chitGroup);
@@ -134,6 +135,13 @@ export default function ReportsPage() {
       return schemeType === reportType;
     });
     const targetIds = new Set(targetMembers.map(m => m.id));
+
+    // Daily members specifically for the pending tabs (hardcoded to daily as per rules)
+    const dailyMembers = members.filter(m => {
+        if (m.status === 'inactive') return false;
+        const round = rounds.find(r => r.name === m.chitGroup);
+        return (m.paymentType || round?.collectionType || "Monthly") === 'Daily';
+    });
 
     const isMatchingPeriod = (dateStr: string) => {
       if (!dateStr) return false;
@@ -164,8 +172,8 @@ export default function ReportsPage() {
 
     const todayCollection = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     
-    const getUnpaidForDate = (dateStr: string) => {
-      return targetMembers.filter(m => {
+    const getUnpaidDailyForDate = (dateStr: string) => {
+      return dailyMembers.filter(m => {
         const hasPaid = payments.some(p => 
           p.memberId === m.id && 
           (p.status === 'paid' || p.status === 'success') && 
@@ -175,8 +183,8 @@ export default function ReportsPage() {
       });
     };
 
-    const unpaidToday = getUnpaidForDate(todayStr);
-    const unpaidYesterday = getUnpaidForDate(yesterdayStr);
+    const unpaidTodayDaily = getUnpaidDailyForDate(todayStr);
+    const unpaidYesterdayDaily = getUnpaidDailyForDate(yesterdayStr);
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthPayments = payments.filter(p => {
@@ -195,12 +203,12 @@ export default function ReportsPage() {
     return { 
       collectionData: collectionDataByMonth, 
       targetMembers,
-      unpaidToday,
-      unpaidYesterday,
+      unpaidTodayDaily,
+      unpaidYesterdayDaily,
       todayStats: {
         collection: todayCollection,
         txCount: todayPayments.length,
-        pendingCount: unpaidToday.length
+        pendingCount: unpaidTodayDaily.length
       },
       metrics: {
         totalCollected: periodPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0),
@@ -229,11 +237,8 @@ export default function ReportsPage() {
 
     switch (activeTab) {
       case "collections": exportData = filteredData.collectionData.map(d => ({ Period: d.month, Amount: d.amount })); break;
-      case "members": exportData = filteredData.targetMembers.map(m => ({ Name: m.name, Scheme: m.chitGroup, Amount: m.monthlyAmount, Status: m.status })); break;
-      case "daily-status": exportData = [
-        ...filteredData.unpaidYesterday.map(m => ({ Day: "Yesterday", Member: m.name, Group: m.chitGroup, Status: "Unpaid" })),
-        ...filteredData.unpaidToday.map(m => ({ Day: "Today", Member: m.name, Group: m.chitGroup, Status: "Unpaid" }))
-      ]; break;
+      case "yesterday-pending": exportData = filteredData.unpaidYesterdayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, PendingDays: m.pendingDays || 0, Status: "Unpaid" })); break;
+      case "today-pending": exportData = filteredData.unpaidTodayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, PendingDays: m.pendingDays || 0, Status: "Unpaid" })); break;
     }
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -249,7 +254,6 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 overflow-x-hidden print:p-0">
-      {/* 1. Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div className="space-y-1">
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Admin Reports</h2>
@@ -265,7 +269,6 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* 2. Daily Report Card */}
       <Card className="border-primary/20 bg-primary/5 shadow-sm overflow-hidden border-2 print:hidden">
         <div className="p-4 bg-primary text-primary-foreground flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div className="flex items-center gap-2">
@@ -286,7 +289,7 @@ export default function ReportsPage() {
             <div className="text-xl font-bold">{filteredData!.todayStats.txCount}</div>
           </div>
           <div className="space-y-1 border-r pr-4">
-            <span className="text-[10px] font-bold uppercase text-destructive tracking-widest">Pending Members</span>
+            <span className="text-[10px] font-bold uppercase text-destructive tracking-widest">Pending Daily</span>
             <div className="text-xl font-bold text-destructive">{filteredData!.todayStats.pendingCount}</div>
           </div>
           <div className="space-y-1">
@@ -299,7 +302,6 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      {/* 3. Filter Section */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 bg-card p-4 rounded-xl border border-border/50 shadow-sm print:hidden">
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Scheme</label>
@@ -331,7 +333,6 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* 4. Top Summary Cards */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-3 print:hidden">
         <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -365,17 +366,16 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {/* 5. Tabs Section */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full print:hidden">
         <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-muted/50 border rounded-xl overflow-x-auto">
           <TabsTrigger value="collections" className="py-2.5 text-[10px] font-bold uppercase tracking-widest gap-2">
             <Database className="size-3.5" /> Collections
           </TabsTrigger>
-          <TabsTrigger value="members" className="py-2.5 text-[10px] font-bold uppercase tracking-widest gap-2">
-            <Users className="size-3.5" /> Members
+          <TabsTrigger value="yesterday-pending" className="py-2.5 text-[10px] font-bold uppercase tracking-widest gap-2">
+            <History className="size-3.5" /> Yesterday Pending
           </TabsTrigger>
-          <TabsTrigger value="daily-status" className="py-2.5 text-[10px] font-bold uppercase tracking-widest gap-2">
-            <Clock className="size-3.5" /> Daily Status
+          <TabsTrigger value="today-pending" className="py-2.5 text-[10px] font-bold uppercase tracking-widest gap-2">
+            <Clock className="size-3.5" /> Today Pending
           </TabsTrigger>
         </TabsList>
         
@@ -419,31 +419,36 @@ export default function ReportsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="members" className="mt-6">
+        <TabsContent value="yesterday-pending" className="mt-6">
           <Card className="border-border/50 overflow-hidden shadow-sm">
-            <div className="p-4 border-b bg-muted/20">
-              <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                <Users className="size-4 text-primary" /> Member Directory
+            <div className="p-4 border-b bg-amber-50/50 flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2 text-amber-700">
+                <History className="size-4" /> Unpaid Yesterday (Daily)
               </h3>
+              <Badge variant="outline" className="text-[10px] font-bold border-amber-200 text-amber-700">
+                {filteredData!.unpaidYesterdayDaily.length} Members
+              </Badge>
             </div>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Name</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Member</TableHead>
                     <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10">Group</TableHead>
-                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-10 pr-6">Due</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pr-6 text-right">Pending Days</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredData!.targetMembers.length > 0 ? filteredData!.targetMembers.map((m, i) => (
+                  {filteredData!.unpaidYesterdayDaily.length > 0 ? filteredData!.unpaidYesterdayDaily.map((m, i) => (
                     <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                      <TableCell className="font-bold text-sm pl-6">{m.name}</TableCell>
-                      <TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup || "N/A"}</TableCell>
-                      <TableCell className="text-right font-bold text-sm tabular-nums pr-6">₹{m.monthlyAmount?.toLocaleString()}</TableCell>
+                      <TableCell className="pl-6 py-4">
+                        <span className="font-bold text-sm">{m.name}</span>
+                      </TableCell>
+                      <TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup}</TableCell>
+                      <TableCell className="text-right pr-6 tabular-nums font-bold text-destructive text-sm">{m.pendingDays || 0}</TableCell>
                     </TableRow>
                   )) : (
-                    <TableRow><TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-sm">No members found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-sm">Clear for yesterday.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -451,78 +456,44 @@ export default function ReportsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="daily-status" className="mt-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="border-border/50 overflow-hidden shadow-sm">
-              <div className="p-4 border-b bg-amber-50/50 flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2 text-amber-700">
-                  <AlertCircle className="size-4" /> Unpaid Yesterday
-                </h3>
-                <Badge variant="outline" className="text-[10px] font-bold border-amber-200 text-amber-700">
-                  {filteredData!.unpaidYesterday.length}
-                </Badge>
-              </div>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-muted/30">
-                    <TableRow>
-                      <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Member</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pr-6 text-right">Group</TableHead>
+        <TabsContent value="today-pending" className="mt-6">
+          <Card className="border-border/50 overflow-hidden shadow-sm">
+            <div className="p-4 border-b bg-blue-50/50 flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2 text-blue-700">
+                <Clock className="size-4" /> Unpaid Today (Daily)
+              </h3>
+              <Badge variant="outline" className="text-[10px] font-bold border-blue-200 text-blue-700">
+                {filteredData!.unpaidTodayDaily.length} Members
+              </Badge>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Member</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10">Group</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pr-6 text-right">Pending Days</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredData!.unpaidTodayDaily.length > 0 ? filteredData!.unpaidTodayDaily.map((m, i) => (
+                    <TableRow key={i} className="hover:bg-muted/5 transition-colors">
+                      <TableCell className="pl-6 py-4">
+                        <span className="font-bold text-sm">{m.name}</span>
+                      </TableCell>
+                      <TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup}</TableCell>
+                      <TableCell className="text-right pr-6 tabular-nums font-bold text-destructive text-sm">{m.pendingDays || 0}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredData!.unpaidYesterday.length > 0 ? filteredData!.unpaidYesterday.map((m, i) => (
-                      <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                        <TableCell className="pl-6 py-3">
-                          <span className="font-semibold text-sm">{m.name}</span>
-                        </TableCell>
-                        <TableCell className="text-right text-[10px] font-bold text-primary uppercase pr-6">{m.chitGroup}</TableCell>
-                      </TableRow>
-                    )) : (
-                      <TableRow><TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic text-xs">Clear for yesterday.</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </Card>
-
-            <Card className="border-border/50 overflow-hidden shadow-sm">
-              <div className="p-4 border-b bg-blue-50/50 flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2 text-blue-700">
-                  <Clock className="size-4" /> Unpaid Today
-                </h3>
-                <Badge variant="outline" className="text-[10px] font-bold border-blue-200 text-blue-700">
-                  {filteredData!.unpaidToday.length}
-                </Badge>
-              </div>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-muted/30">
-                    <TableRow>
-                      <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Member</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pr-6 text-right">Group</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredData!.unpaidToday.length > 0 ? filteredData!.unpaidToday.map((m, i) => (
-                      <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                        <TableCell className="pl-6 py-3">
-                          <span className="font-semibold text-sm">{m.name}</span>
-                        </TableCell>
-                        <TableCell className="text-right text-[10px] font-bold text-primary uppercase pr-6">{m.chitGroup}</TableCell>
-                      </TableRow>
-                    )) : (
-                      <TableRow><TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic text-xs">Clear for today.</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </Card>
-          </div>
+                  )) : (
+                    <TableRow><TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-sm">Clear for today.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
         </TabsContent>
       </Tabs>
 
-      {/* 6. Print Selection Dialog */}
       <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
@@ -558,7 +529,6 @@ export default function ReportsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 7. Hidden Thermal Receipt Component */}
       <div id="thermal-receipt" className="hidden">
         <div className="text-center font-bold mb-2">CHIT FUND REPORT</div>
         <div className="text-center mb-4">----------------------------</div>
