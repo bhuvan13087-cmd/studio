@@ -95,6 +95,7 @@ export default function RoundsPage() {
   const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
   const [isAddPendingMode, setIsAddPendingMode] = useState(false)
+  const [paymentSuccessful, setPaymentSuccessful] = useState(false)
   
   const [editingChit, setEditingChit] = useState<any>(null)
   const [chitToDelete, setChitToDelete] = useState<any>(null)
@@ -303,8 +304,7 @@ export default function RoundsPage() {
       await withTimeout(batch.commit());
       await createAuditLog(db, user, `Recorded Payment ₹${amountToSave} and cleared pending for ${selectedMemberForPayment.name}`);
 
-      setIsQuickPaymentDialogOpen(false);
-      setSelectedMemberForPayment(null);
+      setPaymentSuccessful(true);
       setPaymentData(INITIAL_PAYMENT_STATE);
       toast({ title: "Payment Recorded", description: "Ledger updated and pending cleared." });
     } catch (e: any) {
@@ -576,8 +576,8 @@ export default function RoundsPage() {
                   </div>
                   {editingChit.collectionType && (
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={editingChit.monthlyAmount || ""} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
-                      <div className="grid gap-2"><Label>Seats</Label><Input type="number" value={editingChit.totalMembers || ""} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
+                      <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={editingChit.monthlyAmount || ""} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(editingChit.monthlyAmount)})} required disabled={isActionPending} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
+                      <div className="grid gap-2"><Label>Seats</Label><Input type="number" value={editingChit.totalMembers || ""} onChange={e => setEditingChit({...editingChit, totalMembers: Number(editingChit.totalMembers)})} required disabled={isActionPending} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
                     </div>
                   )}
                 </div>
@@ -616,7 +616,7 @@ export default function RoundsPage() {
           <Button variant="ghost" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-9 w-9" disabled={isActionPending}><ChevronLeft className="size-5" /></Button>
           <div className="min-w-0">
             <h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight text-primary">{currentRound?.name}</h2>
-            <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Reservation Dashboard</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Reservation Board</p>
           </div>
         </div>
         <Dialog open={isAddMemberDialogOpen} onOpenChange={(open) => { if(!isActionPending) setIsAddMemberDialogOpen(open); if(!open) setNewMember(INITIAL_MEMBER_STATE); }}>
@@ -733,7 +733,7 @@ export default function RoundsPage() {
             </TableHeader>
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
-                const { paid, pendingTotal, totalCredits } = analyzePaymentStatus(m);
+                const { paid, pendingTotal } = analyzePaymentStatus(m);
                 const displayStatus = paid ? 'paid' : 'pending';
                 
                 return (
@@ -777,8 +777,7 @@ export default function RoundsPage() {
                           variant="ghost" 
                           size="icon" 
                           className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" 
-                          onClick={() => { if(!isActionPending) { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: currentRound?.monthlyAmount || 0 }); setIsQuickPaymentDialogOpen(true); setIsAddPendingMode(false); } }} 
-                          disabled={isActionPending || paid}
+                          onClick={() => { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: currentRound?.monthlyAmount || 0 }); setIsQuickPaymentDialogOpen(true); setIsAddPendingMode(false); }} 
                           title="Record Payment"
                         >
                           <IndianRupee className="size-4" />
@@ -960,7 +959,7 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsQuickPaymentDialogOpen(open); if (!open) { setSelectedMemberForPayment(null); setPaymentData(INITIAL_PAYMENT_STATE); setIsAddPendingMode(false); } } }}>
+      <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsQuickPaymentDialogOpen(open); if (!open) { setSelectedMemberForPayment(null); setPaymentData(INITIAL_PAYMENT_STATE); setIsAddPendingMode(false); setPaymentSuccessful(false); } } }}>
         <DialogContent className="sm:max-w-[450px]">
           {selectedMemberForPayment && (
             <div className="space-y-6">
@@ -1057,7 +1056,7 @@ export default function RoundsPage() {
                         onChange={e => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
                         className="font-bold text-emerald-600 h-12 text-xl [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
                         placeholder="Enter amount"
-                        disabled={isActionPending}
+                        disabled={isActionPending || paymentSuccessful}
                         required
                       />
                       <p className="text-[10px] text-muted-foreground ml-1 italic">Will be subtracted from total outstanding.</p>
@@ -1067,7 +1066,7 @@ export default function RoundsPage() {
                       <Select 
                         value={paymentData.method} 
                         onValueChange={(v) => setPaymentData({ ...paymentData, method: v })}
-                        disabled={isActionPending}
+                        disabled={isActionPending || paymentSuccessful}
                       >
                         <SelectTrigger className="h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
                         <SelectContent>
@@ -1080,9 +1079,9 @@ export default function RoundsPage() {
                   </div>
                   <div className="flex gap-3 pt-4 border-t">
                     <Button variant="outline" type="button" onClick={() => setIsQuickPaymentDialogOpen(false)} disabled={isActionPending} className="flex-1 font-bold h-11">Cancel</Button>
-                    <Button type="submit" disabled={isActionPending} className="flex-1 font-bold gap-2 h-11 bg-emerald-600 hover:bg-emerald-700">
+                    <Button type="submit" disabled={isActionPending || paymentSuccessful} className="flex-1 font-bold gap-2 h-11 bg-emerald-600 hover:bg-emerald-700">
                       {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                      Record Paid
+                      {paymentSuccessful ? "Paid Recorded" : "Record Paid"}
                     </Button>
                   </div>
                 </form>
@@ -1116,7 +1115,7 @@ export default function RoundsPage() {
                   </TableBody>
                 </Table>
               </div>
-              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button></DialogFooter>
+              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close History</Button></DialogFooter>
             </>
           )}
         </DialogContent>
