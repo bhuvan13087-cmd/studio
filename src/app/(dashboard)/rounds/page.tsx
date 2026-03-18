@@ -138,7 +138,7 @@ export default function RoundsPage() {
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
   const analyzePaymentStatus = (member: any) => {
-    if (!member || !allPayments) return { amount: 0, paid: false, pendingTotal: 0, pendingRecords: [] };
+    if (!member || !allPayments) return { amount: 0, paid: false, pendingTotal: 0, pendingRecords: [], totalCredits: 0 };
     
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const memberPayments = (allPayments || []).filter(p => p.memberId === member.id);
@@ -155,13 +155,15 @@ export default function RoundsPage() {
     const totalDebts = pendingRecords.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     const totalCredits = successPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     
+    // Dynamic outstanding: Sum(Pending) - Sum(Paid)
     const pendingTotal = Math.max(0, totalDebts - totalCredits);
 
     return { 
       amount: 0, 
       paid: paidToday,
       pendingTotal,
-      pendingRecords
+      pendingRecords,
+      totalCredits // THIS IS THE DYNAMIC "TOTAL CONTRIBUTION"
     };
   };
 
@@ -454,7 +456,7 @@ export default function RoundsPage() {
         format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
       )
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-  }, [allPayments, assignedMembers]);
+  }, [allPayments, assignedMembers])
 
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
@@ -733,7 +735,7 @@ export default function RoundsPage() {
             </TableHeader>
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
-                const { paid, pendingTotal } = analyzePaymentStatus(m);
+                const { paid, pendingTotal, totalCredits } = analyzePaymentStatus(m);
                 const displayStatus = paid ? 'paid' : 'pending';
                 
                 return (
@@ -856,7 +858,7 @@ export default function RoundsPage() {
               </div>
               <div className="mt-6 flex justify-between items-center p-3 bg-emerald-50 rounded-lg border border-emerald-100">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Total Contribution</span>
-                <span className="font-bold text-sm text-emerald-700 tabular-nums">₹{(selectedProfileMember.totalPaid || 0).toLocaleString()}</span>
+                <span className="font-bold text-sm text-emerald-700 tabular-nums">₹{(analyzePaymentStatus(selectedProfileMember).totalCredits).toLocaleString()}</span>
               </div>
             </div>
           ) : selectedProfileMember && isEditingProfile ? (

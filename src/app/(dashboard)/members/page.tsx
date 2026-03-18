@@ -96,6 +96,19 @@ export default function MembersPage() {
     return () => clearInterval(recoveryInterval)
   }, [])
 
+  // Dynamic Total Paid Calculation
+  const totalPaidByMember = useMemo(() => {
+    if (!payments) return new Map<string, number>();
+    const map = new Map<string, number>();
+    payments.forEach(p => {
+      if (p.status === 'paid' || p.status === 'success') {
+        const current = map.get(p.memberId) || 0;
+        map.set(p.memberId, current + (p.amountPaid || 0));
+      }
+    });
+    return map;
+  }, [payments]);
+
   const paidMemberStatus = useMemo(() => {
     if (!payments) return new Map<string, any>();
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -223,6 +236,8 @@ export default function MembersPage() {
                 visibleMembers.map((member) => {
                   const todayPayment = paidMemberStatus.get(member.id);
                   const isPaidToday = !!todayPayment;
+                  const dynamicTotalPaid = totalPaidByMember.get(member.id) || 0;
+                  
                   return (
                     <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
                       <TableCell>
@@ -242,7 +257,7 @@ export default function MembersPage() {
                           <Popover>
                             <PopoverTrigger asChild>
                               <button className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[10px] font-bold border border-emerald-200 uppercase tracking-tight shadow-sm">
-                                <CheckCircle2 className="size-2.5" /> Success
+                                <CheckCircle2 className="size-2.5" /> Paid
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-3 shadow-xl text-xs" align="start">
@@ -258,7 +273,7 @@ export default function MembersPage() {
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-sm font-bold text-emerald-600">₹{(member.totalPaid || 0).toLocaleString()}</span>
+                          <span className="text-sm font-bold text-emerald-600">₹{dynamicTotalPaid.toLocaleString()}</span>
                           <span className="text-[10px] font-bold text-muted-foreground uppercase">Total Paid</span>
                         </div>
                       </TableCell>
@@ -380,7 +395,7 @@ export default function MembersPage() {
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Phone</span><span className="font-bold">{selectedMember?.phone}</span></div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Joined</span><span className="font-bold">{selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Amount</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
-                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg text-sm"><span className="text-emerald-600 font-bold uppercase text-[10px]">Total Paid</span><span className="font-bold text-emerald-600 text-base">₹{(selectedMember?.totalPaid || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg text-sm"><span className="text-emerald-600 font-bold uppercase text-[10px]">Total Paid</span><span className="font-bold text-emerald-600 text-base">₹{(totalPaidByMember.get(selectedMember?.id) || 0).toLocaleString()}</span></div>
               </div>
               <DialogFooter className="flex flex-col sm:flex-row gap-2">
                 <Button 
@@ -433,7 +448,7 @@ export default function MembersPage() {
                       <TableRow key={i}>
                         <TableCell className="text-sm font-semibold">{p.month}</TableCell>
                         <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy') : '-'}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy, hh:mm a') : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

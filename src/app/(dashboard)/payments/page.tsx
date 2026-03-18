@@ -110,6 +110,18 @@ export default function PaymentsPage() {
     return () => clearInterval(recoveryInterval)
   }, []);
 
+  // Dynamic Total Contribution Map
+  const totalPaidByMember = useMemo(() => {
+    const map = new Map<string, number>();
+    payments.forEach(p => {
+      if (p.status === 'paid' || p.status === 'success') {
+        const current = map.get(p.memberId) || 0;
+        map.set(p.memberId, current + (p.amountPaid || 0));
+      }
+    });
+    return map;
+  }, [payments]);
+
   const handleCorrectPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || !paymentToCorrect || isActionPending) return;
@@ -539,13 +551,17 @@ export default function PaymentsPage() {
             <div className="space-y-4 py-4">
               <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Name</span><span className="font-bold text-sm">{selectedAuditMember.name}</span></div>
               <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Status</span><Badge variant={selectedAuditMember.status === 'active' ? 'default' : 'secondary'} className="uppercase font-bold text-[9px]">{selectedAuditMember.status}</Badge></div>
+              <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
+                <span className="text-xs font-bold uppercase text-emerald-600">Total Contribution</span>
+                <span className="font-bold text-sm text-emerald-700">₹{(totalPaidByMember.get(selectedAuditMember.id) || 0).toLocaleString()}</span>
+              </div>
               {selectedAuditMember.status === 'inactive' ? (
                 <div className="p-4 border border-destructive/20 bg-destructive/5 rounded-lg space-y-2">
                   <span className="text-[10px] font-bold uppercase text-destructive tracking-widest block">Active Period</span>
                   <div className="flex items-center gap-2 font-bold text-sm text-foreground">{selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}<span className="text-muted-foreground">→</span>{selectedAuditMember.deactivatedAt ? format(parseISO(selectedAuditMember.deactivatedAt), 'MMM dd, yyyy') : '-'}</div>
                 </div>
               ) : (
-                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg"><span className="text-xs font-bold uppercase text-emerald-600">Joined Date</span><span className="font-bold text-sm text-emerald-700">{selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Joined Date</span><span className="font-bold text-sm">{selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
               )}
             </div>
           )}
