@@ -272,7 +272,6 @@ export default function RoundsPage() {
 
     const { paid: alreadyPaid } = analyzePaymentStatus(selectedMemberForPayment);
     
-    // Log the click attempt immediately for audit trail
     await createAuditLog(db, user, `Click attempt on 'Record Paid' button for ${selectedMemberForPayment.name} (Current Status: ${alreadyPaid ? 'Already Paid' : 'Pending'})`);
 
     if (alreadyPaid) {
@@ -1130,7 +1129,9 @@ export default function RoundsPage() {
                   <TableBody>
                     {historyMember && (allPayments || []).filter(p => p.memberId === historyMember.id).map((p, i) => (
                       <TableRow key={i} className="hover:bg-muted/5 transition-colors">
-                        <TableCell className="text-xs font-semibold pl-4">{p.targetDate || p.month}</TableCell>
+                        <TableCell className="text-xs font-semibold pl-4">
+                          {p.targetDate ? format(parseISO(p.targetDate), 'dd MMM yyyy') : p.month}
+                        </TableCell>
                         <TableCell className={cn("text-xs font-bold", p.status === 'pending' ? 'text-amber-600' : 'text-emerald-600')}>₹{p.amountPaid?.toLocaleString()}</TableCell>
                         <TableCell>
                           <Badge variant={p.status === 'pending' ? 'secondary' : 'default'} className={cn("text-[8px] font-bold uppercase", p.status === 'pending' ? 'bg-amber-100 text-amber-700' : (p.status === 'success' || p.status === 'paid' ? 'bg-emerald-500' : 'bg-muted text-muted-foreground'))}>
