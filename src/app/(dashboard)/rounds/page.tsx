@@ -1133,6 +1133,7 @@ export default function RoundsPage() {
                   <TableHeader>
                     <TableRow className="bg-muted/30">
                       <TableHead className="text-[10px] uppercase font-bold text-muted-foreground pl-4">Date</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Time</TableHead>
                       <TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Amount</TableHead>
                       <TableHead className="text-right text-[10px] uppercase font-bold text-muted-foreground pr-4">Status</TableHead>
                     </TableRow>
@@ -1142,6 +1143,9 @@ export default function RoundsPage() {
                       <TableRow key={i} className="hover:bg-muted/5 transition-colors">
                         <TableCell className="text-xs font-semibold pl-4">
                           {format(parseISO(p.targetDate || p.paymentDate), 'dd MMM yyyy')}
+                        </TableCell>
+                        <TableCell className="text-xs font-medium text-muted-foreground tabular-nums">
+                          {p.paymentDate ? format(parseISO(p.paymentDate), 'hh:mm a') : '-'}
                         </TableCell>
                         <TableCell className={cn("text-xs font-bold", p.status === 'pending' ? 'text-amber-600' : 'text-emerald-600')}>₹{p.amountPaid?.toLocaleString()}</TableCell>
                         <TableCell className="text-right pr-4">
