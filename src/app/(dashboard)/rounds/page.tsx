@@ -55,7 +55,7 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebas
 import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc, writeBatch } from "firebase/firestore"
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth, startOfDay, eachDayOfInterval, differenceInDays, isValid } from "date-fns"
+import { format, parseISO, isSameMonth, startOfDay, eachDayOfInterval, differenceInDays, isValid, subDays, isBefore } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -131,6 +131,84 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
+  // Automatic Pending Days Increment Effect
+  useEffect(() => {
+    if (!db || !assignedMembers.length || !currentRound || currentRound.collectionType !== 'Daily' || isActionPending) return;
+
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    
+    const syncPendingDays = async () => {
+      const membersToUpdate = assignedMembers.filter(m => {
+        // Only daily users with active status
+        if (m.paymentType !== 'Daily' && currentRound.collectionType !== 'Daily') return false;
+        // Last update was before today
+        return !m.lastPendingUpdateDate || m.lastPendingUpdateDate < todayStr;
+      });
+
+      if (membersToUpdate.length === 0) return;
+
+      setIsActionPending(true);
+      try {
+        const batch = writeBatch(db);
+        let updatedCount = 0;
+
+        for (const member of membersToUpdate) {
+          const lastUpdate = member.lastPendingUpdateDate ? parseISO(member.lastPendingUpdateDate) : subDays(new Date(), 1);
+          const yesterday = subDays(new Date(), 1);
+          
+          if (isBefore(lastUpdate, yesterday) || format(lastUpdate, 'yyyy-MM-dd') !== format(yesterday, 'yyyy-MM-dd')) {
+            // Find missed days between lastUpdate + 1 and yesterday
+            const intervalStart = lastUpdate; 
+            const intervalEnd = yesterday;
+            
+            if (isBefore(intervalStart, intervalEnd)) {
+              const days = eachDayOfInterval({ start: intervalStart, end: intervalEnd });
+              // We skip the lastUpdate itself if it was already processed, but for safety we check all days
+              let missedCount = 0;
+              for (const day of days) {
+                const dayStr = format(day, 'yyyy-MM-dd');
+                if (dayStr === member.lastPendingUpdateDate) continue; // Skip day already processed
+
+                const hasPayment = (allPayments || []).some(p => 
+                  p.memberId === member.id && 
+                  (p.status === 'success' || p.status === 'paid') &&
+                  (p.targetDate === dayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === dayStr))
+                );
+
+                if (!hasPayment) missedCount++;
+              }
+
+              if (missedCount > 0 || member.lastPendingUpdateDate !== todayStr) {
+                batch.update(doc(db, 'members', member.id), {
+                  pendingDays: (member.pendingDays || 0) + missedCount,
+                  lastPendingUpdateDate: todayStr
+                });
+                updatedCount++;
+              }
+            } else if (member.lastPendingUpdateDate !== todayStr) {
+               // Just update the sync date if no days have passed
+               batch.update(doc(db, 'members', member.id), { lastPendingUpdateDate: todayStr });
+               updatedCount++;
+            }
+          } else if (member.lastPendingUpdateDate !== todayStr) {
+            batch.update(doc(db, 'members', member.id), { lastPendingUpdateDate: todayStr });
+            updatedCount++;
+          }
+        }
+
+        if (updatedCount > 0) {
+          await withTimeout(batch.commit());
+        }
+      } catch (err) {
+        console.error("Failed to sync pending days:", err);
+      } finally {
+        setIsActionPending(false);
+      }
+    };
+
+    syncPendingDays();
+  }, [db, assignedMembers, currentRound, allPayments]);
+
   const analyzePaymentStatus = (member: any) => {
     if (!member || !allPayments) return { amount: 0, paid: false, totalCredits: 0 };
     
@@ -199,6 +277,8 @@ export default function RoundsPage() {
         monthlyAmount: currentRound.monthlyAmount,
         status: "active",
         totalPaid: 0,
+        pendingDays: 0,
+        lastPendingUpdateDate: format(new Date(), 'yyyy-MM-dd'),
         createdAt: serverTimestamp(),
       }));
       
@@ -276,8 +356,19 @@ export default function RoundsPage() {
       });
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
+      
+      // Calculate Pending Days reduction for Daily users
+      let newPendingDays = selectedMemberForPayment.pendingDays || 0;
+      if (selectedMemberForPayment.paymentType === 'Daily' || currentRound.collectionType === 'Daily') {
+        const dailyAmount = currentRound.monthlyAmount || 800;
+        const daysPaid = Math.floor(amountToSave / dailyAmount);
+        newPendingDays = Math.max(0, newPendingDays - daysPaid);
+      }
+
       batch.update(memberRef, {
-        totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave
+        totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave,
+        pendingDays: newPendingDays,
+        lastPendingUpdateDate: todayStr
       });
 
       await withTimeout(batch.commit());
@@ -637,6 +728,9 @@ export default function RoundsPage() {
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
+                {currentRound?.collectionType === 'Daily' && (
+                  <TableHead className="text-[10px] uppercase font-bold tracking-wider">Pending Days</TableHead>
+                )}
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
@@ -645,6 +739,7 @@ export default function RoundsPage() {
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
                 const { paid } = analyzePaymentStatus(m);
                 const displayStatus = paid ? 'paid' : 'pending';
+                const isDaily = m.paymentType === 'Daily' || currentRound?.collectionType === 'Daily';
                 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
@@ -670,6 +765,16 @@ export default function RoundsPage() {
                         </div>
                       </div>
                     </TableCell>
+                    {currentRound?.collectionType === 'Daily' && (
+                      <TableCell>
+                        <span className={cn(
+                          "text-xs font-bold tabular-nums",
+                          (m.pendingDays || 0) > 0 ? "text-destructive" : "text-muted-foreground"
+                        )}>
+                          {(m.pendingDays || 0) > 0 ? m.pendingDays : "-"}
+                        </span>
+                      </TableCell>
+                    )}
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <Badge variant={displayStatus === 'paid' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5 w-fit", displayStatus === 'paid' ? "bg-emerald-500" : "")}>{displayStatus}</Badge>
@@ -700,7 +805,7 @@ export default function RoundsPage() {
                     </TableCell>
                   </TableRow>
                 )
-              }) : <TableRow><TableCell colSpan={3} className="h-32 text-center text-xs text-muted-foreground italic">No participants registered in this scheme.</TableCell></TableRow>}
+              }) : <TableRow><TableCell colSpan={currentRound?.collectionType === 'Daily' ? 4 : 3} className="h-32 text-center text-xs text-muted-foreground italic">No participants registered in this scheme.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
@@ -751,6 +856,12 @@ export default function RoundsPage() {
                   {selectedProfileMember.paymentType || currentRound?.collectionType}
                 </Badge>
               </div>
+              {(selectedProfileMember.paymentType === 'Daily' || currentRound?.collectionType === 'Daily') && (
+                <div className="flex justify-between items-center py-4 border-b">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-destructive">Pending Days</span>
+                  <span className="font-bold text-sm text-destructive">{selectedProfileMember.pendingDays || 0} Days</span>
+                </div>
+              )}
               <div className="flex justify-between items-center py-4 border-b">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Registration Date</span>
                 <span className="font-bold text-sm text-foreground">

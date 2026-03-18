@@ -50,6 +50,16 @@
         "totalPaid": {
           "type": "number",
           "description": "Sum of all payments made by the member."
+        },
+        "pendingDays": {
+          "type": "number",
+          "description": "Automatic tracking of missed payment days for Daily users.",
+          "default": 0
+        },
+        "lastPendingUpdateDate": {
+          "type": "string",
+          "description": "The last date (YYYY-MM-DD) when pendingDays was auto-calculated.",
+          "format": "date"
         }
       },
       "required": [
@@ -252,6 +262,7 @@
             "$ref": "#/backend/entities/ChitRound"
           },
           "description": "Stores details of completed chit rounds."
+"description": "Stores details of completed chit rounds."
         }
       },
       {
