@@ -65,7 +65,8 @@ const YEARS = ["2024", "2025", "2026", "2027", "2028"]
 
 export default function ReportsPage() {
   const [mounted, setMounted] = useState(false)
-  const [reportType, setReportType] = useState("all")
+  // DEFAULT: Show Daily Only as per production requirements
+  const [reportType, setReportType] = useState("daily")
   const [selectedMonth, setSelectedMonth] = useState<string>("all")
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
   const [activeTab, setActiveTab] = useState("collections")
@@ -248,8 +249,15 @@ export default function ReportsPage() {
     };
 
     const getUnpaid = (dateStr: string, refDate: Date) => {
-      return targetMembers.filter(m => {
+      return members.filter(m => {
+        // Exclude Inactive
         if (m.status === 'inactive') return false;
+        
+        // STRICT FILTER: Daily status reports only apply to Daily members
+        const round = rounds.find(r => r.name === m.chitGroup);
+        const schemeType = (m.paymentType || round?.collectionType || "Monthly").toLowerCase();
+        if (schemeType !== 'daily') return false;
+
         if (!activeAt(m, refDate)) return false;
         
         const hasPaid = payments.some(p => 
