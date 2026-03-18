@@ -237,10 +237,10 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="space-y-6 print:hidden">
+      <div className="space-y-4 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-l-4 border-primary pl-4 py-1">
           <div className="space-y-0.5">
-            <h3 className="text-xl font-bold tracking-tight text-primary font-headline">Today's Summary</h3>
+            <h3 className="text-lg font-bold tracking-tight text-primary font-headline">Today's Summary</h3>
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
               {filteredData!.focusStats.dateLabel}
             </p>
@@ -248,21 +248,21 @@ export default function ReportsPage() {
           <div className="hidden sm:block h-px flex-1 bg-gradient-to-r from-border to-transparent mb-2 ml-4"></div>
         </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Total Collection</span>
-                <div className="p-2 rounded-full bg-emerald-50">
-                  <IndianRupee className="size-4 text-emerald-600" />
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Total Collection</span>
+                <div className="p-1.5 rounded-full bg-emerald-50">
+                  <IndianRupee className="size-3 text-emerald-600" />
                 </div>
               </div>
               <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-emerald-600 tracking-tight">
+                <span className="text-xl font-bold text-emerald-600 tracking-tight">
                   ₹{filteredData!.focusStats.collection.toLocaleString()}
                 </span>
               </div>
-              <div className="mt-4 pt-4 border-t border-muted/30 flex items-center gap-2">
+              <div className="mt-3 pt-3 border-t border-muted/30 flex items-center gap-2">
                 <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
                    <div className="h-full bg-emerald-500 w-[65%]" />
                 </div>
@@ -271,29 +271,29 @@ export default function ReportsPage() {
           </Card>
 
           <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Transactions</span>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Transactions</span>
               </div>
-              <div className="text-3xl font-bold tracking-tight text-foreground">
+              <div className="text-xl font-bold tracking-tight text-foreground">
                 {filteredData!.focusStats.txCount}
               </div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">Daily Total</p>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">Daily Total</p>
             </CardContent>
           </Card>
 
           <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md border-l-4 border-l-destructive">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-destructive/80">Pending Members</span>
-                <div className="p-2 rounded-full bg-destructive/5">
-                  <Clock className="size-4 text-destructive" />
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-destructive/80">Pending Members</span>
+                <div className="p-1.5 rounded-full bg-destructive/5">
+                  <Clock className="size-3 text-destructive" />
                 </div>
               </div>
-              <div className="text-3xl font-bold tracking-tight text-destructive">
+              <div className="text-xl font-bold tracking-tight text-destructive">
                 {filteredData!.focusStats.pendingCount}
               </div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1 italic">Action Items</p>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1 italic">Action Items</p>
             </CardContent>
           </Card>
         </div>
