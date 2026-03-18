@@ -267,47 +267,66 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="space-y-4 print:hidden">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-lg font-bold text-primary">Today's Summary</h3>
-          <p className="text-xs text-muted-foreground">
-            {format(new Date(), 'EEEE, dd MMMM yyyy')}
-          </p>
+      <div className="space-y-6 print:hidden">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-l-4 border-primary pl-4 py-1">
+          <div className="space-y-0.5">
+            <h3 className="text-xl font-bold tracking-tight text-primary font-headline">Today's Summary</h3>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+              {format(new Date(), 'EEEE, dd MMMM yyyy')}
+            </p>
+          </div>
+          <div className="hidden sm:block h-px flex-1 bg-gradient-to-r from-border to-transparent mb-2 ml-4"></div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="border-none shadow-sm bg-white overflow-hidden">
+        
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Today Collection</span>
-                <IndianRupee className="size-4 text-emerald-600" />
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Today Collection</span>
+                <div className="p-2 rounded-full bg-emerald-50">
+                  <IndianRupee className="size-4 text-emerald-600" />
+                </div>
               </div>
-              <div className="text-2xl font-bold text-emerald-600">
-                ₹{filteredData!.todayStats.collection.toLocaleString()}
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-bold text-emerald-600 tracking-tight">
+                  ₹{filteredData!.todayStats.collection.toLocaleString()}
+                </span>
+              </div>
+              <div className="mt-4 pt-4 border-t border-muted/30 flex items-center gap-2">
+                <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+                   <div className="h-full bg-emerald-500 w-[65%]" />
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm bg-white overflow-hidden">
+          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Transactions</span>
-                <LayoutList className="size-4 text-primary" />
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Transactions</span>
+                <div className="p-2 rounded-full bg-primary/5">
+                  <LayoutList className="size-4 text-primary" />
+                </div>
               </div>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-bold tracking-tight text-foreground">
                 {filteredData!.todayStats.txCount}
               </div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">Processed Today</p>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm bg-white overflow-hidden border-l-4 border-l-destructive/30">
+          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md border-l-4 border-l-destructive">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-destructive/80">Pending Members</span>
-                <Clock className="size-4 text-destructive/80" />
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-destructive/80">Pending Members</span>
+                <div className="p-2 rounded-full bg-destructive/5">
+                  <Clock className="size-4 text-destructive" />
+                </div>
               </div>
-              <div className="text-2xl font-bold text-destructive/90">
+              <div className="text-3xl font-bold tracking-tight text-destructive">
                 {filteredData!.todayStats.pendingCount}
               </div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1 italic">Action Required</p>
             </CardContent>
           </Card>
         </div>
