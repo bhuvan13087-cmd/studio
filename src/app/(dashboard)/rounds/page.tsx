@@ -766,7 +766,7 @@ export default function RoundsPage() {
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold truncate max-w-[120px] group-hover:text-primary transition-colors">{m.name}</span>
                           <span className="text-[10px] font-bold text-primary uppercase tracking-tight mt-0.5">
-                            {m.chitGroup}
+                            {m.paymentType || currentRound?.collectionType || 'N/A'}
                           </span>
                         </div>
                       </div>
