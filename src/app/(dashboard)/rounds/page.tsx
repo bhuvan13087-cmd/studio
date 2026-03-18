@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -31,13 +30,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogAction,
+  AlertDialogCancel,
 } from "@/components/ui/alert-dialog"
 import {
   Select,
@@ -713,7 +712,7 @@ export default function RoundsPage() {
           <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Today Collection</CardTitle>
             <CalendarDays className="size-3 text-emerald-600 opacity-60" />
-          </Header>
+          </CardHeader>
           <CardContent className="p-3 pt-0">
             <div className="text-lg font-bold text-emerald-600">₹{todayCollection.toLocaleString()}</div>
           </CardContent>
