@@ -710,13 +710,13 @@ export default function RoundsPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="shadow-sm border-l-4 border-l-primary/40"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Seats Filled</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-amber-500 bg-white">
+        <Card className="shadow-sm border-l-4 border-l-destructive bg-white">
           <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-[10px] uppercase font-bold text-amber-700 tracking-wider">Pending Today</CardTitle>
-            <Clock className="size-3 text-amber-600 opacity-60" />
+            <CardTitle className="text-[10px] uppercase font-bold text-destructive tracking-wider">Pending Today</CardTitle>
+            <Clock className="size-3 text-destructive opacity-60" />
           </CardHeader>
           <CardContent className="p-3 pt-0">
-            <div className="text-lg font-bold text-amber-600">{pendingMembersInCurrentGroup} Members</div>
+            <div className="text-lg font-bold text-destructive">{pendingMembersInCurrentGroup} Members</div>
           </CardContent>
         </Card>
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-white">
