@@ -546,8 +546,8 @@ export default function RoundsPage() {
                 </div>
                 {newChit.collectionType && (
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} placeholder="Enter amount" /></div>
-                    <div className="grid gap-2"><Label htmlFor="totalMembers">Seats</Label><Input id="totalMembers" type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                    <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} placeholder="Enter amount" className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
+                    <div className="grid gap-2"><Label htmlFor="totalMembers">Seats</Label><Input id="totalMembers" type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
                   </div>
                 )}
               </div>
@@ -577,8 +577,8 @@ export default function RoundsPage() {
                   </div>
                   {editingChit.collectionType && (
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={editingChit.monthlyAmount || ""} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} /></div>
-                      <div className="grid gap-2"><Label>Seats</Label><Input type="number" value={editingChit.totalMembers || ""} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} /></div>
+                      <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={editingChit.monthlyAmount || ""} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
+                      <div className="grid gap-2"><Label>Seats</Label><Input type="number" value={editingChit.totalMembers || ""} onChange={e => setEditingChit({...editingChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
                     </div>
                   )}
                 </div>
@@ -713,7 +713,7 @@ export default function RoundsPage() {
           <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Today Collection</CardTitle>
             <CalendarDays className="size-3 text-emerald-600 opacity-60" />
-          </CardHeader>
+          </Header>
           <CardContent className="p-3 pt-0">
             <div className="text-lg font-bold text-emerald-600">₹{todayCollection.toLocaleString()}</div>
           </CardContent>
@@ -1020,7 +1020,7 @@ export default function RoundsPage() {
                         type="number" 
                         value={pendingFormData.amountPerDay || ""} 
                         onChange={e => setPendingFormData({ ...pendingFormData, amountPerDay: Number(e.target.value) })}
-                        className="bg-white border-amber-200 font-bold"
+                        className="bg-white border-amber-200 font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         placeholder="e.g. 800"
                         required
                         disabled={isActionPending}
@@ -1056,7 +1056,7 @@ export default function RoundsPage() {
                         type="number"
                         value={paymentData.amount || ""} 
                         onChange={e => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
-                        className="font-bold text-emerald-600 h-12 text-xl" 
+                        className="font-bold text-emerald-600 h-12 text-xl [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
                         placeholder="Enter amount"
                         disabled={isActionPending}
                         required
