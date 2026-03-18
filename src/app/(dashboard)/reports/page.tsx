@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -77,6 +76,7 @@ export default function ReportsPage() {
   
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false)
   const [printReportType, setPrintReportType] = useState<'daily' | 'monthly'>('daily')
+  const [printDate, setPrintDate] = useState<Date>(new Date())
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -125,7 +125,6 @@ export default function ReportsPage() {
       isMatchingPeriod(p.paymentDate)
     );
 
-    // Contextual Date Handling
     const focusDate = isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date();
     const focusDateStr = format(focusDate, 'yyyy-MM-dd');
     const prevDate = subDays(focusDate, 1);
@@ -134,8 +133,7 @@ export default function ReportsPage() {
     const focusDatePayments = payments.filter(p => 
       (p.status === 'paid' || p.status === 'success') && 
       targetIds.has(p.memberId) &&
-      p.paymentDate && 
-      isSameDay(parseISO(p.paymentDate), focusDate)
+      (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
     );
 
     const focusDateCollection = focusDatePayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
@@ -190,6 +188,7 @@ export default function ReportsPage() {
 
   const handleOpenPrintDialog = () => {
     setPrintReportType('daily');
+    setPrintDate(isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date());
     setIsPrintDialogOpen(true);
   };
 
@@ -243,7 +242,7 @@ export default function ReportsPage() {
       <div className="space-y-4 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-l-4 border-primary pl-4 py-1">
           <div className="space-y-0.5">
-            <h3 className="text-lg font-bold tracking-tight text-primary font-headline">Today's Summary</h3>
+            <h3 className="text-lg font-bold tracking-tight text-primary font-headline">Daily Summary</h3>
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
               {filteredData!.focusStats.dateLabel}
             </p>
@@ -252,42 +251,38 @@ export default function ReportsPage() {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md h-24">
+          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md h-20">
             <CardContent className="p-4 flex flex-col justify-center h-full">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Total Collection</span>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Collection</span>
                 <IndianRupee className="size-3 text-emerald-600" />
               </div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-lg font-bold text-emerald-600 tracking-tight">
-                  ₹{filteredData!.focusStats.collection.toLocaleString()}
-                </span>
+              <div className="text-base font-bold text-emerald-600 tracking-tight">
+                ₹{filteredData!.focusStats.collection.toLocaleString()}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md h-24">
+          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md h-20">
             <CardContent className="p-4 flex flex-col justify-center h-full">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-0.5">
                 <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Transactions</span>
               </div>
-              <div className="text-lg font-bold tracking-tight text-foreground">
+              <div className="text-base font-bold tracking-tight text-foreground">
                 {filteredData!.focusStats.txCount}
               </div>
-              <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Daily Total</p>
             </CardContent>
           </Card>
 
-          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md border-l-4 border-l-destructive h-24">
+          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md border-l-4 border-l-destructive h-20">
             <CardContent className="p-4 flex flex-col justify-center h-full">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-0.5">
                 <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-destructive/80">Pending Members</span>
                 <Clock className="size-3 text-destructive" />
               </div>
-              <div className="text-lg font-bold tracking-tight text-destructive">
+              <div className="text-base font-bold tracking-tight text-destructive">
                 {filteredData!.focusStats.pendingCount}
               </div>
-              <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5 italic">Action Items</p>
             </CardContent>
           </Card>
         </div>
@@ -301,15 +296,19 @@ export default function ReportsPage() {
               <Button
                 variant={"outline"}
                 className={cn(
-                  "w-full h-10 justify-start text-left font-bold text-[11px] border-muted",
+                  "w-full h-10 justify-start text-left font-bold text-[11px] border-muted bg-white",
                   !selectedDate && "text-muted-foreground"
                 )}
               >
-                <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                {selectedDate ? format(parseISO(selectedDate), "dd-MM-yyyy") : <span>Pick a date</span>}
+                <div className="flex items-center w-full">
+                  <CalendarIcon className="mr-3 h-4 w-4 text-primary shrink-0" />
+                  <span className="flex-1 truncate">
+                    {selectedDate ? format(parseISO(selectedDate), "dd-MM-yyyy") : "Select Date"}
+                  </span>
+                </div>
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            <PopoverContent className="w-auto p-0" align="start" side="bottom">
               <Calendar
                 mode="single"
                 selected={isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date()}
@@ -328,7 +327,7 @@ export default function ReportsPage() {
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Scheme</label>
           <Select value={reportType} onValueChange={setReportType}>
-            <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Filter className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full h-10 text-[11px] font-bold bg-white"><Filter className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="daily">Daily</SelectItem>
               <SelectItem value="monthly">Monthly</SelectItem>
@@ -338,7 +337,7 @@ export default function ReportsPage() {
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Month</label>
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-full h-10 text-[11px] font-bold"><CalendarIcon className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full h-10 text-[11px] font-bold bg-white"><CalendarIcon className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
             <SelectContent>
               {MONTHS_MASTER.map(m => (<SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>))}
             </SelectContent>
@@ -347,7 +346,7 @@ export default function ReportsPage() {
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Year</label>
           <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-full h-10 text-[11px] font-bold"><CalendarIcon className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full h-10 text-[11px] font-bold bg-white"><CalendarIcon className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
             <SelectContent>
               {YEARS.map(y => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
             </SelectContent>
@@ -439,7 +438,7 @@ export default function ReportsPage() {
           <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-blue-50/50 flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2 text-blue-700">
-                <Clock className="size-4" /> Unpaid Today (Daily)
+                <Clock className="size-4" /> Unpaid Selected Date (Daily)
               </h3>
               <Badge variant="outline" className="text-[10px] font-bold border-blue-200 text-blue-700">
                 {filteredData!.unpaidTodayDaily.length} Members
@@ -482,7 +481,7 @@ export default function ReportsPage() {
             </DialogTitle>
             <DialogDescription>Select the report format for 3-inch thermal printer.</DialogDescription>
           </DialogHeader>
-          <div className="py-6">
+          <div className="py-6 space-y-4">
             <RadioGroup 
               value={printReportType} 
               onValueChange={(v: any) => setPrintReportType(v)}
@@ -492,7 +491,25 @@ export default function ReportsPage() {
                 <RadioGroupItem value="daily" id="r-daily" />
                 <div className="flex-1 cursor-pointer">
                   <Label htmlFor="r-daily" className="font-bold uppercase text-xs tracking-widest block mb-1">Daily Report</Label>
-                  <span className="text-[10px] text-muted-foreground font-medium">{filteredData!.focusStats.dateShort}</span>
+                  <div className="flex flex-col gap-2 mt-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="h-8 justify-start text-[10px] font-bold w-full">
+                          <CalendarIcon className="mr-2 h-3 w-3" />
+                          {format(printDate, 'dd-MM-yyyy')}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={printDate}
+                          onSelect={(date) => date && setPrintDate(date)}
+                          disabled={(date) => date > new Date()}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer">
@@ -521,7 +538,7 @@ export default function ReportsPage() {
         {printReportType === 'daily' ? (
           <>
             <div className="text-center font-bold mb-2 uppercase">Daily Report</div>
-            <div className="mb-2">Date: {filteredData!.focusStats.dateShort}</div>
+            <div className="mb-2">Date: {format(printDate, 'dd-MM-yyyy')}</div>
             <div className="mb-4">----------------------------</div>
             <div className="flex justify-between mb-1">
               <span>Total Collection:</span>
