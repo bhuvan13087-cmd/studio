@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Users, IndianRupee, TrendingUp, Calendar, AlertCircle, LayoutList, FileText, LayoutDashboard, History, ChevronRight, Search } from "lucide-react"
+import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Users, IndianRupee, TrendingUp, Calendar as CalendarIcon, AlertCircle, LayoutList, FileText, LayoutDashboard, History, ChevronRight, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -35,6 +35,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Input } from "@/components/ui/input"
@@ -71,6 +73,7 @@ export default function ReportsPage() {
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
   const [activeTab, setActiveTab] = useState("collections")
   const [isActionPending, setIsActionPending] = useState(false)
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false)
   const [printReportType, setPrintReportType] = useState<'daily' | 'monthly'>('daily')
@@ -249,51 +252,42 @@ export default function ReportsPage() {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
+          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md h-24">
+            <CardContent className="p-4 flex flex-col justify-center h-full">
+              <div className="flex items-center justify-between mb-1">
                 <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Total Collection</span>
-                <div className="p-1.5 rounded-full bg-emerald-50">
-                  <IndianRupee className="size-3 text-emerald-600" />
-                </div>
+                <IndianRupee className="size-3 text-emerald-600" />
               </div>
               <div className="flex items-baseline gap-1">
-                <span className="text-xl font-bold text-emerald-600 tracking-tight">
+                <span className="text-lg font-bold text-emerald-600 tracking-tight">
                   ₹{filteredData!.focusStats.collection.toLocaleString()}
                 </span>
               </div>
-              <div className="mt-3 pt-3 border-t border-muted/30 flex items-center gap-2">
-                <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
-                   <div className="h-full bg-emerald-500 w-[65%]" />
-                </div>
-              </div>
             </CardContent>
           </Card>
 
-          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
+          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md h-24">
+            <CardContent className="p-4 flex flex-col justify-center h-full">
+              <div className="flex items-center justify-between mb-1">
                 <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Transactions</span>
               </div>
-              <div className="text-xl font-bold tracking-tight text-foreground">
+              <div className="text-lg font-bold tracking-tight text-foreground">
                 {filteredData!.focusStats.txCount}
               </div>
-              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">Daily Total</p>
+              <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Daily Total</p>
             </CardContent>
           </Card>
 
-          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md border-l-4 border-l-destructive">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
+          <Card className="border border-border/50 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md border-l-4 border-l-destructive h-24">
+            <CardContent className="p-4 flex flex-col justify-center h-full">
+              <div className="flex items-center justify-between mb-1">
                 <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-destructive/80">Pending Members</span>
-                <div className="p-1.5 rounded-full bg-destructive/5">
-                  <Clock className="size-3 text-destructive" />
-                </div>
+                <Clock className="size-3 text-destructive" />
               </div>
-              <div className="text-xl font-bold tracking-tight text-destructive">
+              <div className="text-lg font-bold tracking-tight text-destructive">
                 {filteredData!.focusStats.pendingCount}
               </div>
-              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1 italic">Action Items</p>
+              <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5 italic">Action Items</p>
             </CardContent>
           </Card>
         </div>
@@ -302,12 +296,34 @@ export default function ReportsPage() {
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-4 bg-card p-4 rounded-xl border border-border/50 shadow-sm print:hidden">
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Select Date</label>
-          <Input 
-            type="date" 
-            value={selectedDate} 
-            onChange={(e) => setSelectedDate(e.target.value)} 
-            className="h-10 text-[11px] font-bold border-muted"
-          />
+          <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-full h-10 justify-start text-left font-bold text-[11px] border-muted",
+                  !selectedDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+                {selectedDate ? format(parseISO(selectedDate), "dd-MM-yyyy") : <span>Pick a date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date()}
+                onSelect={(date) => {
+                  if (date) {
+                    setSelectedDate(format(date, 'yyyy-MM-dd'))
+                    setIsDatePickerOpen(false)
+                  }
+                }}
+                disabled={(date) => date > new Date()}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         </div>
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Scheme</label>
@@ -322,7 +338,7 @@ export default function ReportsPage() {
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Month</label>
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Calendar className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full h-10 text-[11px] font-bold"><CalendarIcon className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
             <SelectContent>
               {MONTHS_MASTER.map(m => (<SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>))}
             </SelectContent>
@@ -331,7 +347,7 @@ export default function ReportsPage() {
         <div className="space-y-2">
           <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Year</label>
           <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Calendar className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full h-10 text-[11px] font-bold"><CalendarIcon className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
             <SelectContent>
               {YEARS.map(y => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
             </SelectContent>
