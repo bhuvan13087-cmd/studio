@@ -711,9 +711,9 @@ export default function RoundsPage() {
         <Card className="shadow-sm border-l-4 border-l-primary/40"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Seats Filled</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-destructive bg-white">
-          <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-[10px] uppercase font-bold text-destructive tracking-wider">Pending Today</CardTitle>
-            <Clock className="size-3 text-destructive opacity-60" />
+          <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0 text-destructive">
+            <CardTitle className="text-[10px] uppercase font-bold tracking-wider">Pending Today</CardTitle>
+            <Clock className="size-3 opacity-60" />
           </CardHeader>
           <CardContent className="p-3 pt-0">
             <div className="text-lg font-bold text-destructive">{pendingMembersInCurrentGroup} Members</div>
@@ -765,8 +765,8 @@ export default function RoundsPage() {
                         </div>
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold truncate max-w-[120px] group-hover:text-primary transition-colors">{m.name}</span>
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
-                            {m.paymentType || currentRound?.collectionType}
+                          <span className="text-[10px] font-bold text-primary uppercase tracking-tight mt-0.5">
+                            {m.chitGroup}
                           </span>
                         </div>
                       </div>
