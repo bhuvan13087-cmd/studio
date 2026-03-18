@@ -2,11 +2,10 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Trophy, Users, IndianRupee, TrendingUp, Calendar, Pencil, Lock, AlertCircle } from "lucide-react"
+import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Users, IndianRupee, TrendingUp, Calendar, Lock, AlertCircle, LayoutList, FileText, LayoutDashboard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -28,19 +27,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { useFirestore, useCollection, useMemoFirebase, useDoc, useUser } from "@/firebase"
+import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"
-import { format, parseISO, getMonth, getYear, subDays, isBefore, startOfDay } from "date-fns"
+import { format, parseISO, getMonth, getYear, subDays, startOfDay, isSameDay } from "date-fns"
 import * as XLSX from 'xlsx'
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
@@ -65,15 +55,11 @@ const YEARS = ["2024", "2025", "2026", "2027", "2028"]
 
 export default function ReportsPage() {
   const [mounted, setMounted] = useState(false)
-  // DEFAULT: Show Daily Only as per production requirements
   const [reportType, setReportType] = useState("daily")
-  const [selectedMonth, setSelectedMonth] = useState<string>("all")
+  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().getMonth().toString())
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
   const [activeTab, setActiveTab] = useState("collections")
-  
-  const [targetInput, setTargetInput] = useState<string>("")
   const [isActionPending, setIsActionPending] = useState(false)
-  const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -88,13 +74,6 @@ export default function ReportsPage() {
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db])
   const { data: rounds, isLoading: roundsLoading } = useCollection(roundsQuery)
 
-  const targetId = `${selectedYear}-${selectedMonth}`
-  const targetDocRef = useMemoFirebase(() => 
-    selectedMonth !== 'all' ? doc(db, 'monthlyTargets', targetId) : null, 
-    [db, selectedYear, selectedMonth, targetId]
-  )
-  const { data: targetData } = useDoc(targetDocRef)
-
   const locksQuery = useMemoFirebase(() => collection(db, 'monthLocks'), [db]);
   const { data: monthLocks } = useCollection(locksQuery);
 
@@ -106,46 +85,6 @@ export default function ReportsPage() {
 
   useEffect(() => { setMounted(true) }, [])
 
-  useEffect(() => {
-    if (isTargetDialogOpen) {
-      setTargetInput(targetData?.targetAmount?.toString() || "")
-    }
-  }, [isTargetDialogOpen, targetData])
-
-  const handleSaveTarget = async () => {
-    if (!selectedMonth || selectedMonth === 'all' || !targetInput) {
-      toast({ variant: "destructive", title: "Validation Error", description: "Select a specific month and amount." })
-      return
-    }
-
-    if (isMonthLocked) {
-      toast({ variant: "destructive", title: "Locked", description: "Cannot modify target for a locked month." });
-      return;
-    }
-
-    setIsActionPending(true)
-    try {
-      const amount = parseFloat(targetInput)
-      if (isNaN(amount)) throw new Error("Invalid amount")
-
-      await withTimeout(setDoc(doc(db, 'monthlyTargets', targetId), {
-        id: targetId,
-        year: selectedYear,
-        month: selectedMonth,
-        targetAmount: amount
-      }, { merge: true }));
-
-      await createAuditLog(db, user, `Updated collection target for ${currentMonthName} ${selectedYear} to ₹${amount.toLocaleString()}`)
-      
-      setIsTargetDialogOpen(false)
-      toast({ title: "Target Saved", description: `Collection goal updated.` })
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save target." })
-    } finally {
-      setIsActionPending(false)
-    }
-  }
-
   const toggleMonthLock = async () => {
     if (selectedMonth === 'all') return;
     
@@ -156,7 +95,7 @@ export default function ReportsPage() {
         const lockRef = doc(db, 'monthLocks', lockId);
         await withTimeout(deleteDoc(lockRef));
         await createAuditLog(db, user, `Unlocked month: ${currentMonthName} ${selectedYear}`);
-        toast({ title: "Month Unlocked", description: "Records can now be modified." });
+        toast({ title: "Month Unlocked" });
       } else {
         await withTimeout(setDoc(doc(db, 'monthLocks', lockId), {
           id: lockId,
@@ -166,43 +105,28 @@ export default function ReportsPage() {
           lockedBy: user?.email
         }));
         await createAuditLog(db, user, `Locked month: ${currentMonthName} ${selectedYear}`);
-        toast({ title: "Month Locked", description: "Financial records are now read-only." });
+        toast({ title: "Month Locked" });
       }
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message || "Operation failed." });
+      toast({ variant: "destructive", title: "Error", description: e.message });
     } finally {
       setIsActionPending(false);
     }
   }
 
-  const availableMonths = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const selectedYearNum = parseInt(selectedYear);
-
-    if (selectedYearNum < currentYear) {
-      return MONTHS_MASTER;
-    } else if (selectedYearNum === currentYear) {
-      return MONTHS_MASTER.filter(m => m.value === "all" || parseInt(m.value) <= currentMonth);
-    } else {
-      return MONTHS_MASTER.filter(m => m.value === "all");
-    }
-  }, [selectedYear]);
-
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
-    let targetMembers = members;
-    if (reportType !== "all") {
-      targetMembers = members.filter(m => {
-        const round = rounds.find(r => r.name === m.chitGroup);
-        return (round?.collectionType || "Monthly").toLowerCase() === reportType;
-      });
-    }
+    // 1. Filter Target Members based on Scheme
+    const targetMembers = members.filter(m => {
+      if (m.status === 'inactive') return false;
+      const round = rounds.find(r => r.name === m.chitGroup);
+      const schemeType = (m.paymentType || round?.collectionType || "Monthly").toLowerCase();
+      return schemeType === reportType;
+    });
     const targetIds = new Set(targetMembers.map(m => m.id));
 
-    const isMatchingDate = (dateStr: string) => {
+    const isMatchingPeriod = (dateStr: string) => {
       if (!dateStr) return false;
       const d = parseISO(dateStr);
       const matchYear = getYear(d).toString() === selectedYear;
@@ -210,12 +134,44 @@ export default function ReportsPage() {
       return matchYear && matchMonth;
     };
 
-    const periodMembers = targetMembers.filter(m => m.joinDate && isMatchingDate(m.joinDate));
-    const periodPayments = payments.filter(p => (p.status === 'paid' || p.status === 'success') && targetIds.has(p.memberId) && p.paymentDate && isMatchingDate(p.paymentDate));
+    // 2. Filter Period Payments
+    const periodPayments = payments.filter(p => 
+      (p.status === 'paid' || p.status === 'success') && 
+      targetIds.has(p.memberId) && 
+      p.paymentDate && 
+      isMatchingPeriod(p.paymentDate)
+    );
 
-    const totalCollected = periodPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-    const membersJoined = periodMembers.length;
+    // 3. Today's Statistics
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const yesterday = subDays(today, 1);
+    const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
+    const todayPayments = payments.filter(p => 
+      (p.status === 'paid' || p.status === 'success') && 
+      targetIds.has(p.memberId) &&
+      p.paymentDate && 
+      isSameDay(parseISO(p.paymentDate), today)
+    );
+
+    const todayCollection = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+    
+    const getUnpaidForDate = (dateStr: string, refDate: Date) => {
+      return targetMembers.filter(m => {
+        const hasPaid = payments.some(p => 
+          p.memberId === m.id && 
+          (p.status === 'paid' || p.status === 'success') && 
+          (p.targetDate === dateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === dateStr))
+        );
+        return !hasPaid;
+      });
+    };
+
+    const unpaidToday = getUnpaidForDate(todayStr, today);
+    const unpaidYesterday = getUnpaidForDate(yesterdayStr, yesterday);
+
+    // 4. Monthly Breakdown
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthPayments = payments.filter(p => {
         const d = parseISO(p.paymentDate);
@@ -231,57 +187,20 @@ export default function ReportsPage() {
       return isMonthAll ? row.amount > 0 : row.month.startsWith(monthLabel);
     });
 
-    const winners = rounds.filter(r => r.winnerName && 
-      (reportType === "all" || (r.collectionType || "Monthly").toLowerCase() === reportType) &&
-      (r.date && isMatchingDate(r.date))
-    );
-
-    // DAILY STATUS AUDIT (Yesterday vs Today)
-    const today = new Date();
-    const yesterday = subDays(today, 1);
-    const todayStr = format(today, 'yyyy-MM-dd');
-    const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-
-    const activeAt = (m: any, d: Date) => {
-      if (!m.joinDate) return true;
-      const joined = startOfDay(parseISO(m.joinDate));
-      return joined <= startOfDay(d);
-    };
-
-    const getUnpaid = (dateStr: string, refDate: Date) => {
-      return members.filter(m => {
-        // Exclude Inactive
-        if (m.status === 'inactive') return false;
-        
-        // STRICT FILTER: Daily status reports only apply to Daily members
-        const round = rounds.find(r => r.name === m.chitGroup);
-        const schemeType = (m.paymentType || round?.collectionType || "Monthly").toLowerCase();
-        if (schemeType !== 'daily') return false;
-
-        if (!activeAt(m, refDate)) return false;
-        
-        const hasPaid = payments.some(p => 
-          p.memberId === m.id && 
-          (p.status === 'paid' || p.status === 'success') && 
-          (p.targetDate === dateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === dateStr))
-        );
-        return !hasPaid;
-      });
-    };
-
-    const unpaidToday = getUnpaid(todayStr, today);
-    const unpaidYesterday = getUnpaid(yesterdayStr, yesterday);
-
     return { 
       collectionData: collectionDataByMonth, 
       targetMembers,
-      winners,
       unpaidToday,
       unpaidYesterday,
+      todayStats: {
+        collection: todayCollection,
+        txCount: todayPayments.length,
+        pendingCount: unpaidToday.length
+      },
       metrics: {
-        totalCollected,
-        membersJoined,
-        paymentsCount: periodPayments.length
+        totalCollected: periodPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0),
+        txCount: periodPayments.length,
+        membersCount: targetMembers.length
       }
     };
   }, [mounted, reportType, selectedMonth, selectedYear, members, payments, rounds]);
@@ -291,13 +210,12 @@ export default function ReportsPage() {
   const handleExportExcel = () => {
     if (!filteredData) return;
     let exportData: any[] = [];
-    const fileName = `Report_${selectedYear}_${selectedMonth === 'all' ? 'Year' : currentMonthName}.xlsx`;
+    const fileName = `Report_${reportType.toUpperCase()}_${selectedYear}_${selectedMonth === 'all' ? 'Year' : currentMonthName}.xlsx`;
 
     switch (activeTab) {
       case "collections": exportData = filteredData.collectionData.map(d => ({ Period: d.month, Amount: d.amount })); break;
       case "members": exportData = filteredData.targetMembers.map(m => ({ Name: m.name, Scheme: m.chitGroup, Amount: m.monthlyAmount, Status: m.status })); break;
-      case "winners": exportData = filteredData.winners.map(w => ({ Winner: w.winnerName, Scheme: w.name, Round: w.roundNumber, WinningAmount: w.winningAmount })); break;
-      case "daily-audit": exportData = [
+      case "daily-status": exportData = [
         ...filteredData.unpaidYesterday.map(m => ({ Day: "Yesterday", Member: m.name, Group: m.chitGroup, Status: "Unpaid" })),
         ...filteredData.unpaidToday.map(m => ({ Day: "Today", Member: m.name, Group: m.chitGroup, Status: "Unpaid" }))
       ]; break;
@@ -314,157 +232,213 @@ export default function ReportsPage() {
     return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
   }
 
-  const targetAmount = targetData?.targetAmount || 0
-  const reachPercentage = targetAmount > 0 ? Math.round((filteredData!.metrics.totalCollected / targetAmount) * 100) : 0
-
   return (
-    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden print:p-0">
-      <div className="flex flex-col gap-6 print:hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Financial Reports</h2>
-            <p className="text-sm text-muted-foreground">Comprehensive audit of fund collections and distributions.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-             {selectedMonth !== 'all' && (
-               <Button 
-                 variant={isMonthLocked ? "secondary" : "outline"} 
-                 size="sm" 
-                 className={cn("h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-sm", isMonthLocked && "text-amber-700 bg-amber-50")}
-                 onClick={toggleMonthLock}
-                 disabled={isActionPending}
-               >
-                 {isMonthLocked ? <Lock className="mr-2 size-4" /> : <Clock className="mr-2 size-4" />}
-                 {isMonthLocked ? "Unlock Month" : "Lock Month"}
-               </Button>
-             )}
-             <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-sm" onClick={handlePrint} disabled={isActionPending}>
-               <Printer className="mr-2 size-4" /> Print
-             </Button>
-             <Button size="sm" className="h-10 px-4 text-[10px] font-bold uppercase tracking-widest shadow-md" onClick={handleExportExcel} disabled={isActionPending}>
-               <Download className="mr-2 size-4" /> Export Excel
-             </Button>
-          </div>
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10 overflow-x-hidden print:p-0">
+      {/* 1. Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
+        <div className="space-y-1">
+          <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Admin Reports</h2>
+          <p className="text-sm text-muted-foreground">Daily audit and collection monitoring.</p>
         </div>
-
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 bg-card p-4 rounded-xl border border-border/50 shadow-sm items-end">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Scheme Filter</label>
-            <Select value={reportType} onValueChange={setReportType} disabled={isActionPending}>
-              <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Filter className="mr-2 size-3.5 text-primary" /><SelectValue placeholder="Scheme Type" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">All Schemes</SelectItem><SelectItem value="daily">Daily Only</SelectItem><SelectItem value="monthly">Monthly Only</SelectItem></SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Report Month</label>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth} disabled={isActionPending}>
-              <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Calendar className="mr-2 size-3.5 text-primary" /><SelectValue placeholder="Month" /></SelectTrigger>
-              <SelectContent>{availableMonths.map(m => (<SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>))}</SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Report Year</label>
-            <Select value={selectedYear} onValueChange={setSelectedYear} disabled={isActionPending}>
-              <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Calendar className="mr-2 size-3.5 text-primary" /><SelectValue placeholder="Year" /></SelectTrigger>
-              <SelectContent>{YEARS.map(y => (<SelectItem key={y} value={y}>{y}</SelectItem>))}</SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Month Status</label>
-            <div className="flex items-center gap-1.5 h-10">
-              <div className={cn("flex-1 flex items-center justify-between px-2.5 h-full rounded-md border", isMonthLocked ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200")}>
-                <span className={cn("text-[10px] font-bold uppercase tracking-tight", isMonthLocked ? "text-amber-700" : "text-emerald-700")}>
-                  {selectedMonth === 'all' ? "Select Month" : (isMonthLocked ? "LOCKED 🔒" : "ACTIVE ✨")}
-                </span>
-                {selectedMonth !== 'all' && !isMonthLocked && (
-                  <Button variant="ghost" size="icon" onClick={() => setIsTargetDialogOpen(true)} className="h-6 w-6 text-emerald-600 hover:bg-emerald-100" disabled={isActionPending}><Pencil className="size-3" /></Button>
-                )}
-              </div>
-            </div>
-          </div>
+        <div className="flex items-center gap-2">
+           <Button variant="outline" size="sm" className="h-9 px-3 text-[10px] font-bold uppercase tracking-widest" onClick={handlePrint}>
+             <Printer className="mr-2 size-3.5" /> Print
+           </Button>
+           <Button size="sm" className="h-9 px-3 text-[10px] font-bold uppercase tracking-widest shadow-md" onClick={handleExportExcel}>
+             <Download className="mr-2 size-3.5" /> Export
+           </Button>
         </div>
       </div>
 
-      <Dialog open={isTargetDialogOpen} onOpenChange={(open) => { if(!isActionPending) setIsTargetDialogOpen(open) }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader><DialogTitle>Update Monthly Target</DialogTitle><DialogDescription>Set a goal for {currentMonthName} {selectedYear}.</DialogDescription></DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2"><Label htmlFor="targetAmount">Target Amount (₹)</Label><Input id="targetAmount" type="number" value={targetInput} onChange={(e) => setTargetInput(e.target.value)} className="font-bold" autoFocus disabled={isActionPending} /></div>
+      {/* 2. ⭐ Daily Report Card (Top Priority) */}
+      <Card className="border-primary/20 bg-primary/5 shadow-sm overflow-hidden border-2">
+        <div className="p-4 bg-primary text-primary-foreground flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex items-center gap-2">
+            <LayoutDashboard className="size-5" />
+            <h3 className="font-bold text-sm uppercase tracking-widest">Today at a Glance</h3>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setIsTargetDialogOpen(false)} disabled={isActionPending}>Cancel</Button><Button onClick={handleSaveTarget} disabled={isActionPending}>{isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Save Target</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <Badge variant="secondary" className="bg-white/20 text-white border-white/30 font-bold">
+            {format(new Date(), 'EEEE, dd MMMM yyyy')}
+          </Badge>
+        </div>
+        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6">
+          <div className="space-y-1 border-r pr-4">
+            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Today Collection</span>
+            <div className="text-xl font-bold text-emerald-600">₹{filteredData!.todayStats.collection.toLocaleString()}</div>
+          </div>
+          <div className="space-y-1 md:border-r md:pr-4">
+            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Transactions</span>
+            <div className="text-xl font-bold">{filteredData!.todayStats.txCount}</div>
+          </div>
+          <div className="space-y-1 border-r pr-4">
+            <span className="text-[10px] font-bold uppercase text-destructive tracking-widest">Pending Members</span>
+            <div className="text-xl font-bold text-destructive">{filteredData!.todayStats.pendingCount}</div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Month Status</span>
+            <div className={cn("text-sm font-bold uppercase flex items-center gap-1", isMonthLocked ? "text-amber-600" : "text-emerald-600")}>
+              {isMonthLocked ? <Lock className="size-3.5" /> : <Clock className="size-3.5" />}
+              {isMonthLocked ? "Locked" : "Active"}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0"><CardTitle className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Period Collections</CardTitle><IndianRupee className="size-4 text-emerald-600" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-emerald-600">₹{filteredData!.metrics.totalCollected.toLocaleString()}</div><p className="text-[10px] text-muted-foreground mt-1 font-medium">{filteredData!.metrics.paymentsCount} Transactions</p></CardContent>
-        </Card>
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0"><CardTitle className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">New Members Joined</CardTitle><Users className="size-4 text-primary" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{filteredData!.metrics.membersJoined}</div><p className="text-[10px] text-muted-foreground mt-1 font-medium">During selected period</p></CardContent>
-        </Card>
-        <Card className="border-border/50 shadow-sm overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0"><CardTitle className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Target Reach</CardTitle><TrendingUp className={cn("size-4", reachPercentage >= 100 ? "text-emerald-500" : "text-blue-500")} /></CardHeader>
+      {/* 3. Filter Section */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 bg-card p-4 rounded-xl border border-border/50 shadow-sm print:hidden">
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Scheme</label>
+          <Select value={reportType} onValueChange={setReportType}>
+            <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Filter className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="daily">Daily Only</SelectItem>
+              <SelectItem value="monthly">Monthly Only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Month</label>
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Calendar className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {MONTHS_MASTER.map(m => (<SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Year</label>
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Calendar className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {YEARS.map(y => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* 4. Top Summary Cards (3 Cards) */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Period Collection</CardTitle>
+            <IndianRupee className="size-4 text-emerald-600" />
+          </CardHeader>
           <CardContent>
-            <div className={cn("text-2xl font-bold", reachPercentage >= 100 ? "text-emerald-600" : "text-blue-600")}>{selectedMonth === 'all' ? <span className="text-xs uppercase text-muted-foreground">Select Month</span> : `${reachPercentage}%`}</div>
-            <p className="text-[10px] text-muted-foreground mt-1 font-medium">{targetAmount > 0 ? `Goal: ₹${targetAmount.toLocaleString()}` : "No goal defined"}</p>
-            {targetAmount > 0 && (<div className="w-full bg-muted h-1 rounded-full mt-2 overflow-hidden"><div className={cn("h-full transition-all duration-1000", reachPercentage >= 100 ? "bg-emerald-500" : "bg-blue-500")} style={{ width: `${Math.min(reachPercentage, 100)}%` }} /></div>)}
+            <div className="text-2xl font-bold text-emerald-600">₹{filteredData!.metrics.totalCollected.toLocaleString()}</div>
+            <p className="text-[10px] text-muted-foreground mt-1 font-medium italic">For selected filters</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Transactions</CardTitle>
+            <CheckCircle2 className="size-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{filteredData!.metrics.txCount}</div>
+            <p className="text-[10px] text-muted-foreground mt-1 font-medium italic">Confirmed payments</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Members</CardTitle>
+            <Users className="size-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{filteredData!.metrics.membersCount}</div>
+            <p className="text-[10px] text-muted-foreground mt-1 font-medium italic">Active in scheme</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* 5. Tabs Section */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 h-auto p-1 bg-muted/50 border rounded-xl overflow-x-auto print:hidden">
-          <TabsTrigger value="collections" className="py-3 text-[10px] font-bold uppercase tracking-widest">Collections</TabsTrigger>
-          <TabsTrigger value="members" className="py-3 text-[10px] font-bold uppercase tracking-widest">Members</TabsTrigger>
-          <TabsTrigger value="winners" className="py-3 text-[10px] font-bold uppercase tracking-widest">Winners</TabsTrigger>
-          <TabsTrigger value="daily-audit" className="py-3 text-[10px] font-bold uppercase tracking-widest">Daily Status</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-muted/50 border rounded-xl overflow-x-auto print:hidden">
+          <TabsTrigger value="collections" className="py-2.5 text-[10px] font-bold uppercase tracking-widest gap-2">
+            <Database className="size-3.5" /> Collections
+          </TabsTrigger>
+          <TabsTrigger value="members" className="py-2.5 text-[10px] font-bold uppercase tracking-widest gap-2">
+            <Users className="size-3.5" /> Members
+          </TabsTrigger>
+          <TabsTrigger value="daily-status" className="py-2.5 text-[10px] font-bold uppercase tracking-widest gap-2">
+            <Clock className="size-3.5" /> Daily Status
+          </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="collections" className="mt-8">
+        <TabsContent value="collections" className="mt-6">
           <Card className="border-border/50 overflow-hidden shadow-sm">
-            <div className="p-4 border-b bg-muted/20"><h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2"><Database className="size-4 text-primary" /> Monthly Revenue Breakdown</h3></div>
+            <div className="p-4 border-b bg-muted/20 flex justify-between items-center">
+              <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                <Database className="size-4 text-primary" /> Monthly Revenue
+              </h3>
+              {selectedMonth !== 'all' && (
+                <Button 
+                  variant={isMonthLocked ? "secondary" : "outline"} 
+                  size="sm" 
+                  className={cn("h-7 px-3 text-[9px] font-bold uppercase tracking-widest", isMonthLocked && "text-amber-700 bg-amber-50")}
+                  onClick={toggleMonthLock}
+                  disabled={isActionPending}
+                >
+                  {isMonthLocked ? <Lock className="mr-2 size-3" /> : <Clock className="mr-2 size-3" />}
+                  {isMonthLocked ? "Unlock" : "Lock"}
+                </Button>
+              )}
+            </div>
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-muted/30"><TableRow><TableHead className="text-[10px] uppercase font-bold tracking-widest h-12 pl-6">Period</TableHead><TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-12 pr-6">Total Collection</TableHead></TableRow></TableHeader>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Period</TableHead>
+                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-10 pr-6">Collection</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                  {filteredData!.collectionData.length > 0 ? filteredData!.collectionData.map((row, i) => (<TableRow key={i} className="hover:bg-muted/5 transition-colors h-14"><TableCell className="font-bold text-sm pl-6">{row.month}</TableCell><TableCell className="text-right font-bold text-emerald-600 text-sm tabular-nums pr-6">₹{row.amount.toLocaleString()}</TableCell></TableRow>)) : (<TableRow><TableCell colSpan={2} className="h-40 text-center text-muted-foreground italic text-sm">No collections found.</TableCell></TableRow>)}
+                  {filteredData!.collectionData.length > 0 ? filteredData!.collectionData.map((row, i) => (
+                    <TableRow key={i} className="hover:bg-muted/5 transition-colors">
+                      <TableCell className="font-bold text-sm pl-6">{row.month}</TableCell>
+                      <TableCell className="text-right font-bold text-emerald-600 text-sm tabular-nums pr-6">₹{row.amount.toLocaleString()}</TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow><TableCell colSpan={2} className="h-40 text-center text-muted-foreground italic text-sm">No collections found.</TableCell></TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
           </Card>
         </TabsContent>
 
-        <TabsContent value="members" className="mt-8">
+        <TabsContent value="members" className="mt-6">
           <Card className="border-border/50 overflow-hidden shadow-sm">
-            <div className="p-4 border-b bg-muted/20"><h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2"><Users className="size-4 text-primary" /> Member Directory View</h3></div>
+            <div className="p-4 border-b bg-muted/20">
+              <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                <Users className="size-4 text-primary" /> Member Directory
+              </h3>
+            </div>
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-muted/30"><TableRow><TableHead className="text-[10px] uppercase font-bold tracking-widest h-12 pl-6">Member Name</TableHead><TableHead className="text-[10px] uppercase font-bold tracking-widest h-12">Scheme</TableHead><TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-12">Monthly Due</TableHead><TableHead className="text-center text-[10px] uppercase font-bold tracking-widest h-12 pr-6">Status</TableHead></TableRow></TableHeader>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Name</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10">Group</TableHead>
+                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-10 pr-6">Due</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                  {filteredData!.targetMembers.length > 0 ? filteredData!.targetMembers.map((m, i) => (<TableRow key={i} className="hover:bg-muted/5 transition-colors h-14"><TableCell className="font-bold text-sm pl-6">{m.name}</TableCell><TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup || "N/A"}</TableCell><TableCell className="text-right font-bold text-sm tabular-nums">₹{m.monthlyAmount?.toLocaleString()}</TableCell><TableCell className="text-center pr-6"><Badge variant={m.status === 'active' ? 'default' : 'secondary'} className="text-[8px] font-bold uppercase">{m.status}</Badge></TableCell></TableRow>)) : (<TableRow><TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic text-sm">No member data found.</TableCell></TableRow>)}
+                  {filteredData!.targetMembers.length > 0 ? filteredData!.targetMembers.map((m, i) => (
+                    <TableRow key={i} className="hover:bg-muted/5 transition-colors">
+                      <TableCell className="font-bold text-sm pl-6">{m.name}</TableCell>
+                      <TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup || "N/A"}</TableCell>
+                      <TableCell className="text-right font-bold text-sm tabular-nums pr-6">₹{m.monthlyAmount?.toLocaleString()}</TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow><TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-sm">No members found.</TableCell></TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
           </Card>
         </TabsContent>
 
-        <TabsContent value="winners" className="mt-8">
-          <Card className="border-border/50 overflow-hidden shadow-sm">
-            <div className="p-4 border-b bg-muted/20"><h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2"><Trophy className="size-4 text-amber-500" /> Auction History Breakdown</h3></div>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-muted/30"><TableRow><TableHead className="text-[10px] uppercase font-bold tracking-widest h-12 pl-6">Winner Name</TableHead><TableHead className="text-[10px] uppercase font-bold tracking-widest h-12">Scheme</TableHead><TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-12 pr-6">Winning Amount</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {filteredData!.winners.length > 0 ? filteredData!.winners.map((r, i) => (<TableRow key={i} className="hover:bg-muted/5 transition-colors h-14"><TableCell className="font-bold text-sm pl-6">{r.winnerName}</TableCell><TableCell className="text-[10px] font-bold text-primary uppercase">{r.name}</TableCell><TableCell className="text-right font-bold text-emerald-600 text-sm tabular-nums pr-6">₹{r.winningAmount?.toLocaleString()}</TableCell></TableRow>)) : (<TableRow><TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-sm">No winners recorded.</TableCell></TableRow>)}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="daily-audit" className="mt-8">
+        <TabsContent value="daily-status" className="mt-6">
           <div className="grid gap-6 lg:grid-cols-2">
             <Card className="border-border/50 overflow-hidden shadow-sm">
               <div className="p-4 border-b bg-amber-50/50 flex items-center justify-between">
@@ -472,7 +446,7 @@ export default function ReportsPage() {
                   <AlertCircle className="size-4" /> Unpaid Yesterday
                 </h3>
                 <Badge variant="outline" className="text-[10px] font-bold border-amber-200 text-amber-700">
-                  {filteredData!.unpaidYesterday.length} Members
+                  {filteredData!.unpaidYesterday.length}
                 </Badge>
               </div>
               <div className="overflow-x-auto">
@@ -485,23 +459,14 @@ export default function ReportsPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredData!.unpaidYesterday.length > 0 ? filteredData!.unpaidYesterday.map((m, i) => (
-                      <TableRow key={i} className="hover:bg-muted/5 transition-colors h-12">
-                        <TableCell className="pl-6">
-                          <div className="flex flex-col">
-                            <span className="font-semibold text-sm">{m.name}</span>
-                            <span className="text-[8px] font-bold text-muted-foreground uppercase">
-                              {m.paymentType || (rounds.find(r => r.name === m.chitGroup)?.collectionType) || 'N/A'}
-                            </span>
-                          </div>
+                      <TableRow key={i} className="hover:bg-muted/5 transition-colors">
+                        <TableCell className="pl-6 py-3">
+                          <span className="font-semibold text-sm">{m.name}</span>
                         </TableCell>
                         <TableCell className="text-right text-[10px] font-bold text-primary uppercase pr-6">{m.chitGroup}</TableCell>
                       </TableRow>
                     )) : (
-                      <TableRow>
-                        <TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic text-xs">
-                          All payments cleared for yesterday.
-                        </TableCell>
-                      </TableRow>
+                      <TableRow><TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic text-xs">Clear for yesterday.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -514,7 +479,7 @@ export default function ReportsPage() {
                   <Clock className="size-4" /> Unpaid Today
                 </h3>
                 <Badge variant="outline" className="text-[10px] font-bold border-blue-200 text-blue-700">
-                  {filteredData!.unpaidToday.length} Members
+                  {filteredData!.unpaidToday.length}
                 </Badge>
               </div>
               <div className="overflow-x-auto">
@@ -527,23 +492,14 @@ export default function ReportsPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredData!.unpaidToday.length > 0 ? filteredData!.unpaidToday.map((m, i) => (
-                      <TableRow key={i} className="hover:bg-muted/5 transition-colors h-12">
-                        <TableCell className="pl-6">
-                          <div className="flex flex-col">
-                            <span className="font-semibold text-sm">{m.name}</span>
-                            <span className="text-[8px] font-bold text-muted-foreground uppercase">
-                              {m.paymentType || (rounds.find(r => r.name === m.chitGroup)?.collectionType) || 'N/A'}
-                            </span>
-                          </div>
+                      <TableRow key={i} className="hover:bg-muted/5 transition-colors">
+                        <TableCell className="pl-6 py-3">
+                          <span className="font-semibold text-sm">{m.name}</span>
                         </TableCell>
                         <TableCell className="text-right text-[10px] font-bold text-primary uppercase pr-6">{m.chitGroup}</TableCell>
                       </TableRow>
                     )) : (
-                      <TableRow>
-                        <TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic text-xs">
-                          All payments cleared for today.
-                        </TableCell>
-                      </TableRow>
+                      <TableRow><TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic text-xs">Clear for today.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
