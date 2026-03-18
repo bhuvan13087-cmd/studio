@@ -476,7 +476,7 @@ export default function ReportsPage() {
                 <RadioGroupItem value="daily" id="r-daily" />
                 <div className="flex-1 cursor-pointer">
                   <Label htmlFor="r-daily" className="font-bold uppercase text-xs tracking-widest block mb-1">Daily Report</Label>
-                  <span className="text-[10px] text-muted-foreground font-medium">Selected Date: {filteredData!.focusStats.dateShort}</span>
+                  <span className="text-[10px] text-muted-foreground font-medium">{filteredData!.focusStats.dateShort}</span>
                 </div>
               </div>
               <div className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer">
