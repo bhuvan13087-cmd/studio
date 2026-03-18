@@ -155,7 +155,6 @@ export default function RoundsPage() {
     const totalDebts = pendingRecords.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     const totalCredits = successPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     
-    // Dynamic outstanding: Sum(Pending) - Sum(Paid)
     const pendingTotal = Math.max(0, totalDebts - totalCredits);
 
     return { 
@@ -163,7 +162,7 @@ export default function RoundsPage() {
       paid: paidToday,
       pendingTotal,
       pendingRecords,
-      totalCredits // THIS IS THE DYNAMIC "TOTAL CONTRIBUTION"
+      totalCredits 
     };
   };
 
@@ -1098,7 +1097,7 @@ export default function RoundsPage() {
         <DialogContent className="sm:max-w-[600px]">
           {isHistoryDialogOpen && (
             <>
-              <DialogHeader><DialogTitle className="text-xl">Transaction Audit: {historyMember?.name}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle className="text-xl">Transaction History: {historyMember?.name}</DialogTitle></DialogHeader>
               <div className="py-4 overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow className="bg-muted/30"><TableHead className="text-[10px] uppercase font-bold text-muted-foreground pl-4">Date</TableHead><TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Amount</TableHead><TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Status</TableHead><TableHead className="text-right text-[10px] uppercase font-bold text-muted-foreground pr-4">Recorded On</TableHead></TableRow></TableHeader>
@@ -1118,7 +1117,7 @@ export default function RoundsPage() {
                   </TableBody>
                 </Table>
               </div>
-              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close Audit</Button></DialogFooter>
+              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button></DialogFooter>
             </>
           )}
         </DialogContent>

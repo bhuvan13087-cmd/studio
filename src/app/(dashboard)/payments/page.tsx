@@ -259,7 +259,6 @@ export default function PaymentsPage() {
       .map(member => {
         const memberPayments = payments.filter(p => p.memberId === member.id);
         
-        // Dynamic outstanding calculation
         const totalDebt = memberPayments
           .filter(p => p.status === 'pending')
           .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
@@ -543,10 +542,10 @@ export default function PaymentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Member Audit Profile Modal */}
+      {/* Member Profile Modal */}
       <Dialog open={isAuditProfileOpen} onOpenChange={setIsAuditProfileOpen}>
         <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><User className="size-5 text-primary" /> Member Audit Profile</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><User className="size-5 text-primary" /> Member Profile</DialogTitle></DialogHeader>
           {selectedAuditMember && (
             <div className="space-y-4 py-4">
               <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Name</span><span className="font-bold text-sm">{selectedAuditMember.name}</span></div>
@@ -565,7 +564,7 @@ export default function PaymentsPage() {
               )}
             </div>
           )}
-          <DialogFooter><Button onClick={() => setIsAuditProfileOpen(false)} className="w-full sm:w-auto font-bold uppercase text-[10px] tracking-widest">Close Audit</Button></DialogFooter>
+          <DialogFooter><Button onClick={() => setIsAuditProfileOpen(false)} className="w-full sm:w-auto font-bold uppercase text-[10px] tracking-widest">Close</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -575,7 +574,7 @@ export default function PaymentsPage() {
             <>
               <DialogHeader><DialogTitle className="text-xl">History: {historyMember?.memberName}</DialogTitle></DialogHeader>
               <div className="py-4"><Table><TableHeader><TableRow><TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead><TableHead className="text-xs uppercase font-bold text-muted-foreground">Paid</TableHead><TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead></TableRow></TableHeader><TableBody>{payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success')).map((e, i) => (<TableRow key={i}><TableCell className="text-sm font-semibold">{e.month}</TableCell><TableCell className="text-sm font-bold text-emerald-600">₹{e.amountPaid?.toLocaleString()}</TableCell><TableCell className="text-right text-xs text-muted-foreground font-medium">{e.paymentDate ? format(parseISO(e.paymentDate), 'MMM dd, yyyy, hh:mm a') : "-"}</TableCell></TableRow>))}</TableBody></Table></div>
-              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryOpen(false)}>Close Audit</Button></DialogFooter>
+              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryOpen(false)}>Close</Button></DialogFooter>
             </>
           )}
         </DialogContent>
