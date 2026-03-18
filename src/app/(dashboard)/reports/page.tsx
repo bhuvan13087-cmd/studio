@@ -127,7 +127,6 @@ export default function ReportsPage() {
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
-    // Core members based on the top filter
     const targetMembers = members.filter(m => {
       if (m.status === 'inactive') return false;
       const round = rounds.find(r => r.name === m.chitGroup);
@@ -136,7 +135,6 @@ export default function ReportsPage() {
     });
     const targetIds = new Set(targetMembers.map(m => m.id));
 
-    // Daily members specifically for the pending tabs (hardcoded to daily as per rules)
     const dailyMembers = members.filter(m => {
         if (m.status === 'inactive') return false;
         const round = rounds.find(r => r.name === m.chitGroup);
@@ -269,38 +267,51 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <Card className="border-primary/20 bg-primary/5 shadow-sm overflow-hidden border-2 print:hidden">
-        <div className="p-4 bg-primary text-primary-foreground flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div className="flex items-center gap-2">
-            <LayoutDashboard className="size-5" />
-            <h3 className="font-bold text-sm uppercase tracking-widest">Today at a Glance</h3>
-          </div>
-          <Badge variant="secondary" className="bg-white/20 text-white border-white/30 font-bold">
+      <div className="space-y-4 print:hidden">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-lg font-bold text-primary">Today's Summary</h3>
+          <p className="text-xs text-muted-foreground">
             {format(new Date(), 'EEEE, dd MMMM yyyy')}
-          </Badge>
+          </p>
         </div>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6">
-          <div className="space-y-1 border-r pr-4">
-            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Today Collection</span>
-            <div className="text-xl font-bold text-emerald-600">₹{filteredData!.todayStats.collection.toLocaleString()}</div>
-          </div>
-          <div className="space-y-1 md:border-r md:pr-4">
-            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Transactions</span>
-            <div className="text-xl font-bold">{filteredData!.todayStats.txCount}</div>
-          </div>
-          <div className="space-y-1 border-r pr-4">
-            <span className="text-[10px] font-bold uppercase text-destructive tracking-widest">Pending Daily</span>
-            <div className="text-xl font-bold text-destructive">{filteredData!.todayStats.pendingCount}</div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Month Status</span>
-            <div className={cn("text-sm font-bold uppercase flex items-center gap-1", isMonthLocked ? "text-amber-600" : "text-emerald-600")}>
-              {isMonthLocked ? <Lock className="size-3.5" /> : <Clock className="size-3.5" />}
-              {isMonthLocked ? "Locked" : "Active"}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card className="border-none shadow-sm bg-white overflow-hidden">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Today Collection</span>
+                <IndianRupee className="size-4 text-emerald-600" />
+              </div>
+              <div className="text-2xl font-bold text-emerald-600">
+                ₹{filteredData!.todayStats.collection.toLocaleString()}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-sm bg-white overflow-hidden">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Transactions</span>
+                <LayoutList className="size-4 text-primary" />
+              </div>
+              <div className="text-2xl font-bold">
+                {filteredData!.todayStats.txCount}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-sm bg-white overflow-hidden border-l-4 border-l-destructive/30">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-destructive/80">Pending Members</span>
+                <Clock className="size-4 text-destructive/80" />
+              </div>
+              <div className="text-2xl font-bold text-destructive/90">
+                {filteredData!.todayStats.pendingCount}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 bg-card p-4 rounded-xl border border-border/50 shadow-sm print:hidden">
         <div className="space-y-2">
@@ -308,8 +319,8 @@ export default function ReportsPage() {
           <Select value={reportType} onValueChange={setReportType}>
             <SelectTrigger className="w-full h-10 text-[11px] font-bold"><Filter className="mr-2 size-3.5 text-primary" /><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="daily">Daily Only</SelectItem>
-              <SelectItem value="monthly">Monthly Only</SelectItem>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -336,7 +347,7 @@ export default function ReportsPage() {
       <div className="grid gap-4 grid-cols-1 md:grid-cols-3 print:hidden">
         <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Period Collection</CardTitle>
+            <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total Collection</CardTitle>
             <IndianRupee className="size-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
@@ -346,7 +357,7 @@ export default function ReportsPage() {
         </Card>
         <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Transactions</CardTitle>
+            <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Transactions Count</CardTitle>
             <CheckCircle2 className="size-4 text-primary" />
           </CardHeader>
           <CardContent>
@@ -356,7 +367,7 @@ export default function ReportsPage() {
         </Card>
         <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Members</CardTitle>
+            <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total Members Count</CardTitle>
             <Users className="size-4 text-primary" />
           </CardHeader>
           <CardContent>
@@ -400,8 +411,8 @@ export default function ReportsPage() {
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Period</TableHead>
-                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-10 pr-6">Collection</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Month</TableHead>
+                    <TableHead className="text-right text-[10px] uppercase font-bold tracking-widest h-10 pr-6">Total Collection</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
