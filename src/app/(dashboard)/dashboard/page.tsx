@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
@@ -165,7 +164,7 @@ export default function DashboardPage() {
 
         <Card className="hover:shadow-md transition-shadow duration-200 border-border/50">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground">Outstanding</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground">Today Pending</CardTitle>
             <AlertCircle className="size-4 text-destructive" />
           </CardHeader>
           <CardContent>
