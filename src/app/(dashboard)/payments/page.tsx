@@ -247,6 +247,8 @@ export default function PaymentsPage() {
     const now = new Date();
     const start = startOfMonth(now);
     const end = endOfMonth(now);
+    const todayStr = format(now, 'yyyy-MM-dd');
+
     return members.filter(m => m.status !== 'inactive').filter(m => {
         const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase());
         if (!matchesSearch) return false;
@@ -259,19 +261,15 @@ export default function PaymentsPage() {
       .map(member => {
         const memberPayments = payments.filter(p => p.memberId === member.id);
         
-        const totalDebt = memberPayments
-          .filter(p => p.status === 'pending')
-          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-        
-        const totalCredit = memberPayments
-          .filter(p => p.status === 'success' || p.status === 'paid')
-          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-
         const amountPaidInMonth = memberPayments
           .filter(p => (p.status === 'paid' || p.status === 'success') && p.paymentDate && isWithinInterval(parseISO(p.paymentDate), { start, end }))
           .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
 
-        const outstanding = Math.max(0, totalDebt - totalCredit);
+        const hasPaidToday = memberPayments.some(p => 
+          (p.status === 'paid' || p.status === 'success') && 
+          p.paymentDate && 
+          format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
+        );
         
         return { 
           id: member.id, 
@@ -279,8 +277,7 @@ export default function PaymentsPage() {
           chitName: member.chitGroup || "N/A", 
           totalAmount: member.monthlyAmount || 0, 
           amountPaid: amountPaidInMonth, 
-          outstanding,
-          status: outstanding <= 0 ? "Paid" : "Unpaid" 
+          status: hasPaidToday ? "Paid" : "Unpaid" 
         };
       });
   }, [members, payments, rounds, searchTerm, typeFilter]);
@@ -357,7 +354,7 @@ export default function PaymentsPage() {
                           <TableCell className="text-[10px] sm:text-xs font-medium tabular-nums text-muted-foreground">
                             <div className="flex items-center gap-1.5">
                               {isLocked && <Lock className="size-2.5 text-amber-600" title="Month Locked" />}
-                              {p.targetDate || (p.paymentDate ? format(parseISO(p.paymentDate), 'yyyy-MM-dd') : "-")}
+                              {p.targetDate || (p.paymentDate ? format(parseISO(p.paymentDate), 'dd MMM yyyy') : "-")}
                             </div>
                           </TableCell>
                           <TableCell className={cn("font-semibold text-xs sm:text-sm", isCorrected && "line-through")}>
@@ -448,8 +445,7 @@ export default function PaymentsPage() {
                   <TableRow>
                     <TableHead className="font-bold text-xs uppercase tracking-wider">Member</TableHead>
                     <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Paid (Month)</TableHead>
-                    <TableHead className="font-bold text-xs uppercase tracking-wider text-right">Outstanding (Total)</TableHead>
-                    <TableHead className="font-bold text-xs uppercase tracking-wider text-center">Status</TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider text-center">Status (Today)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -460,7 +456,6 @@ export default function PaymentsPage() {
                       <TableRow key={s.id} className="hover:bg-muted/10 transition-colors">
                         <TableCell className="font-semibold text-xs sm:text-sm">{s.name}</TableCell>
                         <TableCell className="text-right text-xs font-bold text-emerald-600 tabular-nums">₹{s.amountPaid.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-xs font-bold text-amber-600 tabular-nums">₹{s.outstanding.toLocaleString()}</TableCell>
                         <TableCell className="text-center">
                           <Badge variant={s.status === 'Paid' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-2", s.status === 'Paid' ? "bg-emerald-500" : "bg-amber-100 text-amber-700")}>{s.status}</Badge>
                         </TableCell>
@@ -573,7 +568,7 @@ export default function PaymentsPage() {
           {isHistoryOpen && (
             <>
               <DialogHeader><DialogTitle className="text-xl">History: {historyMember?.memberName}</DialogTitle></DialogHeader>
-              <div className="py-4"><Table><TableHeader><TableRow><TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead><TableHead className="text-xs uppercase font-bold text-muted-foreground">Paid</TableHead><TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead></TableRow></TableHeader><TableBody>{payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success')).map((e, i) => (<TableRow key={i}><TableCell className="text-sm font-semibold">{e.month}</TableCell><TableCell className="text-sm font-bold text-emerald-600">₹{e.amountPaid?.toLocaleString()}</TableCell><TableCell className="text-right text-xs text-muted-foreground font-medium">{e.paymentDate ? format(parseISO(e.paymentDate), 'MMM dd, yyyy, hh:mm a') : "-"}</TableCell></TableRow>))}</TableBody></Table></div>
+              <div className="py-4"><Table><TableHeader><TableRow><TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead><TableHead className="text-xs uppercase font-bold text-muted-foreground">Paid</TableHead><TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead></TableRow></TableHeader><TableBody>{payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success')).map((e, i) => (<TableRow key={i}><TableCell className="text-sm font-semibold">{e.month}</TableCell><TableCell className="text-sm font-bold text-emerald-600">₹{e.amountPaid?.toLocaleString()}</TableCell><TableCell className="text-right text-xs text-muted-foreground font-medium">{e.paymentDate ? format(parseISO(e.paymentDate), 'dd MMM yyyy') : "-"}</TableCell></TableRow>))}</TableBody></Table></div>
               <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryOpen(false)}>Close</Button></DialogFooter>
             </>
           )}

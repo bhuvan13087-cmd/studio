@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
@@ -69,7 +70,9 @@ export default function DashboardPage() {
       }
     }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
-    const pendingSummary = (members || []).filter(m => m.status !== 'inactive').map(m => {
+    const pendingMembersList = (members || []).filter(m => {
+        if (m.status === 'inactive') return false;
+        
         const memberPayments = (payments || []).filter(p => p.memberId === m.id);
         const hasPaidToday = memberPayments.some(p => 
           (p.status === 'paid' || p.status === 'success') && 
@@ -77,25 +80,8 @@ export default function DashboardPage() {
           format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
         );
         
-        // Dynamic dynamic outstanding: Debts - Credits
-        const totalDebt = memberPayments
-          .filter(p => p.status === 'pending')
-          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-        
-        const totalCredit = memberPayments
-          .filter(p => p.status === 'success' || p.status === 'paid')
-          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-
-        const pendingTotal = Math.max(0, totalDebt - totalCredit);
-
-        return {
-          ...m,
-          hasPaidToday,
-          pendingTotal
-        };
+        return !hasPaidToday;
     });
-
-    const pendingMembersList = pendingSummary.filter(s => s.pendingTotal > 0 || !s.hasPaidToday);
 
     return {
       activeMembersCount: members?.filter(m => m.status !== 'inactive').length || 0,
@@ -162,14 +148,14 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow duration-200 border-border/50">
+        <Card className="hover:shadow-md transition-shadow duration-200 border-border/50 border-l-4 border-l-destructive">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground">Today Pending</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-destructive">Today Pending</CardTitle>
             <AlertCircle className="size-4 text-destructive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl sm:text-3xl font-bold text-destructive">{pendingMembersList.length}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Members with dues (Total Outstanding)</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Members who haven't paid today</p>
           </CardContent>
         </Card>
       </div>
@@ -210,16 +196,16 @@ export default function DashboardPage() {
           <CardHeader className="bg-muted/10">
             <CardTitle className="flex items-center gap-2 text-lg font-bold">
                <Clock className="size-5 text-amber-500" />
-               Pending Dues
+               Pending Today
             </CardTitle>
-            <CardDescription className="text-xs">Members with unpaid balances.</CardDescription>
+            <CardDescription className="text-xs">Members who haven't cleared today's dues.</CardDescription>
           </CardHeader>
           <CardContent className="px-0 pt-0">
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
                   <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
-                  <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right pr-6">Due (₹)</TableHead>
+                  <TableHead className="text-[10px] uppercase font-bold tracking-wider text-right pr-6">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -227,7 +213,7 @@ export default function DashboardPage() {
                   return (
                     <TableRow key={i} className="hover:bg-muted/5 transition-colors">
                       <TableCell className="text-sm font-semibold pl-6 truncate">{member.name}</TableCell>
-                      <TableCell className="text-right pr-6 text-sm font-bold text-amber-600">₹{member.pendingTotal.toLocaleString()}</TableCell>
+                      <TableCell className="text-right pr-6 text-[10px] font-bold text-amber-600 uppercase">Unpaid</TableCell>
                     </TableRow>
                   );
                 }) : (
