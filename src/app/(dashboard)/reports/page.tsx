@@ -174,7 +174,8 @@ export default function ReportsPage() {
         collection: focusDateCollection,
         txCount: focusDatePayments.length,
         pendingCount: unpaidFocusDateDaily.length,
-        dateLabel: format(focusDate, 'EEEE, dd MMMM yyyy')
+        dateLabel: format(focusDate, 'EEEE, dd MMMM yyyy'),
+        dateShort: format(focusDate, 'dd-MM-yyyy')
       },
       metrics: {
         totalCollected: periodPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0),
@@ -239,7 +240,7 @@ export default function ReportsPage() {
       <div className="space-y-6 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-l-4 border-primary pl-4 py-1">
           <div className="space-y-0.5">
-            <h3 className="text-xl font-bold tracking-tight text-primary font-headline">Summary for Selected Date</h3>
+            <h3 className="text-xl font-bold tracking-tight text-primary font-headline">Today's Summary</h3>
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
               {filteredData!.focusStats.dateLabel}
             </p>
@@ -473,11 +474,17 @@ export default function ReportsPage() {
             >
               <div className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer">
                 <RadioGroupItem value="daily" id="r-daily" />
-                <Label htmlFor="r-daily" className="flex-1 cursor-pointer font-bold uppercase text-xs tracking-widest">Daily Report (Selected Date)</Label>
+                <div className="flex-1 cursor-pointer">
+                  <Label htmlFor="r-daily" className="font-bold uppercase text-xs tracking-widest block mb-1">Daily Report</Label>
+                  <span className="text-[10px] text-muted-foreground font-medium">Selected Date: {filteredData!.focusStats.dateShort}</span>
+                </div>
               </div>
               <div className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer">
                 <RadioGroupItem value="monthly" id="r-monthly" />
-                <Label htmlFor="r-monthly" className="flex-1 cursor-pointer font-bold uppercase text-xs tracking-widest">Monthly Report ({MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} {selectedYear})</Label>
+                <div className="flex-1 cursor-pointer">
+                  <Label htmlFor="r-monthly" className="font-bold uppercase text-xs tracking-widest block mb-1">Monthly Report</Label>
+                  <span className="text-[10px] text-muted-foreground font-medium">{MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} {selectedYear}</span>
+                </div>
               </div>
             </RadioGroup>
           </div>
@@ -498,10 +505,10 @@ export default function ReportsPage() {
         {printReportType === 'daily' ? (
           <>
             <div className="text-center font-bold mb-2 uppercase">Daily Report</div>
-            <div className="mb-2">Date: {format(parseISO(selectedDate), 'dd-MM-yyyy')}</div>
+            <div className="mb-2">Date: {filteredData!.focusStats.dateShort}</div>
             <div className="mb-4">----------------------------</div>
             <div className="flex justify-between mb-1">
-              <span>Collection:</span>
+              <span>Total Collection:</span>
               <span className="font-bold">₹{filteredData!.focusStats.collection.toLocaleString()}</span>
             </div>
             <div className="flex justify-between mb-1">
@@ -513,7 +520,7 @@ export default function ReportsPage() {
               <span className="font-bold">{filteredData!.metrics.membersCount}</span>
             </div>
             <div className="flex justify-between mb-1">
-              <span>Pending:</span>
+              <span>Pending Members:</span>
               <span className="font-bold">{filteredData!.focusStats.pendingCount}</span>
             </div>
           </>
@@ -523,7 +530,7 @@ export default function ReportsPage() {
             <div className="mb-2">Month: {MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} {selectedYear}</div>
             <div className="mb-4">----------------------------</div>
             <div className="flex justify-between mb-1">
-              <span>Collection:</span>
+              <span>Total Collection:</span>
               <span className="font-bold">₹{filteredData!.metrics.totalCollected.toLocaleString()}</span>
             </div>
             <div className="flex justify-between mb-1">
