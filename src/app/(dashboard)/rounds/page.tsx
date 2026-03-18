@@ -1122,7 +1122,12 @@ export default function RoundsPage() {
         <DialogContent className="sm:max-w-[600px]">
           {isHistoryDialogOpen && (
             <>
-              <DialogHeader><DialogTitle className="text-xl">Transaction History: {historyMember?.name}</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle className="text-xl font-headline font-bold tracking-tight text-primary flex items-center gap-2">
+                  <History className="size-5 text-primary/40" /> 
+                  Financial Record: {historyMember?.name}
+                </DialogTitle>
+              </DialogHeader>
               <div className="py-4 overflow-x-auto">
                 <Table>
                   <TableHeader>
