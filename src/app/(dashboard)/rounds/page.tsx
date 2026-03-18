@@ -534,7 +534,7 @@ export default function RoundsPage() {
                   </div>
                 </CardContent>
                 <CardFooter className="p-0 border-t">
-                  <Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Reservation Board</Button>
+                  <Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View</Button>
                 </CardFooter>
               </Card>
             )
