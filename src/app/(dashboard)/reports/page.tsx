@@ -304,9 +304,6 @@ export default function ReportsPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80">Transactions</span>
-                <div className="p-2 rounded-full bg-primary/5">
-                  <LayoutList className="size-4 text-primary" />
-                </div>
               </div>
               <div className="text-3xl font-bold tracking-tight text-foreground">
                 {filteredData!.todayStats.txCount}
