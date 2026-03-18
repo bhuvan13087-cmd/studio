@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -48,6 +49,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc, writeBatch } from "firebase/firestore"
@@ -267,6 +269,16 @@ export default function RoundsPage() {
   const handleQuickPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
+
+    const { paid: alreadyPaid } = analyzePaymentStatus(selectedMemberForPayment);
+    
+    // Log the click attempt immediately for audit trail
+    await createAuditLog(db, user, `Click attempt on 'Record Paid' button for ${selectedMemberForPayment.name} (Current Status: ${alreadyPaid ? 'Already Paid' : 'Pending'})`);
+
+    if (alreadyPaid) {
+      toast({ variant: "destructive", title: "Action Blocked", description: "Payment for today is already recorded. No changes made." });
+      return;
+    }
 
     const amountToSave = Number(paymentData.amount);
     setIsActionPending(true);
@@ -777,7 +789,7 @@ export default function RoundsPage() {
                           variant="ghost" 
                           size="icon" 
                           className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" 
-                          onClick={() => { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: currentRound?.monthlyAmount || 0 }); setIsQuickPaymentDialogOpen(true); setIsAddPendingMode(false); }} 
+                          onClick={() => { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: currentRound?.monthlyAmount || 0 }); setIsQuickPaymentDialogOpen(true); setIsAddPendingMode(false); setPaymentSuccessful(false); }} 
                           title="Record Payment"
                         >
                           <IndianRupee className="size-4" />
@@ -1037,6 +1049,16 @@ export default function RoundsPage() {
                 </form>
               ) : (
                 <form onSubmit={handleQuickPayment} className="space-y-4">
+                  {analyzePaymentStatus(selectedMemberForPayment).paid && (
+                    <Alert variant="default" className="bg-emerald-50 border-emerald-200 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <CheckCircle2 className="size-4 text-emerald-600" />
+                      <AlertTitle className="text-emerald-800 font-bold">Payment Already Completed</AlertTitle>
+                      <AlertDescription className="text-emerald-700 text-xs">
+                        A successful transaction for today is already recorded in the system.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="grid gap-4">
                     {analyzePaymentStatus(selectedMemberForPayment).pendingTotal > 0 && (
                       <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs font-bold">
@@ -1056,7 +1078,7 @@ export default function RoundsPage() {
                         onChange={e => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
                         className="font-bold text-emerald-600 h-12 text-xl [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
                         placeholder="Enter amount"
-                        disabled={isActionPending || paymentSuccessful}
+                        disabled={isActionPending || paymentSuccessful || analyzePaymentStatus(selectedMemberForPayment).paid}
                         required
                       />
                       <p className="text-[10px] text-muted-foreground ml-1 italic">Will be subtracted from total outstanding.</p>
@@ -1066,7 +1088,7 @@ export default function RoundsPage() {
                       <Select 
                         value={paymentData.method} 
                         onValueChange={(v) => setPaymentData({ ...paymentData, method: v })}
-                        disabled={isActionPending || paymentSuccessful}
+                        disabled={isActionPending || paymentSuccessful || analyzePaymentStatus(selectedMemberForPayment).paid}
                       >
                         <SelectTrigger className="h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
                         <SelectContent>
@@ -1079,9 +1101,18 @@ export default function RoundsPage() {
                   </div>
                   <div className="flex gap-3 pt-4 border-t">
                     <Button variant="outline" type="button" onClick={() => setIsQuickPaymentDialogOpen(false)} disabled={isActionPending} className="flex-1 font-bold h-11">Cancel</Button>
-                    <Button type="submit" disabled={isActionPending || paymentSuccessful} className="flex-1 font-bold gap-2 h-11 bg-emerald-600 hover:bg-emerald-700">
+                    <Button 
+                      type="submit" 
+                      disabled={isActionPending} 
+                      className={cn(
+                        "flex-1 font-bold gap-2 h-11", 
+                        (paymentSuccessful || analyzePaymentStatus(selectedMemberForPayment).paid) 
+                          ? "bg-muted text-muted-foreground grayscale cursor-not-allowed opacity-60" 
+                          : "bg-emerald-600 hover:bg-emerald-700"
+                      )}
+                    >
                       {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                      {paymentSuccessful ? "Paid Recorded" : "Record Paid"}
+                      {(paymentSuccessful || analyzePaymentStatus(selectedMemberForPayment).paid) ? "Paid Recorded" : "Record Paid"}
                     </Button>
                   </div>
                 </form>
@@ -1109,7 +1140,7 @@ export default function RoundsPage() {
                             {p.status === 'success' || p.status === 'paid' ? 'paid' : p.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right text-[10px] text-muted-foreground font-medium pr-4">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy, hh:mm a') : '-'}</TableCell>
+                        <TableCell className="text-right text-[10px] text-muted-foreground font-medium pr-4">{p.paymentDate ? format(parseISO(p.paymentDate), 'dd MMM yyyy, hh:mm a') : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1123,3 +1154,5 @@ export default function RoundsPage() {
     </div>
   )
 }
+
+    
