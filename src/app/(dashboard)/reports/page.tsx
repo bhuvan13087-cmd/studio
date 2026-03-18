@@ -1,8 +1,7 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Users, IndianRupee, TrendingUp, Calendar, Lock, AlertCircle, LayoutList, FileText, LayoutDashboard } from "lucide-react"
+import { Download, Printer, Loader2, Database, Filter, CheckCircle2, Clock, Users, IndianRupee, TrendingUp, Calendar, Lock, AlertCircle, LayoutList, FileText, LayoutDashboard, FileSpreadsheet } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +26,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"
@@ -36,7 +45,6 @@ import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
 const MONTHS_MASTER = [
-  { value: "all", label: "All Months" },
   { value: "0", label: "January" },
   { value: "1", label: "February" },
   { value: "2", label: "March" },
@@ -61,6 +69,10 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState("collections")
   const [isActionPending, setIsActionPending] = useState(false)
   
+  // Print Modal State
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false)
+  const [printReportType, setPrintReportType] = useState<'daily' | 'monthly'>('daily')
+  
   const { toast } = useToast()
   const db = useFirestore()
   const { user } = useUser()
@@ -79,15 +91,13 @@ export default function ReportsPage() {
 
   const currentMonthName = useMemo(() => MONTHS_MASTER.find(m => m.value === selectedMonth)?.label, [selectedMonth]);
   const isMonthLocked = useMemo(() => {
-    if (selectedMonth === 'all' || !monthLocks) return false;
+    if (!monthLocks) return false;
     return monthLocks.some(l => l.year === selectedYear && l.monthName === currentMonthName);
-  }, [monthLocks, selectedYear, currentMonthName, selectedMonth]);
+  }, [monthLocks, selectedYear, currentMonthName]);
 
   useEffect(() => { setMounted(true) }, [])
 
   const toggleMonthLock = async () => {
-    if (selectedMonth === 'all') return;
-    
     setIsActionPending(true);
     try {
       const lockId = `${selectedYear}-${currentMonthName}`;
@@ -117,7 +127,6 @@ export default function ReportsPage() {
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
-    // 1. Filter Target Members based on Scheme
     const targetMembers = members.filter(m => {
       if (m.status === 'inactive') return false;
       const round = rounds.find(r => r.name === m.chitGroup);
@@ -130,11 +139,10 @@ export default function ReportsPage() {
       if (!dateStr) return false;
       const d = parseISO(dateStr);
       const matchYear = getYear(d).toString() === selectedYear;
-      const matchMonth = selectedMonth === "all" || getMonth(d).toString() === selectedMonth;
+      const matchMonth = getMonth(d).toString() === selectedMonth;
       return matchYear && matchMonth;
     };
 
-    // 2. Filter Period Payments
     const periodPayments = payments.filter(p => 
       (p.status === 'paid' || p.status === 'success') && 
       targetIds.has(p.memberId) && 
@@ -142,7 +150,6 @@ export default function ReportsPage() {
       isMatchingPeriod(p.paymentDate)
     );
 
-    // 3. Today's Statistics
     const today = new Date();
     const todayStr = format(today, 'yyyy-MM-dd');
     const yesterday = subDays(today, 1);
@@ -157,7 +164,7 @@ export default function ReportsPage() {
 
     const todayCollection = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     
-    const getUnpaidForDate = (dateStr: string, refDate: Date) => {
+    const getUnpaidForDate = (dateStr: string) => {
       return targetMembers.filter(m => {
         const hasPaid = payments.some(p => 
           p.memberId === m.id && 
@@ -168,10 +175,9 @@ export default function ReportsPage() {
       });
     };
 
-    const unpaidToday = getUnpaidForDate(todayStr, today);
-    const unpaidYesterday = getUnpaidForDate(yesterdayStr, yesterday);
+    const unpaidToday = getUnpaidForDate(todayStr);
+    const unpaidYesterday = getUnpaidForDate(yesterdayStr);
 
-    // 4. Monthly Breakdown
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthPayments = payments.filter(p => {
         const d = parseISO(p.paymentDate);
@@ -182,9 +188,8 @@ export default function ReportsPage() {
         amount: monthPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
       };
     }).filter(row => {
-      const isMonthAll = selectedMonth === "all";
       const monthLabel = MONTHS_MASTER.find(m => m.value === selectedMonth)?.label || "";
-      return isMonthAll ? row.amount > 0 : row.month.startsWith(monthLabel);
+      return row.month.startsWith(monthLabel);
     });
 
     return { 
@@ -205,12 +210,22 @@ export default function ReportsPage() {
     };
   }, [mounted, reportType, selectedMonth, selectedYear, members, payments, rounds]);
 
-  const handlePrint = () => window.print();
+  const handleOpenPrintDialog = () => {
+    setPrintReportType('daily');
+    setIsPrintDialogOpen(true);
+  };
+
+  const handleExecutePrint = () => {
+    setIsPrintDialogOpen(false);
+    setTimeout(() => {
+      window.print();
+    }, 300);
+  };
 
   const handleExportExcel = () => {
     if (!filteredData) return;
     let exportData: any[] = [];
-    const fileName = `Report_${reportType.toUpperCase()}_${selectedYear}_${selectedMonth === 'all' ? 'Year' : currentMonthName}.xlsx`;
+    const fileName = `Report_${reportType.toUpperCase()}_${selectedYear}_${currentMonthName}.xlsx`;
 
     switch (activeTab) {
       case "collections": exportData = filteredData.collectionData.map(d => ({ Period: d.month, Amount: d.amount })); break;
@@ -241,7 +256,7 @@ export default function ReportsPage() {
           <p className="text-sm text-muted-foreground">Daily audit and collection monitoring.</p>
         </div>
         <div className="flex items-center gap-2">
-           <Button variant="outline" size="sm" className="h-9 px-3 text-[10px] font-bold uppercase tracking-widest" onClick={handlePrint}>
+           <Button variant="outline" size="sm" className="h-9 px-3 text-[10px] font-bold uppercase tracking-widest" onClick={handleOpenPrintDialog}>
              <Printer className="mr-2 size-3.5" /> Print
            </Button>
            <Button size="sm" className="h-9 px-3 text-[10px] font-bold uppercase tracking-widest shadow-md" onClick={handleExportExcel}>
@@ -250,8 +265,8 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* 2. ⭐ Daily Report Card (Top Priority) */}
-      <Card className="border-primary/20 bg-primary/5 shadow-sm overflow-hidden border-2">
+      {/* 2. Daily Report Card */}
+      <Card className="border-primary/20 bg-primary/5 shadow-sm overflow-hidden border-2 print:hidden">
         <div className="p-4 bg-primary text-primary-foreground flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div className="flex items-center gap-2">
             <LayoutDashboard className="size-5" />
@@ -316,8 +331,8 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* 4. Top Summary Cards (3 Cards) */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+      {/* 4. Top Summary Cards */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3 print:hidden">
         <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Period Collection</CardTitle>
@@ -351,8 +366,8 @@ export default function ReportsPage() {
       </div>
 
       {/* 5. Tabs Section */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-muted/50 border rounded-xl overflow-x-auto print:hidden">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full print:hidden">
+        <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-muted/50 border rounded-xl overflow-x-auto">
           <TabsTrigger value="collections" className="py-2.5 text-[10px] font-bold uppercase tracking-widest gap-2">
             <Database className="size-3.5" /> Collections
           </TabsTrigger>
@@ -370,18 +385,16 @@ export default function ReportsPage() {
               <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
                 <Database className="size-4 text-primary" /> Monthly Revenue
               </h3>
-              {selectedMonth !== 'all' && (
-                <Button 
-                  variant={isMonthLocked ? "secondary" : "outline"} 
-                  size="sm" 
-                  className={cn("h-7 px-3 text-[9px] font-bold uppercase tracking-widest", isMonthLocked && "text-amber-700 bg-amber-50")}
-                  onClick={toggleMonthLock}
-                  disabled={isActionPending}
-                >
-                  {isMonthLocked ? <Lock className="mr-2 size-3" /> : <Clock className="mr-2 size-3" />}
-                  {isMonthLocked ? "Unlock" : "Lock"}
-                </Button>
-              )}
+              <Button 
+                variant={isMonthLocked ? "secondary" : "outline"} 
+                size="sm" 
+                className={cn("h-7 px-3 text-[9px] font-bold uppercase tracking-widest", isMonthLocked && "text-amber-700 bg-amber-50")}
+                onClick={toggleMonthLock}
+                disabled={isActionPending}
+              >
+                {isMonthLocked ? <Lock className="mr-2 size-3" /> : <Clock className="mr-2 size-3" />}
+                {isMonthLocked ? "Unlock" : "Lock"}
+              </Button>
             </div>
             <div className="overflow-x-auto">
               <Table>
@@ -508,6 +521,94 @@ export default function ReportsPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* 6. Print Selection Dialog */}
+      <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="size-5 text-primary" />
+              Print Report
+            </DialogTitle>
+            <DialogDescription>Select the report format for 3-inch thermal printer.</DialogDescription>
+          </DialogHeader>
+          <div className="py-6">
+            <RadioGroup 
+              value={printReportType} 
+              onValueChange={(v: any) => setPrintReportType(v)}
+              className="grid gap-4"
+            >
+              <div className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer">
+                <RadioGroupItem value="daily" id="r-daily" />
+                <Label htmlFor="r-daily" className="flex-1 cursor-pointer font-bold uppercase text-xs tracking-widest">Daily Report (Today)</Label>
+              </div>
+              <div className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer">
+                <RadioGroupItem value="monthly" id="r-monthly" />
+                <Label htmlFor="r-monthly" className="flex-1 cursor-pointer font-bold uppercase text-xs tracking-widest">Monthly Report ({currentMonthName} {selectedYear})</Label>
+              </div>
+            </RadioGroup>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPrintDialogOpen(false)} className="w-full sm:w-auto font-bold">Cancel</Button>
+            <Button onClick={handleExecutePrint} className="w-full sm:w-auto font-bold gap-2">
+              <Printer className="size-4" />
+              Print Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 7. Hidden Thermal Receipt Component */}
+      <div id="thermal-receipt" className="hidden">
+        <div className="text-center font-bold mb-2">CHIT FUND REPORT</div>
+        <div className="text-center mb-4">----------------------------</div>
+        
+        {printReportType === 'daily' ? (
+          <>
+            <div className="text-center font-bold mb-2 uppercase">Daily Report</div>
+            <div className="mb-2">Date: {format(new Date(), 'dd-MM-yyyy')}</div>
+            <div className="mb-4">----------------------------</div>
+            <div className="flex justify-between mb-1">
+              <span>Collection:</span>
+              <span className="font-bold">₹{filteredData!.todayStats.collection.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span>Transactions:</span>
+              <span className="font-bold">{filteredData!.todayStats.txCount}</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span>Members:</span>
+              <span className="font-bold">{filteredData!.metrics.membersCount}</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span>Pending:</span>
+              <span className="font-bold">{filteredData!.todayStats.pendingCount}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-center font-bold mb-2 uppercase">Monthly Report</div>
+            <div className="mb-2">Month: {currentMonthName} {selectedYear}</div>
+            <div className="mb-4">----------------------------</div>
+            <div className="flex justify-between mb-1">
+              <span>Collection:</span>
+              <span className="font-bold">₹{filteredData!.metrics.totalCollected.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span>Transactions:</span>
+              <span className="font-bold">{filteredData!.metrics.txCount}</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span>Members Joined:</span>
+              <span className="font-bold">{filteredData!.metrics.membersCount}</span>
+            </div>
+          </>
+        )}
+        
+        <div className="mt-4 text-center">----------------------------</div>
+        <div className="text-center font-bold mt-2 uppercase">Thank You</div>
+        <div className="text-center mt-1 text-[8px]">{new Date().toLocaleString()}</div>
+      </div>
     </div>
   )
 }
