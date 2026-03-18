@@ -1110,7 +1110,7 @@ export default function RoundsPage() {
                             {p.status === 'success' || p.status === 'paid' ? 'paid' : p.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right text-[10px] text-muted-foreground font-medium pr-4">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy HH:mm') : '-'}</TableCell>
+                        <TableCell className="text-right text-[10px] text-muted-foreground font-medium pr-4">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy, hh:mm a') : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
