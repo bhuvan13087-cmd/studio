@@ -94,25 +94,62 @@ export default function ReportsPage() {
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
-    // PRIMARY FILTER: Identify all Daily members
-    const dailyMembers = members.filter(m => {
-        if (m.status === 'inactive') return false;
-        return (m.paymentType || "").toLowerCase() === 'daily';
-    });
-
-    const targetMembers = members.filter(m => {
-      if (m.status === 'inactive') return false;
-      const schemeType = (m.paymentType || "").toLowerCase();
-      return schemeType === reportType;
-    });
-    const targetIds = new Set(targetMembers.map(m => m.id));
-
     const focusDate = isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date();
     const focusDateStr = format(focusDate, 'yyyy-MM-dd');
     const yesterday = subDays(focusDate, 1);
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
-    // 1. COLLECTION TOTALS: Across all groups for the focus date based on paymentDate
+    // REUSE GROUP LOGIC FOR MEMBER TYPE CHECK
+    const dailyMembers = members.filter(m => {
+        if (m.status === 'inactive') return false;
+        const scheme = rounds.find(r => r.name === m.chitGroup);
+        const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
+        return resolvedType === 'daily';
+    });
+
+    const targetMembers = members.filter(m => {
+      if (m.status === 'inactive') return false;
+      const scheme = rounds.find(r => r.name === m.chitGroup);
+      const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
+      return resolvedType === reportType;
+    });
+    const targetIds = new Set(targetMembers.map(m => m.id));
+
+    // REUSE GROUP LOGIC FOR TODAY PENDING
+    const unpaidTodayDaily = dailyMembers.filter(m => {
+      // EXACT Group view payment predicate
+      const hasPaidToday = payments.some(p => 
+        p.memberId === m.id && 
+        (p.status === 'success' || p.status === 'paid') && 
+        (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
+      );
+      return !hasPaidToday;
+    });
+
+    // REUSE GROUP LOGIC FOR YESTERDAY PENDING (With Carry-Forward Settlement)
+    const unpaidYesterdayDaily = dailyMembers.filter(m => {
+      // Check if payment exists specifically for yesterday
+      const hasPaidYesterday = payments.some(p => 
+        p.memberId === m.id && 
+        (p.status === 'success' || p.status === 'paid') && 
+        (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
+      );
+      
+      if (hasPaidYesterday) return false;
+
+      // Settlement check: if they paid today enough to cover yesterday, remove from yesterday list
+      const dailyAmount = m.monthlyAmount || 0;
+      const totalPaidToday = payments.filter(p => 
+        p.memberId === m.id && 
+        (p.status === 'success' || p.status === 'paid') && 
+        (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
+      ).reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+
+      // If they paid at least one installment's worth today, we consider yesterday cleared for this view
+      return totalPaidToday < dailyAmount;
+    });
+
+    // COLLECTION TOTALS (Runtime Dynamic)
     const focusDatePayments = payments.filter(p => {
       if (p.status !== 'paid' && p.status !== 'success') return false;
       if (!p.paymentDate) return false;
@@ -126,40 +163,6 @@ export default function ReportsPage() {
 
     const totalCollection = focusDatePayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     const totalTransactions = focusDatePayments.length;
-
-    // 2. TODAY PENDING (Daily Only): REUSE GROUP LOGIC
-    // A member is pending if NO payment exists for the focus focus date in targetDate OR paymentDate
-    const unpaidTodayDaily = dailyMembers.filter(m => {
-      const hasPaidToday = payments.some(p => 
-        p.memberId === m.id && 
-        (p.status === 'success' || p.status === 'paid') && 
-        (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
-      );
-      return !hasPaidToday;
-    });
-
-    // 3. YESTERDAY PENDING (Daily Only): Missed yesterday AND not settled today
-    const unpaidYesterdayDaily = dailyMembers.filter(m => {
-      // Step 1: Check if payment exists for yesterday
-      const hasPaidYesterday = payments.some(p => 
-        p.memberId === m.id && 
-        (p.status === 'success' || p.status === 'paid') && 
-        (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
-      );
-      
-      if (hasPaidYesterday) return false;
-
-      // Step 2: Check if dues are covered by extra payment today
-      const dailyAmount = m.monthlyAmount || 0;
-      const totalPaidToday = payments.filter(p => 
-        p.memberId === m.id && 
-        (p.status === 'success' || p.status === 'paid') && 
-        (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
-      ).reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-
-      // If totalPaidToday covers at least one installment, we consider yesterday settled for this view
-      return totalPaidToday < dailyAmount;
-    });
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthPayments = payments.filter(p => {
@@ -190,50 +193,6 @@ export default function ReportsPage() {
       }
     };
   }, [mounted, reportType, selectedMonth, selectedYear, selectedDate, members, payments, rounds]);
-
-  const thermalReceiptData = useMemo(() => {
-    if (!mounted || !members || !payments) return null;
-
-    const focusDate = isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date();
-    const focusDateStr = format(focusDate, 'yyyy-MM-dd');
-    const yesterday = subDays(focusDate, 1);
-    const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-
-    const todayPayments = payments.filter(p => 
-      (p.status === 'paid' || p.status === 'success') && 
-      (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
-    );
-
-    const rows = todayPayments.map(tp => {
-      const member = members.find(m => m.id === tp.memberId);
-      const schemeAmount = member?.monthlyAmount || 0;
-
-      const yesterdayPayment = payments.find(p => 
-        p.memberId === tp.memberId && 
-        (p.status === 'success' || p.status === 'paid') && 
-        (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
-      );
-
-      const yesterdayPendingInitial = yesterdayPayment ? 0 : schemeAmount;
-      const todayPaid = tp.amountPaid || 0;
-      const remainingYP = Math.max(0, yesterdayPendingInitial - todayPaid);
-
-      return {
-        name: tp.memberName || member?.name || "N/A",
-        yesterdayPending: remainingYP,
-        todayPaid: todayPaid,
-        pendingDate: remainingYP > 0 ? yesterdayStr : null
-      };
-    });
-
-    return {
-      timestamp: format(new Date(), 'dd-MM-yyyy HH:mm:ss'),
-      date: focusDateStr,
-      rows,
-      totalCollectedToday: rows.reduce((acc, r) => acc + r.todayPaid, 0),
-      txCount: rows.length
-    };
-  }, [mounted, members, payments, selectedDate]);
 
   const handleOpenPrintDialog = () => {
     setPrintReportType('daily');
@@ -579,53 +538,6 @@ export default function ReportsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <div id="thermal-receipt" className="hidden">
-        <div className="text-center font-bold mb-1">DAILY COLLECTION REPORT</div>
-        <div className="text-center text-[8px] mb-2">{thermalReceiptData?.timestamp}</div>
-        <div className="mb-2">----------------------------</div>
-        
-        {/* Table Headers */}
-        <div className="flex text-[9px] font-bold border-b pb-1 mb-1">
-          <div className="w-[35%]">Member</div>
-          <div className="w-[20%] text-right">Y.P</div>
-          <div className="w-[20%] text-right">T.P</div>
-          <div className="w-[25%] text-right">Status</div>
-        </div>
-
-        {thermalReceiptData?.rows.map((row, i) => (
-          <div key={i} className="flex flex-col border-b border-dashed py-1">
-            <div className="flex text-[9px] items-center">
-              <div className="w-[35%] truncate">{row.name}</div>
-              <div className="w-[20%] text-right tabular-nums">{row.yesterdayPending > 0 ? `₹${row.yesterdayPending}` : "-"}</div>
-              <div className="w-[20%] text-right tabular-nums">₹{row.todayPaid}</div>
-              <div className="w-[25%] text-right text-[8px] uppercase font-bold">
-                {row.yesterdayPending > 0 ? "Pending" : "Cleared"}
-              </div>
-            </div>
-            {row.pendingDate && (
-              <div className="text-[7px] italic text-muted-foreground text-right mt-0.5">
-                Due Date: {row.pendingDate}
-              </div>
-            )}
-          </div>
-        ))}
-        
-        <div className="mt-4">----------------------------</div>
-        <div className="space-y-1">
-          <div className="flex justify-between font-bold text-[9px]">
-            <span>TX COUNT:</span>
-            <span>{thermalReceiptData?.txCount}</span>
-          </div>
-          <div className="flex justify-between font-bold text-[10px]">
-            <span>TOTAL COLLECTED:</span>
-            <span>₹{thermalReceiptData?.totalCollectedToday.toLocaleString()}</span>
-          </div>
-        </div>
-        
-        <div className="mt-4 text-center">----------------------------</div>
-        <div className="text-center font-bold text-[9px] uppercase">Thank You</div>
-      </div>
     </div>
   )
 }
