@@ -94,6 +94,15 @@ export default function ReportsPage() {
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
+    // PRIMARY FILTER: Get ONLY Daily members for pending lists
+    const dailyMembers = members.filter(m => {
+        if (m.status === 'inactive') return false;
+        const round = rounds.find(r => r.name === m.chitGroup);
+        // Using paymentType as the indicator for 'Daily' or 'Monthly'
+        const type = (m.paymentType || round?.collectionType || "Monthly");
+        return type === 'Daily';
+    });
+
     const targetMembers = members.filter(m => {
       if (m.status === 'inactive') return false;
       const round = rounds.find(r => r.name === m.chitGroup);
@@ -101,12 +110,6 @@ export default function ReportsPage() {
       return schemeType === reportType;
     });
     const targetIds = new Set(targetMembers.map(m => m.id));
-
-    const dailyMembers = members.filter(m => {
-        if (m.status === 'inactive') return false;
-        const round = rounds.find(r => r.name === m.chitGroup);
-        return (m.paymentType || round?.collectionType || "Monthly") === 'Daily';
-    });
 
     const isMatchingPeriod = (dateStr: string) => {
       if (!dateStr) return false;
@@ -128,7 +131,7 @@ export default function ReportsPage() {
     const yesterday = subDays(focusDate, 1);
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
-    // Dynamic TODAY Pending Check: Check if payment record exists for target focusDate
+    // Dynamic TODAY Pending Check: STRICTLY DAILY MEMBERS ONLY
     const unpaidFocusDateDaily = dailyMembers.filter(m => {
       const hasPaid = payments.some(p => 
         p.memberId === m.id && 
@@ -138,8 +141,7 @@ export default function ReportsPage() {
       return !hasPaid;
     });
 
-    // Dynamic YESTERDAY Pending Check: Check if payment record exists for target yesterdayStr
-    // STRICT RULE: If payment exists for yesterday, EXCLUDE. If NO payment, INCLUDE.
+    // Dynamic YESTERDAY Pending Check: STRICTLY DAILY MEMBERS ONLY
     const unpaidYesterdayDaily = dailyMembers.filter(m => {
       const hasPaidYesterday = payments.some(p => 
         p.memberId === m.id && 
@@ -211,7 +213,7 @@ export default function ReportsPage() {
       const yesterdayPayment = payments.find(p => 
         p.memberId === tp.memberId && 
         (p.status === 'success' || p.status === 'paid') && 
-        p.targetDate === yesterdayStr
+        (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
       );
 
       const yesterdayPendingInitial = yesterdayPayment ? 0 : schemeAmount;
