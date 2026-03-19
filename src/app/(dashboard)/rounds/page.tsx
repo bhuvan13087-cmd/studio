@@ -131,11 +131,6 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // --- STRONG AUTOMATION LOGIC ---
-  // 1. Check "yesterday pending" field (yesterdayPending).
-  // 2. If "yesterday pending" = 1 and "pending count" (pendingDays) = 0: Increment pending count by 1.
-  // 3. If "pending count" already > 0, do nothing (no double-count).
-  // 4. Run once per day only for yesterday's pending members.
   useEffect(() => {
     if (!db || !assignedMembers.length || isActionPending) return;
 
@@ -151,7 +146,6 @@ export default function RoundsPage() {
         let updated = 0;
 
         for (const m of membersToSync) {
-          // Rule: If yesterdayPending = 1 AND pending count (pendingDays) = 0 -> increment by 1
           if (m.yesterdayPending === 1 && (m.pendingDays || 0) === 0) {
             batch.update(doc(db, 'members', m.id), {
               pendingDays: 1,
@@ -159,7 +153,6 @@ export default function RoundsPage() {
             });
             updated++;
           } else {
-            // Just update the date to signify we checked today
             batch.update(doc(db, 'members', m.id), {
               lastPendingUpdateDate: todayStr
             });
@@ -189,7 +182,6 @@ export default function RoundsPage() {
       let updatedCount = 0;
 
       for (const m of assignedMembers) {
-        // Manual entries: if pending count = 0, increment by 1, otherwise skip.
         if (m.yesterdayPending === 1 && (m.pendingDays || 0) === 0) {
           batch.update(doc(db, 'members', m.id), {
             pendingDays: 1,
@@ -359,7 +351,6 @@ export default function RoundsPage() {
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       
-      // When a payment is made, reset pending count and yesterday flag
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave,
         pendingDays: 0,
@@ -729,7 +720,7 @@ export default function RoundsPage() {
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Pending Cases</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Pending Days</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
@@ -853,7 +844,7 @@ export default function RoundsPage() {
                 </Badge>
               </div>
               <div className="flex justify-between items-center py-4 border-b">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-destructive">Pending Cases</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-destructive">Pending Days</span>
                 <span className="font-bold text-sm text-destructive">{selectedProfileMember.pendingDays || 0}</span>
               </div>
               <div className="flex justify-between items-center py-4 border-b">
