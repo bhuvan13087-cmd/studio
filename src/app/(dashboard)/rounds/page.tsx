@@ -318,6 +318,22 @@ export default function RoundsPage() {
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
   }, [allPayments, assignedMembers])
 
+  const pendingMembersInCurrentGroup = useMemo(() => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    return assignedMembers.filter(m => {
+      const isDaily = (m.paymentType || currentRound?.collectionType || "").toLowerCase() === 'daily';
+      if (!isDaily) return false;
+      
+      const hasPaidToday = (allPayments || []).some(p => 
+        p.memberId === m.id &&
+        (p.status === 'success' || p.status === 'paid') &&
+        (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
+      );
+      
+      return !hasPaidToday;
+    }).length;
+  }, [assignedMembers, allPayments, currentRound]);
+
   const handlePrintHistory = () => {
     if (!historyMember || !allPayments) return;
     window.print();
@@ -358,12 +374,18 @@ export default function RoundsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {chitSchemes.map((group) => {
             const monthlyColl = getMonthlyCollectionForScheme(group.name);
+            const todayStr = format(new Date(), 'yyyy-MM-dd');
             const pendingCount = (members || []).filter(m => {
               if (m.status === 'inactive' || m.chitGroup !== group.name) return false;
               const isDaily = (m.paymentType || group.collectionType || "").toLowerCase() === 'daily';
               if (!isDaily) return false; 
-              const { paid } = analyzePaymentStatus(m);
-              return !paid;
+              
+              const hasPaidToday = (allPayments || []).some(p => 
+                p.memberId === m.id &&
+                (p.status === 'success' || p.status === 'paid') &&
+                (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
+              );
+              return !hasPaidToday;
             }).length;
 
             return (
@@ -403,12 +425,6 @@ export default function RoundsPage() {
       </div>
     )
   }
-
-  const pendingMembersInCurrentGroup = assignedMembers.filter(m => {
-    const isDaily = (m.paymentType || currentRound?.collectionType || "").toLowerCase() === 'daily';
-    if (!isDaily) return false;
-    return !analyzePaymentStatus(m).paid;
-  }).length;
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">

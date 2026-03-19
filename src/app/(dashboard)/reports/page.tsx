@@ -94,7 +94,7 @@ export default function ReportsPage() {
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
-    // PRIMARY FILTER: Get ONLY Daily members for pending lists (Stored value only)
+    // PRIMARY FILTER: Get ONLY Daily members for pending lists
     const dailyMembers = members.filter(m => {
         if (m.status === 'inactive') return false;
         return m.paymentType === 'Daily';
@@ -144,24 +144,7 @@ export default function ReportsPage() {
         (p.status === 'success' || p.status === 'paid') && 
         (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
       );
-      
-      if (hasPaidYesterday) return false;
-
-      const yesterdayAmount = m.monthlyAmount || 0;
-      const todayAmount = m.monthlyAmount || 0;
-      const totalDueAmount = yesterdayAmount + todayAmount;
-
-      const totalPaidToday = payments
-        .filter(p => 
-          p.memberId === m.id && 
-          (p.status === 'success' || p.status === 'paid') && 
-          (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
-        )
-        .reduce((sum, p) => sum + (p.amountPaid || 0), 0);
-
-      if (totalPaidToday >= totalDueAmount) return false;
-
-      return true;
+      return !hasPaidYesterday;
     });
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {

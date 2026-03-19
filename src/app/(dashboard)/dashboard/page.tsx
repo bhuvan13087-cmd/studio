@@ -63,7 +63,8 @@ export default function DashboardPage() {
     const collectedToday = (payments || []).filter(p => {
       if (!p.paymentDate) return false;
       try {
-        return format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr && 
+        const pDateStr = format(parseISO(p.paymentDate), 'yyyy-MM-dd');
+        return (pDateStr === todayStr || p.targetDate === todayStr) && 
                (p.status === 'paid' || p.status === 'success');
       } catch {
         return false;
@@ -74,11 +75,10 @@ export default function DashboardPage() {
         if (m.status === 'inactive') return false;
         if (m.paymentType !== 'Daily') return false; // Strictly Daily members only
         
-        const memberPayments = (payments || []).filter(p => p.memberId === m.id);
-        const hasPaidToday = memberPayments.some(p => 
+        const hasPaidToday = (payments || []).some(p => 
+          p.memberId === m.id &&
           (p.status === 'paid' || p.status === 'success') && 
-          p.paymentDate && 
-          format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
+          (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
         );
         
         return !hasPaidToday;
