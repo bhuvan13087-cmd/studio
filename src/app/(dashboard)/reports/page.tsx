@@ -98,7 +98,6 @@ export default function ReportsPage() {
     const dailyMembers = members.filter(m => {
         if (m.status === 'inactive') return false;
         const round = rounds.find(r => r.name === m.chitGroup);
-        // Using paymentType as the indicator for 'Daily' or 'Monthly'
         const type = (m.paymentType || round?.collectionType || "Monthly");
         return type === 'Daily';
     });
@@ -141,14 +140,37 @@ export default function ReportsPage() {
       return !hasPaid;
     });
 
-    // Dynamic YESTERDAY Pending Check: STRICTLY DAILY MEMBERS ONLY
+    // Dynamic YESTERDAY Pending Check with FULL SETTLEMENT RULE:
+    // Exclude if:
+    // 1. Paid specifically on yesterday's date
+    // 2. OR Paid total today >= (yesterdayAmount + todayAmount)
     const unpaidYesterdayDaily = dailyMembers.filter(m => {
+      // Step 1: Check if payment exists for yesterday
       const hasPaidYesterday = payments.some(p => 
         p.memberId === m.id && 
         (p.status === 'success' || p.status === 'paid') && 
         (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
       );
-      return !hasPaidYesterday;
+      
+      if (hasPaidYesterday) return false; // Not pending for yesterday
+
+      // Step 2 & 3: Check if fully settled today
+      const yesterdayAmount = m.monthlyAmount || 0;
+      const todayAmount = m.monthlyAmount || 0;
+      const totalDueAmount = yesterdayAmount + todayAmount;
+
+      const totalPaidToday = payments
+        .filter(p => 
+          p.memberId === m.id && 
+          (p.status === 'success' || p.status === 'paid') && 
+          (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
+        )
+        .reduce((sum, p) => sum + (p.amountPaid || 0), 0);
+
+      // If they paid >= totalDue (both yesterday and today), they are fully settled for yesterday miss
+      if (totalPaidToday >= totalDueAmount) return false;
+
+      return true; // Still pending yesterday
     });
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
