@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock, AlertCircle, PlusCircle, Calendar as CalendarIcon } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock, AlertCircle, PlusCircle, Calendar as CalendarIcon, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -131,66 +131,87 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Automatic Pending Days Synchronization Logic
+  // --- STRONG AUTOMATION LOGIC ---
+  // 1. Check "yesterday pending" field (yesterdayPending).
+  // 2. If "yesterday pending" = 1 and "pending count" (pendingDays) = 0: Increment pending count by 1.
+  // 3. If "pending count" already > 0, do nothing (no double-count).
+  // 4. Run once per day only for yesterday's pending members.
   useEffect(() => {
-    if (!db || !assignedMembers.length || !currentRound || isActionPending) return;
+    if (!db || !assignedMembers.length || isActionPending) return;
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-    
-    const syncPendingDays = async () => {
-      const membersToUpdate = assignedMembers.filter(m => {
-        const isDaily = m.paymentType === 'Daily' || currentRound.collectionType === 'Daily';
-        if (!isDaily) return false;
-        
-        // Check if field doesn't exist (Initialization) OR if update needed for today
-        return m.pendingDays === undefined || m.lastPendingUpdateDate !== todayStr;
-      });
+    const membersToSync = assignedMembers.filter(m => m.lastPendingUpdateDate !== todayStr);
 
-      if (membersToUpdate.length === 0) return;
+    if (membersToSync.length === 0) return;
 
+    const runAutoPendingSync = async () => {
       setIsActionPending(true);
       try {
         const batch = writeBatch(db);
-        let updatedCount = 0;
+        let updated = 0;
 
-        for (const member of membersToUpdate) {
-          let currentPending = member.pendingDays ?? 0;
-
-          // Check for yesterday's payment status to decide increment
-          const yesterdayPaymentQuery = query(
-            collection(db, 'payments'),
-            where('memberId', '==', member.id),
-            where('targetDate', '==', yesterdayStr),
-            limit(1)
-          );
-          
-          const yesterdayPaymentSnap = await getDocs(yesterdayPaymentQuery);
-          
-          // Initial creation or daily check
-          if (yesterdayPaymentSnap.empty) {
-            currentPending += 1; // Increment if missed
+        for (const m of membersToSync) {
+          // Rule: If yesterdayPending = 1 AND pending count (pendingDays) = 0 -> increment by 1
+          if (m.yesterdayPending === 1 && (m.pendingDays || 0) === 0) {
+            batch.update(doc(db, 'members', m.id), {
+              pendingDays: 1,
+              lastPendingUpdateDate: todayStr
+            });
+            updated++;
+          } else {
+            // Just update the date to signify we checked today
+            batch.update(doc(db, 'members', m.id), {
+              lastPendingUpdateDate: todayStr
+            });
           }
-
-          batch.update(doc(db, 'members', member.id), {
-            pendingDays: currentPending,
-            lastPendingUpdateDate: todayStr
-          });
-          updatedCount++;
         }
 
-        if (updatedCount > 0) {
+        if (updated > 0 || membersToSync.length > 0) {
           await batch.commit();
         }
       } catch (err) {
-        console.error("Failed to sync pending days:", err);
+        console.error("Auto pending sync failed:", err);
       } finally {
         setIsActionPending(false);
       }
     };
 
-    syncPendingDays();
-  }, [db, assignedMembers, currentRound]);
+    runAutoPendingSync();
+  }, [db, assignedMembers]);
+
+  const handleManualPendingSync = async () => {
+    if (!db || !assignedMembers.length || isActionPending) return;
+
+    setIsActionPending(true);
+    try {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const batch = writeBatch(db);
+      let updatedCount = 0;
+
+      for (const m of assignedMembers) {
+        // Manual entries: if pending count = 0, increment by 1, otherwise skip.
+        if (m.yesterdayPending === 1 && (m.pendingDays || 0) === 0) {
+          batch.update(doc(db, 'members', m.id), {
+            pendingDays: 1,
+            lastPendingUpdateDate: todayStr
+          });
+          updatedCount++;
+        }
+      }
+
+      if (updatedCount > 0) {
+        await batch.commit();
+        await createAuditLog(db, user, `Manually synced pending counts for ${updatedCount} members in ${currentRound?.name}`);
+        toast({ title: "Sync Complete", description: `Updated ${updatedCount} members.` });
+      } else {
+        toast({ title: "Already Synced", description: "No members meet the criteria for manual increment." });
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Sync Failed", description: error.message });
+    } finally {
+      setIsActionPending(false);
+    }
+  };
 
   const analyzePaymentStatus = (member: any) => {
     if (!member || !allPayments) return { amount: 0, paid: false, totalCredits: 0 };
@@ -260,6 +281,7 @@ export default function RoundsPage() {
         status: "active",
         totalPaid: 0,
         pendingDays: 0,
+        yesterdayPending: 0,
         lastPendingUpdateDate: format(new Date(), 'yyyy-MM-dd'),
         createdAt: serverTimestamp(),
       }));
@@ -337,10 +359,11 @@ export default function RoundsPage() {
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       
-      // Auto-update PendingDays and last update date on successful payment
+      // When a payment is made, reset pending count and yesterday flag
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave,
-        pendingDays: 0, // Reset as today is clear
+        pendingDays: 0,
+        yesterdayPending: 0,
         lastPendingUpdateDate: todayStr
       });
 
@@ -592,81 +615,87 @@ export default function RoundsPage() {
             <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Reservation Board</p>
           </div>
         </div>
-        <Dialog open={isAddMemberDialogOpen} onOpenChange={(open) => { if(!isActionPending) setIsAddMemberDialogOpen(open); if(!open) setNewMember(INITIAL_MEMBER_STATE); }}>
-          <DialogTrigger asChild>
-            <Button className="h-10 sm:h-11 shadow-lg px-6 font-bold gap-2" disabled={isActionPending}>
-              <UserPlus className="size-5" />
-              Add Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <form onSubmit={handleAddMemberToScheme}>
-              <DialogHeader>
-                <DialogTitle>Register to {currentRound?.name}</DialogTitle>
-                <DialogDescription>Add a new participant directly to this group.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-6">
-                <div className="grid gap-2">
-                  <Label htmlFor="memberName">Member Name</Label>
-                  <Input 
-                    id="memberName" 
-                    value={newMember.name} 
-                    onChange={e => setNewMember({...newMember, name: e.target.value})} 
-                    required 
-                    disabled={isActionPending} 
-                    placeholder="Enter full name"
-                  />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={handleManualPendingSync} disabled={isActionPending} className="h-10 sm:h-11 font-bold gap-2 whitespace-nowrap">
+            <RefreshCw className={cn("size-4", isActionPending && "animate-spin")} />
+            Sync Pending
+          </Button>
+          <Dialog open={isAddMemberDialogOpen} onOpenChange={(open) => { if(!isActionPending) setIsAddMemberDialogOpen(open); if(!open) setNewMember(INITIAL_MEMBER_STATE); }}>
+            <DialogTrigger asChild>
+              <Button className="h-10 sm:h-11 shadow-lg px-6 font-bold gap-2 flex-1 sm:flex-none" disabled={isActionPending}>
+                <UserPlus className="size-5" />
+                Add Member
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <form onSubmit={handleAddMemberToScheme}>
+                <DialogHeader>
+                  <DialogTitle>Register to {currentRound?.name}</DialogTitle>
+                  <DialogDescription>Add a new participant directly to this group.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-6">
+                  <div className="grid gap-2">
+                    <Label htmlFor="memberName">Member Name</Label>
+                    <Input 
+                      id="memberName" 
+                      value={newMember.name} 
+                      onChange={e => setNewMember({...newMember, name: e.target.value})} 
+                      required 
+                      disabled={isActionPending} 
+                      placeholder="Enter full name"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="memberPhone">Phone Number</Label>
+                    <Input 
+                      id="memberPhone" 
+                      value={newMember.phone} 
+                      onChange={e => setNewMember({...newMember, phone: e.target.value})} 
+                      required 
+                      disabled={isActionPending} 
+                      placeholder="Enter phone"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Group</Label>
+                    <Input value={currentRound?.name || ""} readOnly className="bg-muted font-bold text-primary" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="paymentType">Payment Type</Label>
+                    <Select 
+                      value={newMember.paymentType} 
+                      onValueChange={v => setNewMember({ ...newMember, paymentType: v })}
+                      disabled={isActionPending}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Daily">Daily</SelectItem>
+                        <SelectItem value="Monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="joinDate">Date of Joining</Label>
+                    <Input 
+                      id="joinDate" 
+                      type="date" 
+                      value={newMember.joinDate} 
+                      onChange={e => setNewMember({...newMember, joinDate: e.target.value})} 
+                      required 
+                      disabled={isActionPending} 
+                    />
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="memberPhone">Phone Number</Label>
-                  <Input 
-                    id="memberPhone" 
-                    value={newMember.phone} 
-                    onChange={e => setNewMember({...newMember, phone: e.target.value})} 
-                    required 
-                    disabled={isActionPending} 
-                    placeholder="Enter phone"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Group</Label>
-                  <Input value={currentRound?.name || ""} readOnly className="bg-muted font-bold text-primary" />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="paymentType">Payment Type</Label>
-                  <Select 
-                    value={newMember.paymentType} 
-                    onValueChange={v => setNewMember({ ...newMember, paymentType: v })}
-                    disabled={isActionPending}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Daily">Daily</SelectItem>
-                      <SelectItem value="Monthly">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="joinDate">Date of Joining</Label>
-                  <Input 
-                    id="joinDate" 
-                    type="date" 
-                    value={newMember.joinDate} 
-                    onChange={e => setNewMember({...newMember, joinDate: e.target.value})} 
-                    required 
-                    disabled={isActionPending} 
-                  />
-                </div>
-              </div>
-              <DialogFooter className="gap-2">
-                <Button variant="outline" type="button" onClick={() => setIsAddMemberDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
-                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
-                  {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Register Member
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" type="button" onClick={() => setIsAddMemberDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                  <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
+                    {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Register Member
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -700,9 +729,7 @@ export default function RoundsPage() {
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
-                {currentRound?.collectionType === 'Daily' && (
-                  <TableHead className="text-[10px] uppercase font-bold tracking-wider">Pending Days</TableHead>
-                )}
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Pending Cases</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
@@ -711,7 +738,6 @@ export default function RoundsPage() {
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
                 const { paid } = analyzePaymentStatus(m);
                 const displayStatus = paid ? 'paid' : 'pending';
-                const isDaily = m.paymentType === 'Daily' || currentRound?.collectionType === 'Daily';
                 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
@@ -737,16 +763,14 @@ export default function RoundsPage() {
                         </div>
                       </div>
                     </TableCell>
-                    {currentRound?.collectionType === 'Daily' && (
-                      <TableCell>
-                        <span className={cn(
-                          "text-xs font-bold tabular-nums",
-                          (m.pendingDays || 0) > 0 ? "text-destructive" : "text-muted-foreground"
-                        )}>
-                          {(m.pendingDays || 0) > 0 ? m.pendingDays : "-"}
-                        </span>
-                      </TableCell>
-                    )}
+                    <TableCell>
+                      <span className={cn(
+                        "text-xs font-bold tabular-nums",
+                        (m.pendingDays || 0) > 0 ? "text-destructive" : "text-muted-foreground"
+                      )}>
+                        {(m.pendingDays || 0) > 0 ? m.pendingDays : "-"}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <Badge variant={displayStatus === 'paid' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5 w-fit", displayStatus === 'paid' ? "bg-emerald-500" : "")}>{displayStatus}</Badge>
@@ -777,7 +801,7 @@ export default function RoundsPage() {
                     </TableCell>
                   </TableRow>
                 )
-              }) : <TableRow><TableCell colSpan={currentRound?.collectionType === 'Daily' ? 4 : 3} className="h-32 text-center text-xs text-muted-foreground italic">No participants registered in this scheme.</TableCell></TableRow>}
+              }) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-xs text-muted-foreground italic">No participants registered in this scheme.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
@@ -828,12 +852,10 @@ export default function RoundsPage() {
                   {selectedProfileMember.paymentType || currentRound?.collectionType}
                 </Badge>
               </div>
-              {(selectedProfileMember.paymentType === 'Daily' || currentRound?.collectionType === 'Daily') && (
-                <div className="flex justify-between items-center py-4 border-b">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-destructive">Pending Days</span>
-                  <span className="font-bold text-sm text-destructive">{selectedProfileMember.pendingDays || 0} Days</span>
-                </div>
-              )}
+              <div className="flex justify-between items-center py-4 border-b">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-destructive">Pending Cases</span>
+                <span className="font-bold text-sm text-destructive">{selectedProfileMember.pendingDays || 0}</span>
+              </div>
               <div className="flex justify-between items-center py-4 border-b">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Registration Date</span>
                 <span className="font-bold text-sm text-foreground">
