@@ -34,7 +34,7 @@ export default function DashboardPage() {
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db])
   const { data: payments, isLoading: paymentsLoading } = useCollection(paymentsQuery)
 
-  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('date', 'desc')), [db])
+  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db])
   const { data: rounds, isLoading: roundsLoading } = useCollection(roundsQuery)
 
   useEffect(() => {
@@ -72,12 +72,13 @@ export default function DashboardPage() {
     }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
     // REUSED GROUP LOGIC: Only Daily members who haven't paid today
+    // Resolving collection type strictly from schemes + member fields
     const pendingMembersList = (members || []).filter(m => {
         if (m.status === 'inactive') return false;
         
-        // Match Group view type check (Strict DAILY check)
-        const isDaily = (m.paymentType || "").toLowerCase() === 'daily';
-        if (!isDaily) return false;
+        const scheme = (rounds || []).find(r => r.name === m.chitGroup);
+        const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
+        if (resolvedType !== 'daily') return false;
         
         // Exact Group view payment verification logic
         const hasPaidToday = (payments || []).some(p => 
