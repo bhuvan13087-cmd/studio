@@ -131,7 +131,7 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Automatic Pending Days Synchronization Effect (Client-side implementation of user's script logic)
+  // Automatic Pending Days Synchronization Effect
   useEffect(() => {
     if (!db || !assignedMembers.length || !currentRound || isActionPending) return;
 
@@ -151,36 +151,28 @@ export default function RoundsPage() {
         let updatedCount = 0;
 
         for (const member of membersToUpdate) {
-          // Find last payment for this member
-          const lastPaymentQuery = query(
+          // Check if payment done for today
+          const todayPaymentQuery = query(
             collection(db, 'payments'),
             where('memberId', '==', member.id),
-            orderBy('targetDate', 'desc'),
+            where('targetDate', '==', todayStr),
             limit(1)
           );
           
-          const lastPaymentSnap = await getDocs(lastPaymentQuery);
-          let lastPaymentDate = null;
+          const todayPaymentSnap = await getDocs(todayPaymentQuery);
           
-          if (!lastPaymentSnap.empty) {
-            lastPaymentDate = lastPaymentSnap.docs[0].data().targetDate || 
-                             format(parseISO(lastPaymentSnap.docs[0].data().paymentDate), 'yyyy-MM-dd');
+          let currentPendingDays = member.pendingDays || 0;
+
+          if (todayPaymentSnap.empty) {
+            // No payment today -> Increment pending
+            currentPendingDays += 1;
           }
 
-          // If last payment is NOT today → mark pending
-          if (lastPaymentDate !== todayStr) {
-            batch.update(doc(db, 'members', member.id), {
-              pendingDays: 1, // Following user script logic: set to 1
-              lastPendingUpdateDate: todayStr
-            });
-            updatedCount++;
-          } else {
-            // Even if no increment, update the check date so it doesn't run again today
-            batch.update(doc(db, 'members', member.id), {
-              lastPendingUpdateDate: todayStr
-            });
-            updatedCount++;
-          }
+          batch.update(doc(db, 'members', member.id), {
+            pendingDays: currentPendingDays,
+            lastPendingUpdateDate: todayStr
+          });
+          updatedCount++;
         }
 
         if (updatedCount > 0) {
@@ -204,8 +196,7 @@ export default function RoundsPage() {
     
     const paidToday = memberPayments.some(p => 
       (p.status === 'success' || p.status === 'paid') &&
-      p.paymentDate &&
-      format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
+      (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
     );
 
     const successPayments = memberPayments.filter(p => p.status === 'success' || p.status === 'paid');
@@ -342,10 +333,10 @@ export default function RoundsPage() {
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       
-      // Reset Pending Days on payment
+      // Reset Pending Days on payment as they are now clear for today
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave,
-        pendingDays: 0, // Reset to 0 as they paid today
+        pendingDays: 0,
         lastPendingUpdateDate: todayStr
       });
 
@@ -429,8 +420,7 @@ export default function RoundsPage() {
       .filter(p => 
         assignedMemberIds.has(p.memberId) && 
         (p.status === 'paid' || p.status === 'success') &&
-        p.paymentDate && 
-        format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
+        (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
       )
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
   }, [allPayments, assignedMembers])
