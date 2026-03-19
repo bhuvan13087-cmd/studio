@@ -479,15 +479,13 @@ export default function RoundsPage() {
             <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Seat Reservations</h2>
             <p className="text-sm text-muted-foreground">Manage active fund schemes and seat availability.</p>
           </div>
-          <Button className="h-10 sm:h-11 shadow-lg w-full sm:w-auto font-bold" onClick={() => setIsAddChitDialogOpen(true)} disabled={isActionPending}>
-            <Plus className="mr-2 size-5" /> Add Scheme
-          </Button>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {chitSchemes.map((group) => {
             const monthlyColl = getMonthlyCollectionForScheme(group.name);
             const pendingCount = (members || []).filter(m => {
               if (m.status === 'inactive' || m.chitGroup !== group.name) return false;
+              if (m.paymentType !== 'Daily') return false; // Exclude Monthly from daily pending count
               const { paid } = analyzePaymentStatus(m);
               return !paid;
             }).length;
@@ -497,22 +495,6 @@ export default function RoundsPage() {
                 <CardHeader className="bg-muted/20 p-4 space-y-2">
                   <div className="flex justify-between items-start">
                     <Badge variant="outline" className="text-[10px] font-bold uppercase">{group.collectionType}</Badge>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isActionPending}>
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onSelect={() => { if(!isActionPending) { setEditingChit({...group}); setIsEditChitDialogOpen(true); } }}>
-                          <Pencil className="mr-2 size-3.5" /> Edit Details
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => { if(!isActionPending) { setChitToDelete(group); setIsDeleteDialogOpen(true); } }}>
-                          <Trash2 className="mr-2 size-3.5" /> Delete Scheme
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
                   </div>
                   <CardTitle className="text-lg truncate font-bold">{group.name}</CardTitle>
                   <CardDescription className="text-xs">Capacity: {group.totalMembers} Seats</CardDescription>
@@ -527,7 +509,7 @@ export default function RoundsPage() {
                     <span className="text-foreground">{(members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length} / {group.totalMembers}</span>
                   </div>
                   <div className="flex justify-between text-xs font-bold">
-                    <span className="text-amber-600">Pending Members:</span>
+                    <span className="text-amber-600">Pending (Daily):</span>
                     <span className="text-amber-700 font-extrabold">{pendingCount}</span>
                   </div>
                   <div className="pt-2 border-t flex justify-between items-center">
@@ -536,91 +518,20 @@ export default function RoundsPage() {
                   </div>
                 </CardContent>
                 <CardFooter className="p-0 border-t">
-                  <Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View</Button>
+                  <Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Board</Button>
                 </CardFooter>
               </Card>
             )
           })}
         </div>
-
-        <Dialog open={isAddChitDialogOpen} onOpenChange={(o) => { if (!isActionPending) { setIsAddChitDialogOpen(o); if (!o) setNewChit(INITIAL_CHIT_STATE); } }}>
-          <DialogContent className="sm:max-w-[425px]">
-            <form onSubmit={handleAddChit}>
-              <DialogHeader><DialogTitle>New Scheme</DialogTitle><DialogDescription>Define a new chit fund reservation cycle.</DialogDescription></DialogHeader>
-              <div className="grid gap-4 py-6">
-                <div className="grid gap-2"><Label htmlFor="schemeName">Name</Label><Input id="schemeName" value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required disabled={isActionPending} placeholder="e.g. Daily Silver" /></div>
-                <div className="grid gap-2">
-                  <Label>Collection Type</Label>
-                  <Select value={newChit.collectionType} onValueChange={v => setNewChit({...newChit, collectionType: v})} disabled={isActionPending}>
-                    <SelectTrigger><SelectValue placeholder="Select Daily/Monthly" /></SelectTrigger>
-                    <SelectContent><SelectItem value="Monthly">Monthly</SelectItem><SelectItem value="Daily">Daily</SelectItem></SelectContent>
-                  </Select>
-                </div>
-                {newChit.collectionType && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required disabled={isActionPending} placeholder="Enter amount" className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
-                    <div className="grid gap-2"><Label htmlFor="totalMembers">Seats</Label><Input id="totalMembers" type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required disabled={isActionPending} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
-                  </div>
-                )}
-              </div>
-              <DialogFooter className="gap-2">
-                <Button variant="outline" type="button" onClick={() => setIsAddChitDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
-                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
-                  {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create Scheme
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={isEditChitDialogOpen} onOpenChange={(o) => { if (!isActionPending) { setIsEditChitDialogOpen(o); if(!o) setEditingChit(null); } }}>
-          <DialogContent className="sm:max-w-[425px]">
-            {editingChit && (
-              <form onSubmit={handleEditChit}>
-                <DialogHeader><DialogTitle>Edit Scheme</DialogTitle><DialogDescription>Update the parameters for {editingChit.name}.</DialogDescription></DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2"><Label>Name</Label><Input value={editingChit.name} onChange={e => setEditingChit({...editingChit, name: e.target.value})} required disabled={isActionPending} /></div>
-                  <div className="grid gap-2">
-                    <Label>Collection Type</Label>
-                    <Select value={editingChit.collectionType} onValueChange={v => setEditingChit({...editingChit, collectionType: v})} disabled={isActionPending}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="Monthly">Monthly</SelectItem><SelectItem value="Daily">Daily</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                  {editingChit.collectionType && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={editingChit.monthlyAmount || ""} onChange={e => setEditingChit({...editingChit, monthlyAmount: Number(editingChit.monthlyAmount)})} required disabled={isActionPending} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
-                      <div className="grid gap-2"><Label>Seats</Label><Input type="number" value={editingChit.totalMembers || ""} onChange={e => setEditingChit({...editingChit, totalMembers: Number(editingChit.totalMembers)})} required disabled={isActionPending} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
-                    </div>
-                  )}
-                </div>
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" type="button" onClick={() => setIsEditChitDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
-                  <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
-                    {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null} Update Changes
-                  </Button>
-                </DialogFooter>
-              </form>
-            )}
-          </DialogContent>
-        </Dialog>
-
-        <AlertDialog open={isDeleteDialogOpen} onOpenChange={(o) => { if (!isActionPending) { setIsDeleteDialogOpen(o); if(!o) setChitToDelete(null); } }}>
-          <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme <strong>{chitToDelete?.name}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
-              <AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={confirmDelete} disabled={isActionPending}>
-                {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete Permanently
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     )
   }
 
-  const pendingMembersInCurrentGroup = assignedMembers.filter(m => !analyzePaymentStatus(m).paid).length;
+  const pendingMembersInCurrentGroup = assignedMembers.filter(m => {
+    if (m.paymentType !== 'Daily') return false;
+    return !analyzePaymentStatus(m).paid;
+  }).length;
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
@@ -632,87 +543,6 @@ export default function RoundsPage() {
             <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-tight">Reservation Board</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button variant="outline" onClick={handleManualPendingSync} disabled={isActionPending} className="h-10 sm:h-11 font-bold gap-2 whitespace-nowrap">
-            <RefreshCw className={cn("size-4", isActionPending && "animate-spin")} />
-            Sync Pending
-          </Button>
-          <Dialog open={isAddMemberDialogOpen} onOpenChange={(open) => { if(!isActionPending) setIsAddMemberDialogOpen(open); if(!open) setNewMember(INITIAL_MEMBER_STATE); }}>
-            <DialogTrigger asChild>
-              <Button className="h-10 sm:h-11 shadow-lg px-6 font-bold gap-2 flex-1 sm:flex-none" disabled={isActionPending}>
-                <UserPlus className="size-5" />
-                Add Member
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <form onSubmit={handleAddMemberToScheme}>
-                <DialogHeader>
-                  <DialogTitle>Register to {currentRound?.name}</DialogTitle>
-                  <DialogDescription>Add a new participant directly to this group.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-6">
-                  <div className="grid gap-2">
-                    <Label htmlFor="memberName">Member Name</Label>
-                    <Input 
-                      id="memberName" 
-                      value={newMember.name} 
-                      onChange={e => setNewMember({...newMember, name: e.target.value})} 
-                      required 
-                      disabled={isActionPending} 
-                      placeholder="Enter full name"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="memberPhone">Phone Number</Label>
-                    <Input 
-                      id="memberPhone" 
-                      value={newMember.phone} 
-                      onChange={e => setNewMember({...newMember, phone: e.target.value})} 
-                      required 
-                      disabled={isActionPending} 
-                      placeholder="Enter phone"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Group</Label>
-                    <Input value={currentRound?.name || ""} readOnly className="bg-muted font-bold text-primary" />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="paymentType">Payment Type</Label>
-                    <Select 
-                      value={newMember.paymentType} 
-                      onValueChange={v => setNewMember({ ...newMember, paymentType: v })}
-                      disabled={isActionPending}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Daily">Daily</SelectItem>
-                        <SelectItem value="Monthly">Monthly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="joinDate">Date of Joining</Label>
-                    <Input 
-                      id="joinDate" 
-                      type="date" 
-                      value={newMember.joinDate} 
-                      onChange={e => setNewMember({...newMember, joinDate: e.target.value})} 
-                      required 
-                      disabled={isActionPending} 
-                    />
-                  </div>
-                </div>
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" type="button" onClick={() => setIsAddMemberDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
-                  <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
-                    {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Register Member
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -720,7 +550,7 @@ export default function RoundsPage() {
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Seats Filled</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-destructive bg-white">
           <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0 text-destructive">
-            <CardTitle className="text-[10px] uppercase font-bold tracking-wider">Pending Today</CardTitle>
+            <CardTitle className="text-[10px] uppercase font-bold tracking-wider">Daily Pending</CardTitle>
             <Clock className="size-3 opacity-60" />
           </CardHeader>
           <CardContent className="p-3 pt-0">
@@ -754,7 +584,7 @@ export default function RoundsPage() {
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
                 const { paid } = analyzePaymentStatus(m);
-                const displayStatus = paid ? 'paid' : 'pending';
+                const isDaily = m.paymentType === 'Daily';
                 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
@@ -789,9 +619,15 @@ export default function RoundsPage() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <Badge variant={displayStatus === 'paid' ? 'default' : 'secondary'} className={cn("text-[8px] sm:text-[9px] font-bold uppercase px-1.5 w-fit", displayStatus === 'paid' ? "bg-emerald-500" : "")}>{displayStatus}</Badge>
-                      </div>
+                      <Badge 
+                        variant={paid ? 'default' : 'secondary'} 
+                        className={cn(
+                          "text-[8px] sm:text-[9px] font-bold uppercase px-1.5 w-fit", 
+                          paid ? "bg-emerald-500" : (isDaily ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700")
+                        )}
+                      >
+                        {paid ? 'paid' : (isDaily ? 'pending' : 'Due (Month End)')}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right pr-6">
                       <div className="flex items-center justify-end gap-1">
@@ -842,14 +678,14 @@ export default function RoundsPage() {
               </div>
               <div className="flex flex-col">
                 <span className="font-headline tracking-tight text-xl">
-                  {isEditingProfile ? "Update Profile" : "Member Profile"}
+                   Member Profile
                 </span>
-                {!isEditingProfile && <span className="text-[10px] uppercase font-bold tracking-widest text-primary/70">Registry #M-{selectedProfileMember?.id?.slice(0, 4)}</span>}
+                <span className="text-[10px] uppercase font-bold tracking-widest text-primary/70">Registry #M-{selectedProfileMember?.id?.slice(0, 4)}</span>
               </div>
             </DialogTitle>
           </DialogHeader>
 
-          {selectedProfileMember && !isEditingProfile ? (
+          {selectedProfileMember && (
             <div className="px-6 py-2">
               <div className="flex justify-between items-center py-4 border-b">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Full Name</span>
@@ -884,103 +720,16 @@ export default function RoundsPage() {
                 <span className="font-bold text-sm text-emerald-700 tabular-nums">₹{(analyzePaymentStatus(selectedProfileMember).totalCredits).toLocaleString()}</span>
               </div>
             </div>
-          ) : selectedProfileMember && isEditingProfile ? (
-            <form onSubmit={handleSaveMemberEdit} className="px-6 py-6 space-y-5">
-              <div className="grid gap-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Member Name</Label>
-                <Input 
-                  value={editFormData?.name || ""} 
-                  onChange={e => setEditFormData({ ...editFormData, name: e.target.value })} 
-                  required 
-                  disabled={isActionPending}
-                  className="h-10 focus-visible:ring-primary/20"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
-                <Input 
-                  value={editFormData?.phone || ""} 
-                  onChange={e => setEditFormData({ ...editFormData, phone: e.target.value })} 
-                  required 
-                  disabled={isActionPending}
-                  className="h-10 focus-visible:ring-primary/20"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Type</Label>
-                <Select 
-                  value={editFormData?.paymentType || ""} 
-                  onValueChange={v => setEditFormData({ ...editFormData, paymentType: v })}
-                  disabled={isActionPending}
-                >
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Daily">Daily</SelectItem>
-                    <SelectItem value="Monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Joining Date</Label>
-                <Input 
-                  type="date" 
-                  value={editFormData?.joinDate || ""} 
-                  onChange={e => setEditFormData({ ...editFormData, joinDate: e.target.value })} 
-                  required 
-                  disabled={isActionPending}
-                  className="h-10 focus-visible:ring-primary/20"
-                />
-              </div>
-            </form>
-          ) : null}
+          )}
 
           <DialogFooter className="p-6 bg-muted/30 flex flex-col sm:flex-row gap-3">
-            {!isEditingProfile ? (
-              <>
-                <Button 
-                  variant="outline" 
-                  className="w-full sm:w-auto font-bold gap-2 h-10 px-8 uppercase text-[10px] tracking-widest shadow-sm" 
-                  onClick={() => {
-                    setEditFormData({
-                      name: selectedProfileMember.name,
-                      phone: selectedProfileMember.phone,
-                      paymentType: selectedProfileMember.paymentType || currentRound?.collectionType,
-                      joinDate: selectedProfileMember.joinDate
-                    });
-                    setIsEditingProfile(true);
-                  }}
-                  disabled={isActionPending}
-                >
-                  <Pencil className="size-4" /> Edit Profile
-                </Button>
-                <Button 
-                  className="w-full sm:w-auto font-bold h-10 px-8 uppercase text-[10px] tracking-widest shadow-sm" 
-                  onClick={() => setIsMemberProfileDialogOpen(false)}
-                  disabled={isActionPending}
-                >
-                  Close Profile
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button 
-                  variant="outline" 
-                  className="w-full sm:w-auto font-bold gap-2 h-10 px-8 uppercase text-[10px] tracking-widest" 
-                  onClick={() => setIsEditingProfile(false)}
-                  disabled={isActionPending}
-                >
-                  <X className="size-4" /> Cancel
-                </Button>
-                <Button 
-                  className="w-full sm:w-auto font-bold gap-2 h-10 px-8 uppercase text-[10px] tracking-widest shadow-md" 
-                  onClick={handleSaveMemberEdit}
-                  disabled={isActionPending}
-                >
-                  {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                  Save Profile
-                </Button>
-              </>
-            )}
+             <Button 
+                className="w-full font-bold h-10 px-8 uppercase text-[10px] tracking-widest shadow-sm" 
+                onClick={() => setIsMemberProfileDialogOpen(false)}
+                disabled={isActionPending}
+              >
+                Close Profile
+              </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1121,7 +870,6 @@ export default function RoundsPage() {
             
             <div className="border-b border-dashed border-black mb-2"></div>
             
-            {/* Headers with fixed character widths */}
             <div className="flex justify-between font-bold mb-1">
               <span className="w-[10ch]">Date</span>
               <span className="w-[8ch]">Month</span>

@@ -237,6 +237,7 @@ export default function MembersPage() {
                   const todayPayment = paidMemberStatus.get(member.id);
                   const isPaidToday = !!todayPayment;
                   const dynamicTotalPaid = totalPaidByMember.get(member.id) || 0;
+                  const isDaily = member.paymentType === 'Daily';
                   
                   return (
                     <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
@@ -265,9 +266,13 @@ export default function MembersPage() {
                                <div className="text-[10px] text-muted-foreground uppercase font-semibold">Date: {todayPayment.paymentDate ? format(parseISO(todayPayment.paymentDate), 'MMM dd, yyyy') : '-'}</div>
                             </PopoverContent>
                           </Popover>
-                        ) : (
+                        ) : isDaily ? (
                           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 uppercase tracking-tight shadow-sm w-fit">
                             <Clock className="size-2.5" /> Pending
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200 uppercase tracking-tight shadow-sm w-fit">
+                            <Calendar className="size-2.5" /> Due (Month End)
                           </div>
                         )}
                       </TableCell>

@@ -72,6 +72,7 @@ export default function DashboardPage() {
 
     const pendingMembersList = (members || []).filter(m => {
         if (m.status === 'inactive') return false;
+        if (m.paymentType !== 'Daily') return false; // Strictly Daily members only
         
         const memberPayments = (payments || []).filter(p => p.memberId === m.id);
         const hasPaidToday = memberPayments.some(p => 
@@ -155,7 +156,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl sm:text-3xl font-bold text-destructive">{pendingMembersList.length}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Members who haven't paid today</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Daily members who haven't paid today</p>
           </CardContent>
         </Card>
       </div>
@@ -198,7 +199,7 @@ export default function DashboardPage() {
                <Clock className="size-5 text-amber-500" />
                Pending Today
             </CardTitle>
-            <CardDescription className="text-xs">Members who haven't cleared today's dues.</CardDescription>
+            <CardDescription className="text-xs">Daily members without payments.</CardDescription>
           </CardHeader>
           <CardContent className="px-0 pt-0">
             <Table>
