@@ -186,6 +186,50 @@ export default function ReportsPage() {
     };
   }, [mounted, reportType, selectedMonth, selectedYear, selectedDate, members, payments, rounds]);
 
+  const thermalReceiptData = useMemo(() => {
+    if (!mounted || !members || !payments) return null;
+
+    const focusDate = isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date();
+    const focusDateStr = format(focusDate, 'yyyy-MM-dd');
+    const yesterday = subDays(focusDate, 1);
+    const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
+
+    const todayPayments = payments.filter(p => 
+      (p.status === 'paid' || p.status === 'success') && 
+      (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
+    );
+
+    const rows = todayPayments.map(tp => {
+      const member = members.find(m => m.id === tp.memberId);
+      const schemeAmount = member?.monthlyAmount || 0;
+
+      const yesterdayPayment = payments.find(p => 
+        p.memberId === tp.memberId && 
+        (p.status === 'success' || p.status === 'paid') && 
+        p.targetDate === yesterdayStr
+      );
+
+      const yesterdayPendingInitial = yesterdayPayment ? 0 : schemeAmount;
+      const todayPaid = tp.amountPaid || 0;
+      const remainingYP = Math.max(0, yesterdayPendingInitial - todayPaid);
+
+      return {
+        name: tp.memberName || member?.name || "N/A",
+        yesterdayPending: remainingYP,
+        todayPaid: todayPaid,
+        pendingDate: remainingYP > 0 ? yesterdayStr : null
+      };
+    });
+
+    return {
+      timestamp: format(new Date(), 'dd-MM-yyyy HH:mm:ss'),
+      date: focusDateStr,
+      rows,
+      totalCollectedToday: rows.reduce((acc, r) => acc + r.todayPaid, 0),
+      txCount: rows.length
+    };
+  }, [mounted, members, payments, selectedDate]);
+
   const handleOpenPrintDialog = () => {
     setPrintReportType('daily');
     setPrintDate(isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date());
@@ -490,7 +534,7 @@ export default function ReportsPage() {
               <div className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer">
                 <RadioGroupItem value="daily" id="r-daily" />
                 <div className="flex-1 cursor-pointer">
-                  <Label htmlFor="r-daily" className="font-bold uppercase text-xs tracking-widest block mb-1">Daily Report</Label>
+                  <Label htmlFor="r-daily" className="font-bold uppercase text-xs tracking-widest block mb-1">Daily Collection Report</Label>
                   <div className="flex flex-col gap-2 mt-2">
                     <Popover>
                       <PopoverTrigger asChild>
@@ -515,7 +559,7 @@ export default function ReportsPage() {
               <div className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer">
                 <RadioGroupItem value="monthly" id="r-monthly" />
                 <div className="flex-1 cursor-pointer">
-                  <Label htmlFor="r-monthly" className="font-bold uppercase text-xs tracking-widest block mb-1">Monthly Report</Label>
+                  <Label htmlFor="r-monthly" className="font-bold uppercase text-xs tracking-widest block mb-1">Monthly Summary</Label>
                   <span className="text-[10px] text-muted-foreground font-medium">{MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} {selectedYear}</span>
                 </div>
               </div>
@@ -532,54 +576,50 @@ export default function ReportsPage() {
       </Dialog>
 
       <div id="thermal-receipt" className="hidden">
-        <div className="text-center font-bold mb-2">CHIT FUND REPORT</div>
-        <div className="text-center mb-4">----------------------------</div>
+        <div className="text-center font-bold mb-1">DAILY COLLECTION REPORT</div>
+        <div className="text-center text-[8px] mb-2">{thermalReceiptData?.timestamp}</div>
+        <div className="mb-2">----------------------------</div>
         
-        {printReportType === 'daily' ? (
-          <>
-            <div className="text-center font-bold mb-2 uppercase">Daily Report</div>
-            <div className="mb-2">Date: {format(printDate, 'dd-MM-yyyy')}</div>
-            <div className="mb-4">----------------------------</div>
-            <div className="flex justify-between mb-1">
-              <span>Total Collection:</span>
-              <span className="font-bold">₹{filteredData!.focusStats.collection.toLocaleString()}</span>
+        {/* Table Headers */}
+        <div className="flex text-[9px] font-bold border-b pb-1 mb-1">
+          <div className="w-[35%]">Member</div>
+          <div className="w-[20%] text-right">Y.P</div>
+          <div className="w-[20%] text-right">T.P</div>
+          <div className="w-[25%] text-right">Status</div>
+        </div>
+
+        {thermalReceiptData?.rows.map((row, i) => (
+          <div key={i} className="flex flex-col border-b border-dashed py-1">
+            <div className="flex text-[9px] items-center">
+              <div className="w-[35%] truncate">{row.name}</div>
+              <div className="w-[20%] text-right tabular-nums">{row.yesterdayPending > 0 ? `₹${row.yesterdayPending}` : "-"}</div>
+              <div className="w-[20%] text-right tabular-nums">₹{row.todayPaid}</div>
+              <div className="w-[25%] text-right text-[8px] uppercase font-bold">
+                {row.yesterdayPending > 0 ? "Pending" : "Cleared"}
+              </div>
             </div>
-            <div className="flex justify-between mb-1">
-              <span>Transactions:</span>
-              <span className="font-bold">{filteredData!.focusStats.txCount}</span>
-            </div>
-            <div className="flex justify-between mb-1">
-              <span>Members:</span>
-              <span className="font-bold">{filteredData!.metrics.membersCount}</span>
-            </div>
-            <div className="flex justify-between mb-1">
-              <span>Pending Members:</span>
-              <span className="font-bold">{filteredData!.focusStats.pendingCount}</span>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="text-center font-bold mb-2 uppercase">Monthly Report</div>
-            <div className="mb-2">Month: {MONTHS_MASTER.find(m => m.value === selectedMonth)?.label} {selectedYear}</div>
-            <div className="mb-4">----------------------------</div>
-            <div className="flex justify-between mb-1">
-              <span>Total Collection:</span>
-              <span className="font-bold">₹{filteredData!.metrics.totalCollected.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between mb-1">
-              <span>Transactions:</span>
-              <span className="font-bold">{filteredData!.metrics.txCount}</span>
-            </div>
-            <div className="flex justify-between mb-1">
-              <span>Members Joined:</span>
-              <span className="font-bold">{filteredData!.metrics.membersCount}</span>
-            </div>
-          </>
-        )}
+            {row.pendingDate && (
+              <div className="text-[7px] italic text-muted-foreground text-right mt-0.5">
+                Due Date: {row.pendingDate}
+              </div>
+            )}
+          </div>
+        ))}
+        
+        <div className="mt-4">----------------------------</div>
+        <div className="space-y-1">
+          <div className="flex justify-between font-bold text-[9px]">
+            <span>TX COUNT:</span>
+            <span>{thermalReceiptData?.txCount}</span>
+          </div>
+          <div className="flex justify-between font-bold text-[10px]">
+            <span>TOTAL COLLECTED:</span>
+            <span>₹{thermalReceiptData?.totalCollectedToday.toLocaleString()}</span>
+          </div>
+        </div>
         
         <div className="mt-4 text-center">----------------------------</div>
-        <div className="text-center font-bold mt-2 uppercase">Thank You</div>
-        <div className="text-center mt-1 text-[8px]">{new Date().toLocaleString()}</div>
+        <div className="text-center font-bold text-[9px] uppercase">Thank You</div>
       </div>
     </div>
   )
