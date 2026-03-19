@@ -120,30 +120,9 @@ export default function RoundsPage() {
     e.preventDefault();
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
-    // RULE: Fixed scheme amount only. No extra, no partial.
-    const schemeAmount = currentRound.monthlyAmount || 0;
+    const schemeAmount = currentRound.monthlyAmount || 800;
     const paymentAmount = schemeAmount;
-
-    // RULE: Priority Arrears Clearing (FIFO Logic)
-    // 1. Clear Yesterday's Pending first
-    // 2. Any leftover goes to Today's payment
-    // Since we only accept fixed scheme amounts, one payment clears one 'date unit' of debt.
     
-    const currentPendingAmount = selectedMemberForPayment.pendingAmount || 0;
-    const currentPendingDays = selectedMemberForPayment.pendingDays || 0;
-    
-    let newPendingAmount = currentPendingAmount;
-    let newPendingDays = currentPendingDays;
-
-    if (currentPendingAmount > 0) {
-      // Settle oldest debt unit
-      newPendingAmount = Math.max(0, currentPendingAmount - schemeAmount);
-      newPendingDays = Math.max(0, currentPendingDays - 1);
-    } else {
-      // No arrears, pay for today
-      // (Status check will handle flagging today as 'Paid')
-    }
-
     setIsActionPending(true);
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -164,20 +143,25 @@ export default function RoundsPage() {
         createdAt: serverTimestamp()
       });
 
+      // Update Member Balance - 10 PM Batch handles the pendingDay increment/decrement
+      // But we update pendingAmount instantly to reflect the payment
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
+      const currentArrears = selectedMemberForPayment.pendingAmount || 0;
+      
+      // PRODUCTION RULE: Payment first clears arrears
+      const newArrears = Math.max(0, currentArrears - paymentAmount);
+      
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
-        pendingAmount: newPendingAmount,
-        pendingDays: newPendingDays,
-        lastPendingUpdateDate: todayStr
+        pendingAmount: newArrears
       });
 
       await withTimeout(batch.commit());
-      await createAuditLog(db, user, `Processed Fixed Payment ₹${paymentAmount} for ${selectedMemberForPayment.name}`);
+      await createAuditLog(db, user, `Processed Payment ₹${paymentAmount} for ${selectedMemberForPayment.name}`);
 
       setPaymentData(INITIAL_PAYMENT_STATE);
       setIsQuickPaymentDialogOpen(false);
-      toast({ title: "Payment Processed", description: "Fixed installment applied. Arrears settled first." });
+      toast({ title: "Payment Recorded", description: "Arrears updated. Daily aging happens at 10 PM." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
@@ -347,7 +331,6 @@ export default function RoundsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {/* RULE: Show only Date counts. Clicking shows amount in popup. */}
                       <button 
                         onClick={() => { setSelectedPendingMember(m); setIsPendingDetailsOpen(true); }}
                         className={cn(
@@ -391,7 +374,6 @@ export default function RoundsPage() {
         </div>
       </div>
 
-      {/* Pending Details Popup */}
       <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
         <DialogContent className="sm:max-w-[400px]">
           {selectedPendingMember && (
@@ -413,8 +395,8 @@ export default function RoundsPage() {
                    </div>
                 </div>
                 <div className="p-3 bg-primary/5 rounded-lg border border-primary/10">
-                   <p className="text-[10px] text-primary font-bold uppercase tracking-wider mb-1">Policy: Priority Clearing</p>
-                   <p className="text-xs text-muted-foreground leading-relaxed italic">Next payment will first settle the oldest pending dates before applying to today.</p>
+                   <p className="text-[10px] text-primary font-bold uppercase tracking-wider mb-1">Production Policy</p>
+                   <p className="text-xs text-muted-foreground leading-relaxed italic">Arrears are aged daily at 10 PM. Payments first clear previous debt before applying to current cycle.</p>
                 </div>
               </div>
               <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-bold">Close</Button></DialogFooter>
@@ -431,9 +413,8 @@ export default function RoundsPage() {
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label>Scheme Amount (₹) - Fixed</Label>
-                  {/* RULE: Locked to scheme amount. No override. */}
-                  <Input type="number" value={currentRound?.monthlyAmount} readOnly className="bg-muted font-bold text-lg" />
-                  <p className="text-[10px] text-muted-foreground italic">Only the exact scheme amount is accepted. Overpayments or partials are prohibited.</p>
+                  <Input type="number" value={currentRound?.monthlyAmount || 800} readOnly className="bg-muted font-bold text-lg" />
+                  <p className="text-[10px] text-muted-foreground italic">Accepts only the full scheme amount. Debt age is calculated nightly at 10 PM.</p>
                 </div>
                 <div className="grid gap-2">
                   <Label>Method</Label>

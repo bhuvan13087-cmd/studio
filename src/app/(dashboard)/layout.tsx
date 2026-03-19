@@ -7,7 +7,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { useRouter } from "next/navigation"
-import { format, isAfter, setHours, setMinutes, parseISO } from "date-fns"
+import { format, isAfter, setHours, setMinutes, parseISO, startOfDay, endOfDay } from "date-fns"
 import { Clock } from "lucide-react"
 import { collection, query, writeBatch, doc } from "firebase/firestore"
 
@@ -21,7 +21,6 @@ export default function DashboardLayout({
   const db = useFirestore()
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
 
-  // 10 PM Automated Batch Check
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
   const { data: members } = useCollection(membersQuery);
 
@@ -40,46 +39,64 @@ export default function DashboardLayout({
     }
   }, [user, isUserLoading, router])
 
-  // Simulation of 10 PM Automated Calculation Logic
+  // PRODUCTION 10 PM AUTOMATED CALCULATION
   useEffect(() => {
     if (!user || !members || !payments || !currentTime) return;
 
     const runBatchUpdate = async () => {
       const todayStr = format(currentTime, 'yyyy-MM-dd');
-      const tenPM = setMinutes(setHours(new Date(), 22), 0);
+      const scheduledHour = 22; // 10 PM
       
-      // Only run after 10 PM
-      if (!isAfter(currentTime, tenPM)) return;
+      // Only run if current hour is 10 PM or later
+      if (currentTime.getHours() < scheduledHour) return;
 
-      const dailyMembers = members.filter(m => m.status === 'active' && m.paymentType === 'Daily' && m.lastPendingUpdateDate !== todayStr);
+      const dailyMembers = members.filter(m => 
+        m.status === 'active' && 
+        (m.paymentType === 'Daily' || m.paymentType === 'daily') && 
+        m.lastPendingUpdateDate !== todayStr
+      );
+      
       if (dailyMembers.length === 0) return;
 
       const batch = writeBatch(db);
       let updatedCount = 0;
 
       dailyMembers.forEach(member => {
-        // Check if paid today
-        const hasPaidToday = payments.some(p => 
+        const schemeAmount = member.monthlyAmount || 800;
+        const yesterdayPending = member.pendingAmount || 0;
+        
+        // Sum today's payments
+        const todayPayments = payments.filter(p => 
           p.memberId === member.id && 
           (p.status === 'success' || p.status === 'paid') &&
           (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
         );
+        const todayPaymentSum = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
 
-        if (!hasPaidToday) {
-          const memberRef = doc(db, 'members', member.id);
-          const schemeAmount = member.monthlyAmount || 0;
-          batch.update(memberRef, {
-            pendingAmount: (member.pendingAmount || 0) + schemeAmount,
-            pendingDays: (member.pendingDays || 0) + 1,
-            lastPendingUpdateDate: todayStr
-          });
-          updatedCount++;
+        // PRODUCTION FORMULA: today_pending = (scheme_amount - today_payment) + yesterday_pending
+        let todayPending = 0;
+        if (todayPaymentSum >= schemeAmount && yesterdayPending === 0) {
+          todayPending = 0;
         } else {
-           // Even if paid, we mark as updated for today so we don't check again
-           const memberRef = doc(db, 'members', member.id);
-           batch.update(memberRef, { lastPendingUpdateDate: todayStr });
-           updatedCount++;
+          // Calculate debt including arrears
+          todayPending = Math.max(0, (schemeAmount - todayPaymentSum) + yesterdayPending);
         }
+
+        // Counter Logic: Increment if pending exists, decrement if cleared
+        let newPendingDays = member.pendingDays || 0;
+        if (todayPending > 0) {
+          newPendingDays += 1;
+        } else {
+          newPendingDays = Math.max(0, newPendingDays - 1);
+        }
+
+        const memberRef = doc(db, 'members', member.id);
+        batch.update(memberRef, {
+          pendingAmount: todayPending,
+          pendingDays: newPendingDays,
+          lastPendingUpdateDate: todayStr
+        });
+        updatedCount++;
       });
 
       if (updatedCount > 0) {
@@ -111,7 +128,7 @@ export default function DashboardLayout({
                   Admin Panel
                 </h1>
                 <div className="hidden xs:flex items-center gap-1 text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-                  <Clock className="size-2.5" /> 10:00 PM Batch Sync Active
+                  <Clock className="size-2.5" /> 10:00 PM Production Sync
                 </div>
               </div>
             </div>
