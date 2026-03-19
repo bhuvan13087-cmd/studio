@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -56,8 +56,7 @@ const INITIAL_MEMBER_STATE = {
 }
 
 const INITIAL_PAYMENT_STATE = {
-  method: "Cash",
-  amount: 0
+  method: "Cash"
 }
 
 export default function RoundsPage() {
@@ -121,50 +120,18 @@ export default function RoundsPage() {
     e.preventDefault();
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
+    // RULE 1 & 5: Fixed scheme amount only. No extra, no partial.
     const schemeAmount = currentRound.monthlyAmount || 0;
-    let dailyPayment = Number(paymentData.amount);
+    const paymentAmount = schemeAmount;
 
-    // Rule 2c: Ignore extra amount; cap at scheme_amount
-    if (dailyPayment > schemeAmount) {
-      dailyPayment = schemeAmount;
-    }
-
-    const yesterdayPendingAmount = selectedMemberForPayment.pendingAmount || 0;
-    let pendingDays = selectedMemberForPayment.pendingDays || 0;
-    let newPendingAmount = yesterdayPendingAmount;
-
-    // Implementation of Priority Debt Clearing Logic
-    if (dailyPayment < schemeAmount) {
-      // 2a: Increment pending amount and days
-      newPendingAmount += (schemeAmount - dailyPayment);
-      pendingDays += 1;
-    } else if (dailyPayment === schemeAmount) {
-      // 2b: Clear oldest pending first (yesterday)
-      let availableForClearing = dailyPayment;
-      if (newPendingAmount > 0) {
-        const clearAmount = Math.min(availableForClearing, newPendingAmount);
-        newPendingAmount -= clearAmount;
-        availableForClearing -= clearAmount;
-        
-        // If we cleared a full scheme_amount worth of debt, reduce pending days
-        // This is a simplification; in a real FIFO, we'd track days specifically
-        if (newPendingAmount === 0) {
-          pendingDays = Math.max(0, pendingDays - 1);
-        }
-      }
-
-      // Any leftover deficit for today if some was used to clear yesterday
-      const todayDeficit = schemeAmount - availableForClearing;
-      if (todayDeficit > 0) {
-        newPendingAmount += todayDeficit;
-        // If we didn't have a pending day for today yet, add it
-        // (Assuming 1 payment per day)
-        if (availableForClearing < schemeAmount) {
-          // Shifting yesterday's debt to today means total days pending stays same
-          // but if we cleared one and created one, it balances.
-        }
-      }
-    }
+    // RULE 2: Priority Clearing Logic
+    const currentPendingAmount = selectedMemberForPayment.pendingAmount || 0;
+    
+    // Calculate new state
+    // First priority: Yesterday's pending. Second priority: Today's payment.
+    const newPendingAmount = Math.max(0, currentPendingAmount - paymentAmount);
+    // If we cleared arrears, the pending days count decreases
+    const newPendingDays = Math.ceil(newPendingAmount / schemeAmount);
 
     setIsActionPending(true);
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -179,7 +146,7 @@ export default function RoundsPage() {
         memberName: selectedMemberForPayment.name,
         month: format(new Date(), 'MMMM yyyy'),
         targetDate: todayStr,
-        amountPaid: dailyPayment, // Recorded as capped amount
+        amountPaid: paymentAmount,
         paymentDate: new Date().toISOString(),
         status: "success",
         method: paymentData.method,
@@ -188,18 +155,18 @@ export default function RoundsPage() {
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       batch.update(memberRef, {
-        totalPaid: (selectedMemberForPayment.totalPaid || 0) + dailyPayment,
-        pendingDays: pendingDays,
+        totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
+        pendingDays: newPendingDays,
         pendingAmount: newPendingAmount,
         lastPendingUpdateDate: todayStr
       });
 
       await withTimeout(batch.commit());
-      await createAuditLog(db, user, `Processed Priority Payment ₹${dailyPayment} for ${selectedMemberForPayment.name}`);
+      await createAuditLog(db, user, `Processed Fixed Payment ₹${paymentAmount} for ${selectedMemberForPayment.name}`);
 
       setPaymentData(INITIAL_PAYMENT_STATE);
       setIsQuickPaymentDialogOpen(false);
-      toast({ title: "Payment Processed", description: "Priority clearing applied successfully." });
+      toast({ title: "Payment Processed", description: "Fixed scheme amount applied successfully." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
@@ -346,7 +313,7 @@ export default function RoundsPage() {
             <TableHeader>
               <TableRow className="bg-muted/30 hover:bg-muted/30">
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Pending Days</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Pending Dates</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
@@ -369,6 +336,7 @@ export default function RoundsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
+                      {/* RULE 2d: Clicking date count shows small popup with pending amount */}
                       <button 
                         onClick={() => { setSelectedPendingMember(m); setIsPendingDetailsOpen(true); }}
                         className={cn(
@@ -376,7 +344,7 @@ export default function RoundsPage() {
                           pDays > 0 ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "bg-muted text-muted-foreground"
                         )}
                       >
-                        {pDays} {pDays === 1 ? 'Day' : 'Days'}
+                        {pDays} {pDays === 1 ? 'Date' : 'Dates'}
                       </button>
                     </TableCell>
                     <TableCell>
@@ -386,8 +354,22 @@ export default function RoundsPage() {
                     </TableCell>
                     <TableCell className="text-right pr-6">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" onClick={() => { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: currentRound?.monthlyAmount || 0 }); setIsQuickPaymentDialogOpen(true); }}><IndianRupee className="size-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => { setHistoryMember(m); setIsHistoryDialogOpen(true); }}><History className="size-4" /></Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-emerald-600" 
+                          onClick={() => { setSelectedMemberForPayment(m); setIsQuickPaymentDialogOpen(true); }}
+                        >
+                          <IndianRupee className="size-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-muted-foreground" 
+                          onClick={() => { setHistoryMember(m); setIsHistoryDialogOpen(true); }}
+                        >
+                          <History className="size-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -415,12 +397,13 @@ export default function RoundsPage() {
                    </div>
                    <div className="flex justify-between items-center pt-2 border-t">
                       <span className="text-xs font-bold uppercase text-destructive tracking-widest">Pending Amount</span>
+                      {/* RULE 2d: The popup amount equals the real payment applied */}
                       <span className="text-lg font-bold text-destructive">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
                    </div>
                 </div>
                 <div className="p-4 bg-primary/5 rounded-xl border border-primary/10">
                    <p className="text-[10px] text-primary font-bold uppercase tracking-wider mb-2">Policy: Priority Clearing</p>
-                   <p className="text-xs text-muted-foreground leading-relaxed italic">Payments first clear previous deficits. Only the full scheme amount is processed daily; extra payments are ignored.</p>
+                   <p className="text-xs text-muted-foreground leading-relaxed italic">Payments first settle previous arrears. Only the fixed scheme amount is accepted daily.</p>
                 </div>
               </div>
               <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-bold">Close</Button></DialogFooter>
@@ -433,9 +416,14 @@ export default function RoundsPage() {
         <DialogContent className="sm:max-w-[425px]">
           {selectedMemberForPayment && (
             <form onSubmit={handleQuickPayment}>
-              <DialogHeader><DialogTitle>Quick Payment</DialogTitle><DialogDescription>Process transaction for {selectedMemberForPayment.name}.</DialogDescription></DialogHeader>
+              <DialogHeader><DialogTitle>Quick Payment</DialogTitle><DialogDescription>Process fixed installment for {selectedMemberForPayment.name}.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={paymentData.amount || ""} onChange={e => setPaymentData({...paymentData, amount: Number(e.target.value)})} required /></div>
+                <div className="grid gap-2">
+                  <Label>Fixed Scheme Amount (₹)</Label>
+                  {/* RULE 3 & 4: Fixed amount, no manual override below or above */}
+                  <Input type="number" value={currentRound?.monthlyAmount} readOnly className="bg-muted font-bold" />
+                  <p className="text-[10px] text-muted-foreground italic">Only the exact scheme amount is accepted for daily settlement.</p>
+                </div>
                 <div className="grid gap-2">
                   <Label>Method</Label>
                   <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v})}>
@@ -444,7 +432,7 @@ export default function RoundsPage() {
                   </Select>
                 </div>
               </div>
-              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full font-bold bg-emerald-600 hover:bg-emerald-700">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Confirm Payment</Button></DialogFooter>
+              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full font-bold bg-emerald-600 hover:bg-emerald-700">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : <CheckCircle2 className="mr-2 size-4" />}Confirm Payment</Button></DialogFooter>
             </form>
           )}
         </DialogContent>
