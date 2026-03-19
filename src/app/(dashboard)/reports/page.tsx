@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -124,32 +125,29 @@ export default function ReportsPage() {
 
     const focusDate = isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date();
     const focusDateStr = format(focusDate, 'yyyy-MM-dd');
+    const yesterday = subDays(focusDate, 1);
+    const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
-    const focusDatePayments = payments.filter(p => 
-      (p.status === 'paid' || p.status === 'success') && 
-      targetIds.has(p.memberId) &&
-      (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
-    );
+    // Dynamic TODAY Pending Check: Check if payment record exists for target focusDate
+    const unpaidFocusDateDaily = dailyMembers.filter(m => {
+      const hasPaid = payments.some(p => 
+        p.memberId === m.id && 
+        (p.status === 'success' || p.status === 'paid') && 
+        (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
+      );
+      return !hasPaid;
+    });
 
-    const focusDateCollection = focusDatePayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-    
-    const getUnpaidDailyForDate = (dateStr: string) => {
-      return dailyMembers.filter(m => {
-        const hasPaid = payments.some(p => 
-          p.memberId === m.id && 
-          (p.status === 'success' || p.status === 'paid') && 
-          (p.targetDate === dateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === dateStr))
-        );
-        return !hasPaid;
-      });
-    };
-
-    // Calculate dynamic today's pending count based on runtime payment records
-    const unpaidFocusDateDaily = getUnpaidDailyForDate(focusDateStr);
-    
-    // PRODUCTION FIX: Apply strict filter for Yesterday Pending list based on live pendingDays
-    // INCLUDE member IF: pendingDays >= 1, EXCLUDE member IF: pendingDays == 0
-    const unpaidYesterdayDaily = dailyMembers.filter(m => (m.pendingDays || 0) >= 1);
+    // Dynamic YESTERDAY Pending Check: Check if payment record exists for target yesterdayStr
+    // STRICT RULE: If payment exists for yesterday, EXCLUDE. If NO payment, INCLUDE.
+    const unpaidYesterdayDaily = dailyMembers.filter(m => {
+      const hasPaidYesterday = payments.some(p => 
+        p.memberId === m.id && 
+        (p.status === 'success' || p.status === 'paid') && 
+        (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
+      );
+      return !hasPaidYesterday;
+    });
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthPayments = payments.filter(p => {
@@ -171,9 +169,16 @@ export default function ReportsPage() {
       unpaidTodayDaily: unpaidFocusDateDaily,
       unpaidYesterdayDaily: unpaidYesterdayDaily,
       focusStats: {
-        collection: focusDateCollection,
-        txCount: focusDatePayments.length,
-        // PRODUCTION RULE: pendingCount must reflect "Number of members who have NOT paid today"
+        collection: (payments.filter(p => 
+          (p.status === 'paid' || p.status === 'success') && 
+          targetIds.has(p.memberId) &&
+          (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
+        ).reduce((acc, p) => acc + (p.amountPaid || 0), 0)),
+        txCount: payments.filter(p => 
+          (p.status === 'paid' || p.status === 'success') && 
+          targetIds.has(p.memberId) &&
+          (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
+        ).length,
         pendingCount: unpaidFocusDateDaily.length, 
         dateLabel: format(focusDate, 'EEEE, dd MMMM yyyy'),
         dateShort: format(focusDate, 'dd-MM-yyyy')
@@ -251,7 +256,7 @@ export default function ReportsPage() {
 
     switch (activeTab) {
       case "collections": exportData = filteredData.collectionData.map(d => ({ Period: d.month, Amount: d.amount })); break;
-      case "yesterday-pending": exportData = filteredData.unpaidYesterdayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, PendingDays: m.pendingDays || 0, Status: "Unpaid" })); break;
+      case "yesterday-pending": exportData = filteredData.unpaidYesterdayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, Status: "Unpaid" })); break;
       case "today-pending": exportData = filteredData.unpaidTodayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, Status: "Unpaid" })); break;
     }
 
@@ -457,7 +462,7 @@ export default function ReportsPage() {
                   <TableRow>
                     <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Member</TableHead>
                     <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10">Group</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pr-6 text-right">Pending Days</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pr-6 text-right">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -467,7 +472,7 @@ export default function ReportsPage() {
                         <span className="font-bold text-sm">{m.name}</span>
                       </TableCell>
                       <TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup}</TableCell>
-                      <TableCell className="text-right pr-6 tabular-nums font-bold text-destructive text-sm">{m.pendingDays || 0}</TableCell>
+                      <TableCell className="text-right pr-6 text-[10px] font-bold text-destructive uppercase">Unpaid</TableCell>
                     </TableRow>
                   )) : (
                     <TableRow><TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-sm">Clear for previous day.</TableCell></TableRow>
