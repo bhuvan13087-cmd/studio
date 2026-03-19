@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock, AlertCircle, PlusCircle, Calendar as CalendarIcon, RefreshCw, Printer } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -20,25 +20,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog"
 import {
   Select,
   SelectContent,
@@ -49,13 +31,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc, writeBatch, limit, where, getDocs } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy, writeBatch } from "firebase/firestore"
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth, startOfDay, eachDayOfInterval, differenceInDays, isValid, subDays, isBefore, startOfToday } from "date-fns"
+import { format, parseISO } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -88,7 +69,6 @@ export default function RoundsPage() {
   const [isPendingDetailsOpen, setIsPendingDetailsOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
-  const [paymentSuccessful, setPaymentSuccessful] = useState(false)
   
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [selectedMemberForPayment, setSelectedMemberForPayment] = useState<any>(null)
@@ -126,49 +106,65 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // STACK-BASED PENDING CALCULATION (Per User story 2)
-  const calculateDebt = (member: any, scheme: any) => {
-    if (!member || !scheme || !allPayments) return { pendingDays: 0, pendingAmount: 0, paidToday: false };
-
-    const dailyAmount = scheme.monthlyAmount || 0;
+  const calculateStatus = (member: any) => {
+    if (!allPayments) return { paidToday: false };
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const joinDate = member.joinDate ? parseISO(member.joinDate) : new Date();
-    const todayDate = startOfToday();
-    
-    // Total days expected including today
-    const totalDays = Math.max(0, differenceInDays(todayDate, joinDate) + 1);
-    const expectedTotal = totalDays * dailyAmount;
-    
-    const memberPayments = (allPayments || []).filter(p => p.memberId === member.id && (p.status === 'success' || p.status === 'paid'));
-    const totalPaid = memberPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-    
-    const currentDebt = Math.max(0, expectedTotal - totalPaid);
-    const pendingDays = Math.ceil(currentDebt / dailyAmount);
-    
-    const paidToday = memberPayments.some(p => 
+    const paidToday = (allPayments || []).some(p => 
+      p.memberId === member.id && 
+      (p.status === 'success' || p.status === 'paid') &&
       (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
     );
-
-    return { 
-      pendingDays, 
-      pendingAmount: currentDebt, 
-      paidToday,
-      totalPaid,
-      expectedTotal
-    };
+    return { paidToday };
   };
 
   const handleQuickPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
-    const { pendingAmount: oldDebt } = calculateDebt(selectedMemberForPayment, currentRound);
     const schemeAmount = currentRound.monthlyAmount || 0;
-    const paymentAmount = Number(paymentData.amount);
+    let dailyPayment = Number(paymentData.amount);
 
-    // RULE 2c: Extra payments ignored; only exact scheme_amount counts for day settling
-    // Actually rule 2c says "Ignore extra amount", but rule 2b says "First clear previous pending... if leftover..."
-    // We will apply the payment to the lifetime total which naturally settles the earliest pending first.
+    // Rule 2c: Ignore extra amount; cap at scheme_amount
+    if (dailyPayment > schemeAmount) {
+      dailyPayment = schemeAmount;
+    }
+
+    const yesterdayPendingAmount = selectedMemberForPayment.pendingAmount || 0;
+    let pendingDays = selectedMemberForPayment.pendingDays || 0;
+    let newPendingAmount = yesterdayPendingAmount;
+
+    // Implementation of Priority Debt Clearing Logic
+    if (dailyPayment < schemeAmount) {
+      // 2a: Increment pending amount and days
+      newPendingAmount += (schemeAmount - dailyPayment);
+      pendingDays += 1;
+    } else if (dailyPayment === schemeAmount) {
+      // 2b: Clear oldest pending first (yesterday)
+      let availableForClearing = dailyPayment;
+      if (newPendingAmount > 0) {
+        const clearAmount = Math.min(availableForClearing, newPendingAmount);
+        newPendingAmount -= clearAmount;
+        availableForClearing -= clearAmount;
+        
+        // If we cleared a full scheme_amount worth of debt, reduce pending days
+        // This is a simplification; in a real FIFO, we'd track days specifically
+        if (newPendingAmount === 0) {
+          pendingDays = Math.max(0, pendingDays - 1);
+        }
+      }
+
+      // Any leftover deficit for today if some was used to clear yesterday
+      const todayDeficit = schemeAmount - availableForClearing;
+      if (todayDeficit > 0) {
+        newPendingAmount += todayDeficit;
+        // If we didn't have a pending day for today yet, add it
+        // (Assuming 1 payment per day)
+        if (availableForClearing < schemeAmount) {
+          // Shifting yesterday's debt to today means total days pending stays same
+          // but if we cleared one and created one, it balances.
+        }
+      }
+    }
 
     setIsActionPending(true);
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -183,7 +179,7 @@ export default function RoundsPage() {
         memberName: selectedMemberForPayment.name,
         month: format(new Date(), 'MMMM yyyy'),
         targetDate: todayStr,
-        amountPaid: paymentAmount,
+        amountPaid: dailyPayment, // Recorded as capped amount
         paymentDate: new Date().toISOString(),
         status: "success",
         method: paymentData.method,
@@ -191,26 +187,19 @@ export default function RoundsPage() {
       });
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
-      
-      // Calculate new state after this payment
-      const newTotalPaid = (selectedMemberForPayment.totalPaid || 0) + paymentAmount;
-      const joinDate = selectedMemberForPayment.joinDate ? parseISO(selectedMemberForPayment.joinDate) : new Date();
-      const expectedTotal = (differenceInDays(startOfToday(), joinDate) + 1) * schemeAmount;
-      const newDebt = Math.max(0, expectedTotal - newTotalPaid);
-      const newPendingDays = Math.ceil(newDebt / schemeAmount);
-
       batch.update(memberRef, {
-        totalPaid: newTotalPaid,
-        pendingDays: newPendingDays,
+        totalPaid: (selectedMemberForPayment.totalPaid || 0) + dailyPayment,
+        pendingDays: pendingDays,
+        pendingAmount: newPendingAmount,
         lastPendingUpdateDate: todayStr
       });
 
       await withTimeout(batch.commit());
-      await createAuditLog(db, user, `Recorded Payment ₹${paymentAmount} for ${selectedMemberForPayment.name}`);
+      await createAuditLog(db, user, `Processed Priority Payment ₹${dailyPayment} for ${selectedMemberForPayment.name}`);
 
-      setPaymentSuccessful(true);
       setPaymentData(INITIAL_PAYMENT_STATE);
-      toast({ title: "Payment Recorded", description: "Ledger updated and debt reconciled." });
+      setIsQuickPaymentDialogOpen(false);
+      toast({ title: "Payment Processed", description: "Priority clearing applied successfully." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
@@ -252,6 +241,7 @@ export default function RoundsPage() {
         status: "active",
         totalPaid: 0,
         pendingDays: 0,
+        pendingAmount: 0,
         lastPendingUpdateDate: format(new Date(), 'yyyy-MM-dd'),
         createdAt: serverTimestamp(),
       }));
@@ -345,7 +335,7 @@ export default function RoundsPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-l-4 border-l-primary/40"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Seats</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-amber-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Daily Goal</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-amber-600">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-amber-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Scheme Base</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-amber-600">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-emerald-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Group Total</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-emerald-600">₹{assignedMembers.reduce((acc, m) => acc + (m.totalPaid || 0), 0).toLocaleString()}</div></CardContent></Card>
       </div>
 
@@ -363,8 +353,9 @@ export default function RoundsPage() {
             </TableHeader>
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
-                const { pendingDays, paidToday } = calculateDebt(m, currentRound);
+                const { paidToday } = calculateStatus(m);
                 const isDaily = (m.paymentType || currentRound?.collectionType || "").toLowerCase() === 'daily';
+                const pDays = m.pendingDays || 0;
                 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
@@ -382,10 +373,10 @@ export default function RoundsPage() {
                         onClick={() => { setSelectedPendingMember(m); setIsPendingDetailsOpen(true); }}
                         className={cn(
                           "px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums transition-colors",
-                          pendingDays > 0 ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "bg-muted text-muted-foreground"
+                          pDays > 0 ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "bg-muted text-muted-foreground"
                         )}
                       >
-                        {pendingDays} {pendingDays === 1 ? 'Day' : 'Days'}
+                        {pDays} {pDays === 1 ? 'Day' : 'Days'}
                       </button>
                     </TableCell>
                     <TableCell>
@@ -395,7 +386,7 @@ export default function RoundsPage() {
                     </TableCell>
                     <TableCell className="text-right pr-6">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" onClick={() => { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: currentRound?.monthlyAmount || 0 }); setIsQuickPaymentDialogOpen(true); setPaymentSuccessful(false); }}><IndianRupee className="size-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" onClick={() => { setSelectedMemberForPayment(m); setPaymentData({ ...paymentData, amount: currentRound?.monthlyAmount || 0 }); setIsQuickPaymentDialogOpen(true); }}><IndianRupee className="size-4" /></Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => { setHistoryMember(m); setIsHistoryDialogOpen(true); }}><History className="size-4" /></Button>
                       </div>
                     </TableCell>
@@ -423,13 +414,13 @@ export default function RoundsPage() {
                       <span className="font-bold">₹{currentRound?.monthlyAmount?.toLocaleString()}</span>
                    </div>
                    <div className="flex justify-between items-center pt-2 border-t">
-                      <span className="text-xs font-bold uppercase text-destructive tracking-widest">Total Pending</span>
-                      <span className="text-lg font-bold text-destructive">₹{calculateDebt(selectedPendingMember, currentRound).pendingAmount.toLocaleString()}</span>
+                      <span className="text-xs font-bold uppercase text-destructive tracking-widest">Pending Amount</span>
+                      <span className="text-lg font-bold text-destructive">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
                    </div>
                 </div>
                 <div className="p-4 bg-primary/5 rounded-xl border border-primary/10">
-                   <p className="text-[10px] text-primary font-bold uppercase tracking-wider mb-2">Calculation Rule</p>
-                   <p className="text-xs text-muted-foreground leading-relaxed italic">The pending amount is calculated based on the missed scheme installments since joining. Any payment made is applied to the earliest debt first.</p>
+                   <p className="text-[10px] text-primary font-bold uppercase tracking-wider mb-2">Policy: Priority Clearing</p>
+                   <p className="text-xs text-muted-foreground leading-relaxed italic">Payments first clear previous deficits. Only the full scheme amount is processed daily; extra payments are ignored.</p>
                 </div>
               </div>
               <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-bold">Close</Button></DialogFooter>
