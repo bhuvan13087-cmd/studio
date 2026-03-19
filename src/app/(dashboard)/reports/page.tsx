@@ -41,11 +41,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"
-import { format, parseISO, getMonth, getYear, subDays, startOfDay, isSameDay, isValid } from "date-fns"
+import { collection, query, orderBy } from "firebase/firestore"
+import { format, parseISO, getMonth, getYear, subDays, isValid } from "date-fns"
 import * as XLSX from 'xlsx'
-import { cn, withTimeout } from "@/lib/utils"
-import { createAuditLog } from "@/firebase/logging"
+import { cn } from "@/lib/utils"
 
 const MONTHS_MASTER = [
   { value: "0", label: "January" },
@@ -71,7 +70,6 @@ export default function ReportsPage() {
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
   const [activeTab, setActiveTab] = useState("collections")
-  const [isActionPending, setIsActionPending] = useState(false)
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false)
@@ -80,7 +78,6 @@ export default function ReportsPage() {
   
   const { toast } = useToast()
   const db = useFirestore()
-  const { user } = useUser()
 
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
   const { data: members, isLoading: membersLoading } = useCollection(membersQuery)
@@ -127,8 +124,6 @@ export default function ReportsPage() {
 
     const focusDate = isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date();
     const focusDateStr = format(focusDate, 'yyyy-MM-dd');
-    const prevDate = subDays(focusDate, 1);
-    const prevDateStr = format(prevDate, 'yyyy-MM-dd');
 
     const focusDatePayments = payments.filter(p => 
       (p.status === 'paid' || p.status === 'success') && 
@@ -149,6 +144,7 @@ export default function ReportsPage() {
       });
     };
 
+    // Calculate dynamic today's pending count based on runtime payment records
     const unpaidFocusDateDaily = getUnpaidDailyForDate(focusDateStr);
     
     // PRODUCTION FIX: Apply strict filter for Yesterday Pending list based on live pendingDays
@@ -177,7 +173,8 @@ export default function ReportsPage() {
       focusStats: {
         collection: focusDateCollection,
         txCount: focusDatePayments.length,
-        pendingCount: unpaidYesterdayDaily.length,
+        // PRODUCTION RULE: pendingCount must reflect "Number of members who have NOT paid today"
+        pendingCount: unpaidFocusDateDaily.length, 
         dateLabel: format(focusDate, 'EEEE, dd MMMM yyyy'),
         dateShort: format(focusDate, 'dd-MM-yyyy')
       },
@@ -254,8 +251,8 @@ export default function ReportsPage() {
 
     switch (activeTab) {
       case "collections": exportData = filteredData.collectionData.map(d => ({ Period: d.month, Amount: d.amount })); break;
-      case "yesterday-pending": exportData = filteredData.unpaidYesterdayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, PendingDays: (m.pendingDays || 0) === 0 ? 1 : m.pendingDays, Status: "Unpaid" })); break;
-      case "today-pending": exportData = filteredData.unpaidTodayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, PendingDays: (m.pendingDays || 0) === 0 ? 1 : m.pendingDays, Status: "Unpaid" })); break;
+      case "yesterday-pending": exportData = filteredData.unpaidYesterdayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, PendingDays: m.pendingDays || 0, Status: "Unpaid" })); break;
+      case "today-pending": exportData = filteredData.unpaidTodayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, Status: "Unpaid" })); break;
     }
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -470,7 +467,7 @@ export default function ReportsPage() {
                         <span className="font-bold text-sm">{m.name}</span>
                       </TableCell>
                       <TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup}</TableCell>
-                      <TableCell className="text-right pr-6 tabular-nums font-bold text-destructive text-sm">{(m.pendingDays || 0) === 0 ? 1 : m.pendingDays}</TableCell>
+                      <TableCell className="text-right pr-6 tabular-nums font-bold text-destructive text-sm">{m.pendingDays || 0}</TableCell>
                     </TableRow>
                   )) : (
                     <TableRow><TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-sm">Clear for previous day.</TableCell></TableRow>
@@ -497,7 +494,7 @@ export default function ReportsPage() {
                   <TableRow>
                     <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pl-6">Member</TableHead>
                     <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10">Group</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pr-6 text-right">Pending Days</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold tracking-widest h-10 pr-6 text-right">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -507,7 +504,7 @@ export default function ReportsPage() {
                         <span className="font-bold text-sm">{m.name}</span>
                       </TableCell>
                       <TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup}</TableCell>
-                      <TableCell className="text-right pr-6 tabular-nums font-bold text-destructive text-sm">{(m.pendingDays || 0) === 0 ? 1 : m.pendingDays}</TableCell>
+                      <TableCell className="text-right pr-6 text-[10px] font-bold text-destructive uppercase">Unpaid</TableCell>
                     </TableRow>
                   )) : (
                     <TableRow><TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-sm">Clear for selected date.</TableCell></TableRow>
