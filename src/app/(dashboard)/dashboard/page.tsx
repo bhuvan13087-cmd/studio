@@ -75,11 +75,11 @@ export default function DashboardPage() {
     const pendingMembersList = (members || []).filter(m => {
         if (m.status === 'inactive') return false;
         
-        // Match Group view type check
+        // Match Group view type check (Strict DAILY check)
         const isDaily = (m.paymentType || "").toLowerCase() === 'daily';
         if (!isDaily) return false;
         
-        // Exact Group view payment check
+        // Exact Group view payment verification logic
         const hasPaidToday = (payments || []).some(p => 
           p.memberId === m.id &&
           (p.status === 'success' || p.status === 'paid') &&
