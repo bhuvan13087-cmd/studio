@@ -234,8 +234,11 @@ export default function MembersPage() {
                 visibleMembers.map((member) => {
                   const todayPayment = paidMemberStatus.get(member.id);
                   const isPaidToday = !!todayPayment;
-                  const dynamicTotalPaid = totalPaidByMember.get(member.id) || 0;
-                  const isDaily = member.paymentType === 'Daily';
+                  
+                  // STRICT TYPE RESOLUTION: Resolve Daily vs Monthly strictly from database fields
+                  const memberRound = chitRounds?.find((r: any) => r.name === member.chitGroup);
+                  const resolvedType = (member.paymentType || memberRound?.collectionType || "").toLowerCase();
+                  const isDaily = resolvedType === 'daily';
                   
                   return (
                     <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
@@ -276,7 +279,7 @@ export default function MembersPage() {
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-sm font-bold text-emerald-600">₹{dynamicTotalPaid.toLocaleString()}</span>
+                          <span className="text-sm font-bold text-emerald-600">₹{(totalPaidByMember.get(member.id) || 0).toLocaleString()}</span>
                           <span className="text-[10px] font-bold text-muted-foreground uppercase">Total Paid</span>
                         </div>
                       </TableCell>
@@ -344,10 +347,12 @@ export default function MembersPage() {
                 <div className="grid gap-2"><Label>Phone</Label><Input value={memberToEdit?.phone || ""} onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})} required disabled={isActionPending} /></div>
                 <div className="grid gap-2">
                   <Label>Scheme</Label>
-                  <Select 
+                  <select 
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={isActionPending} 
                     value={memberToEdit?.chitGroup || ""} 
-                    onValueChange={v => {
+                    onChange={e => {
+                      const v = e.target.value;
                       const scheme = chitRounds?.find((r: any) => r.name === v);
                       setMemberToEdit({
                         ...memberToEdit, 
@@ -356,9 +361,9 @@ export default function MembersPage() {
                       });
                     }}
                   >
-                    <SelectTrigger><SelectValue placeholder="Select scheme" /></SelectTrigger>
-                    <SelectContent>{chitRounds?.map((round: any) => (<SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>))}</SelectContent>
-                  </Select>
+                    <option value="" disabled>Select scheme</option>
+                    {chitRounds?.map((round: any) => (<option key={round.id} value={round.name}>{round.name}</option>))}
+                  </select>
                 </div>
                 <div className="grid gap-2">
                   <Label>Amount (₹)</Label>

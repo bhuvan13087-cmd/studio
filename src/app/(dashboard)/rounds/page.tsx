@@ -131,80 +131,6 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  useEffect(() => {
-    if (!db || !assignedMembers.length || isActionPending) return;
-
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const membersToSync = assignedMembers.filter(m => m.lastPendingUpdateDate !== todayStr);
-
-    if (membersToSync.length === 0) return;
-
-    const runAutoPendingSync = async () => {
-      setIsActionPending(true);
-      try {
-        const batch = writeBatch(db);
-        let updated = 0;
-
-        for (const m of membersToSync) {
-          if (m.yesterdayPending === 1 && (m.pendingDays || 0) === 0) {
-            batch.update(doc(db, 'members', m.id), {
-              pendingDays: 1,
-              lastPendingUpdateDate: todayStr
-            });
-            updated++;
-          } else {
-            batch.update(doc(db, 'members', m.id), {
-              lastPendingUpdateDate: todayStr
-            });
-          }
-        }
-
-        if (updated > 0 || membersToSync.length > 0) {
-          await batch.commit();
-        }
-      } catch (err) {
-        console.error("Auto pending sync failed:", err);
-      } finally {
-        setIsActionPending(false);
-      }
-    };
-
-    runAutoPendingSync();
-  }, [db, assignedMembers]);
-
-  const handleManualPendingSync = async () => {
-    if (!db || !assignedMembers.length || isActionPending) return;
-
-    setIsActionPending(true);
-    try {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
-      const batch = writeBatch(db);
-      let updatedCount = 0;
-
-      for (const m of assignedMembers) {
-        if (m.yesterdayPending === 1 && (m.pendingDays || 0) === 0) {
-          batch.update(doc(db, 'members', m.id), {
-            pendingDays: 1,
-            lastPendingUpdateDate: todayStr
-            });
-          updatedCount++;
-        }
-      }
-
-      if (updatedCount > 0) {
-        await batch.commit();
-        await createAuditLog(db, user, `Manually synced pending counts for ${updatedCount} members in ${currentRound?.name}`);
-        toast({ title: "Sync Complete", description: `Updated ${updatedCount} members.` });
-      } else {
-        toast({ title: "Already Synced", description: "No members meet the criteria for manual increment." });
-      }
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Sync Failed", description: error.message });
-    } finally {
-      setIsActionPending(false);
-    }
-  };
-
   const analyzePaymentStatus = (member: any) => {
     if (!member || !allPayments) return { amount: 0, paid: false, totalCredits: 0 };
     
@@ -290,32 +216,6 @@ export default function RoundsPage() {
     }
   }
 
-  const handleSaveMemberEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!db || !selectedProfileMember || !editFormData || isActionPending) return;
-
-    setIsActionPending(true);
-    try {
-      const memberRef = doc(db, 'members', selectedProfileMember.id);
-      await withTimeout(updateDoc(memberRef, {
-        name: editFormData.name,
-        phone: editFormData.phone,
-        paymentType: editFormData.paymentType,
-        joinDate: editFormData.joinDate
-      }));
-
-      await createAuditLog(db, user, `Updated profile for member: ${editFormData.name}`);
-      
-      toast({ title: "Profile Updated", description: "Member details have been saved." });
-      setIsEditingProfile(false);
-      setSelectedProfileMember({ ...selectedProfileMember, ...editFormData });
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update profile." });
-    } finally {
-      setIsActionPending(false);
-    }
-  }
-
   const handleQuickPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
@@ -368,31 +268,6 @@ export default function RoundsPage() {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
       setIsActionPending(false);
-    }
-  }
-
-  const handleEditChit = async (e: React.FormEvent) => {
-    e.preventDefault(); 
-    if (!db || !editingChit || isActionPending) return;
-    
-    setIsActionPending(true);
-    try {
-      const chitRef = doc(db, 'chitRounds', editingChit.id);
-      await withTimeout(updateDoc(chitRef, {
-        name: editingChit.name,
-        monthlyAmount: Number(editingChit.monthlyAmount),
-        totalMembers: Number(editingChit.totalMembers),
-        collectionType: editingChit.collectionType,
-        startDate: editingChit.startDate
-      }));
-      await createAuditLog(db, user, `Updated scheme details: ${editingChit.name}`)
-      setIsEditChitDialogOpen(false);
-      setEditingChit(null)
-      toast({ title: "Scheme Updated", description: "Details saved successfully." });
-    } catch (e: any) { 
-      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update scheme." }); 
-    } finally { 
-      setIsActionPending(false); 
     }
   }
 
@@ -485,7 +360,8 @@ export default function RoundsPage() {
             const monthlyColl = getMonthlyCollectionForScheme(group.name);
             const pendingCount = (members || []).filter(m => {
               if (m.status === 'inactive' || m.chitGroup !== group.name) return false;
-              if (m.paymentType !== 'Daily') return false; 
+              const isDaily = (m.paymentType || group.collectionType || "").toLowerCase() === 'daily';
+              if (!isDaily) return false; 
               const { paid } = analyzePaymentStatus(m);
               return !paid;
             }).length;
@@ -529,7 +405,8 @@ export default function RoundsPage() {
   }
 
   const pendingMembersInCurrentGroup = assignedMembers.filter(m => {
-    if (m.paymentType !== 'Daily') return false;
+    const isDaily = (m.paymentType || currentRound?.collectionType || "").toLowerCase() === 'daily';
+    if (!isDaily) return false;
     return !analyzePaymentStatus(m).paid;
   }).length;
 
@@ -584,7 +461,7 @@ export default function RoundsPage() {
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
                 const { paid } = analyzePaymentStatus(m);
-                const isDaily = m.paymentType === 'Daily';
+                const isDaily = (m.paymentType || currentRound?.collectionType || "").toLowerCase() === 'daily';
                 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
@@ -836,7 +713,7 @@ export default function RoundsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {historyMember && (allPayments || []).filter(p => p.memberId === historyMember.id && p.status !== 'pending').map((p, i) => (
+                    {historyMember && (allPayments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (
                       <TableRow key={i} className="hover:bg-muted/5 transition-colors">
                         <TableCell className="text-xs font-semibold pl-4">
                           {format(parseISO(p.targetDate || p.paymentDate), 'dd MMM yyyy')}
