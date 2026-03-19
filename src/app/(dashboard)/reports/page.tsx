@@ -150,7 +150,10 @@ export default function ReportsPage() {
     };
 
     const unpaidFocusDateDaily = getUnpaidDailyForDate(focusDateStr);
-    const unpaidPrevDateDaily = getUnpaidDailyForDate(prevDateStr);
+    
+    // PRODUCTION FIX: Apply strict filter for Yesterday Pending list based on live pendingDays
+    // INCLUDE member IF: pendingDays >= 1, EXCLUDE member IF: pendingDays == 0
+    const unpaidYesterdayDaily = dailyMembers.filter(m => (m.pendingDays || 0) >= 1);
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthPayments = payments.filter(p => {
@@ -170,11 +173,11 @@ export default function ReportsPage() {
       collectionData: collectionDataByMonth, 
       targetMembers,
       unpaidTodayDaily: unpaidFocusDateDaily,
-      unpaidYesterdayDaily: unpaidPrevDateDaily,
+      unpaidYesterdayDaily: unpaidYesterdayDaily,
       focusStats: {
         collection: focusDateCollection,
         txCount: focusDatePayments.length,
-        pendingCount: unpaidFocusDateDaily.length,
+        pendingCount: unpaidYesterdayDaily.length,
         dateLabel: format(focusDate, 'EEEE, dd MMMM yyyy'),
         dateShort: format(focusDate, 'dd-MM-yyyy')
       },
