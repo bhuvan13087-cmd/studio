@@ -71,8 +71,7 @@ export default function DashboardPage() {
       }
     }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
-    // REUSED GROUP LOGIC: Only Daily members who haven't paid today
-    // Resolving collection type strictly from schemes + member fields
+    // UNIFIED PENDING LOGIC (Same as Rounds & Report)
     const pendingMembersList = (members || []).filter(m => {
         if (m.status === 'inactive') return false;
         
@@ -80,7 +79,7 @@ export default function DashboardPage() {
         const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
         if (resolvedType !== 'daily') return false;
         
-        // Exact Group view payment verification logic
+        // Exact Today payment verification
         const hasPaidToday = (payments || []).some(p => 
           p.memberId === m.id &&
           (p.status === 'success' || p.status === 'paid') &&

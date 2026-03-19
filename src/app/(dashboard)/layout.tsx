@@ -5,10 +5,11 @@ import { useState, useEffect } from "react"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
-import { useUser } from "@/firebase"
+import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { useRouter } from "next/navigation"
-import { format } from "date-fns"
+import { format, isAfter, setHours, setMinutes, parseISO } from "date-fns"
 import { Clock } from "lucide-react"
+import { collection, query, writeBatch, doc } from "firebase/firestore"
 
 export default function DashboardLayout({
   children,
@@ -17,7 +18,15 @@ export default function DashboardLayout({
 }) {
   const { user, isUserLoading } = useUser()
   const router = useRouter()
+  const db = useFirestore()
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
+
+  // 10 PM Automated Batch Check
+  const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
+  const { data: members } = useCollection(membersQuery);
+
+  const paymentsQuery = useMemoFirebase(() => collection(db, 'payments'), [db]);
+  const { data: payments } = useCollection(paymentsQuery);
 
   useEffect(() => {
     setCurrentTime(new Date())
@@ -30,6 +39,56 @@ export default function DashboardLayout({
       router.push("/login")
     }
   }, [user, isUserLoading, router])
+
+  // Simulation of 10 PM Automated Calculation Logic
+  useEffect(() => {
+    if (!user || !members || !payments || !currentTime) return;
+
+    const runBatchUpdate = async () => {
+      const todayStr = format(currentTime, 'yyyy-MM-dd');
+      const tenPM = setMinutes(setHours(new Date(), 22), 0);
+      
+      // Only run after 10 PM
+      if (!isAfter(currentTime, tenPM)) return;
+
+      const dailyMembers = members.filter(m => m.status === 'active' && m.paymentType === 'Daily' && m.lastPendingUpdateDate !== todayStr);
+      if (dailyMembers.length === 0) return;
+
+      const batch = writeBatch(db);
+      let updatedCount = 0;
+
+      dailyMembers.forEach(member => {
+        // Check if paid today
+        const hasPaidToday = payments.some(p => 
+          p.memberId === member.id && 
+          (p.status === 'success' || p.status === 'paid') &&
+          (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
+        );
+
+        if (!hasPaidToday) {
+          const memberRef = doc(db, 'members', member.id);
+          const schemeAmount = member.monthlyAmount || 0;
+          batch.update(memberRef, {
+            pendingAmount: (member.pendingAmount || 0) + schemeAmount,
+            pendingDays: (member.pendingDays || 0) + 1,
+            lastPendingUpdateDate: todayStr
+          });
+          updatedCount++;
+        } else {
+           // Even if paid, we mark as updated for today so we don't check again
+           const memberRef = doc(db, 'members', member.id);
+           batch.update(memberRef, { lastPendingUpdateDate: todayStr });
+           updatedCount++;
+        }
+      });
+
+      if (updatedCount > 0) {
+        await batch.commit();
+      }
+    };
+
+    runBatchUpdate();
+  }, [user, members, payments, currentTime, db]);
 
   if (isUserLoading) {
     return (
@@ -52,7 +111,7 @@ export default function DashboardLayout({
                   Admin Panel
                 </h1>
                 <div className="hidden xs:flex items-center gap-1 text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-                  <Clock className="size-2.5" /> 12:00 AM - 11:59 PM
+                  <Clock className="size-2.5" /> 10:00 PM Batch Sync Active
                 </div>
               </div>
             </div>

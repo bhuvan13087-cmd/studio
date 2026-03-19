@@ -132,10 +132,11 @@ export default function MembersPage() {
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToEdit.id);
+      // RULE: Do not allow manual override of pendingDays or pendingAmount here.
       await withTimeout(updateDoc(memberRef, {
         name: memberToEdit.name,
         phone: memberToEdit.phone,
-        monthlyAmount: Number(memberToEdit.monthlyAmount),
+        // monthlyAmount: Number(memberToEdit.monthlyAmount), // Should be fixed by scheme
         joinDate: memberToEdit.joinDate,
         status: memberToEdit.status,
         chitGroup: memberToEdit.chitGroup
@@ -235,7 +236,6 @@ export default function MembersPage() {
                   const todayPayment = paidMemberStatus.get(member.id);
                   const isPaidToday = !!todayPayment;
                   
-                  // STRICT TYPE RESOLUTION: Resolve Daily vs Monthly strictly from database fields
                   const memberRound = chitRounds?.find((r: any) => r.name === member.chitGroup);
                   const resolvedType = (member.paymentType || memberRound?.collectionType || "").toLowerCase();
                   const isDaily = resolvedType === 'daily';
@@ -366,8 +366,9 @@ export default function MembersPage() {
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <Label>Amount (₹)</Label>
-                  <Input type="number" value={memberToEdit?.monthlyAmount || ""} readOnly className="bg-muted font-bold" required disabled={isActionPending} />
+                  <Label>Scheme Amount (₹)</Label>
+                  <Input type="number" value={memberToEdit?.monthlyAmount || ""} readOnly className="bg-muted font-bold" />
+                  <p className="text-[10px] text-muted-foreground italic">Fixed by system logic. Cannot be changed per user.</p>
                 </div>
               </div>
               <DialogFooter className="gap-2">
@@ -402,13 +403,13 @@ export default function MembersPage() {
               <div className="grid gap-4 py-4">
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Phone</span><span className="font-bold">{selectedMember?.phone}</span></div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Joined</span><span className="font-bold">{selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
-                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Amount</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Scheme Base</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
                 <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg text-sm"><span className="text-emerald-600 font-bold uppercase text-[10px]">Total Paid</span><span className="font-bold text-emerald-600 text-base">₹{(totalPaidByMember.get(selectedMember?.id) || 0).toLocaleString()}</span></div>
               </div>
               <DialogFooter className="flex flex-col sm:flex-row gap-2">
                 <Button 
                   variant="destructive" 
-                  className="w-full sm:w-auto sm:mr-auto font-bold" 
+                  className="w-full sm:w-auto font-bold" 
                   disabled={isActionPending}
                   onClick={() => { 
                     setMemberToDeactivate(selectedMember); 
@@ -418,7 +419,7 @@ export default function MembersPage() {
                 >
                   <Ban className="mr-2 size-4" /> Deactivate
                 </Button>
-                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto ml-auto">
                   <Button variant="outline" className="w-full sm:w-auto font-bold" onClick={() => { 
                     const m = selectedMember;
                     setIsProfileDialogOpen(false); 

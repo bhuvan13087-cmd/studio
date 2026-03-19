@@ -120,18 +120,29 @@ export default function RoundsPage() {
     e.preventDefault();
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
-    // RULE 1 & 5: Fixed scheme amount only. No extra, no partial.
+    // RULE: Fixed scheme amount only. No extra, no partial.
     const schemeAmount = currentRound.monthlyAmount || 0;
     const paymentAmount = schemeAmount;
 
-    // RULE 2: Priority Clearing Logic
-    const currentPendingAmount = selectedMemberForPayment.pendingAmount || 0;
+    // RULE: Priority Arrears Clearing (FIFO Logic)
+    // 1. Clear Yesterday's Pending first
+    // 2. Any leftover goes to Today's payment
+    // Since we only accept fixed scheme amounts, one payment clears one 'date unit' of debt.
     
-    // Calculate new state
-    // First priority: Yesterday's pending. Second priority: Today's payment.
-    const newPendingAmount = Math.max(0, currentPendingAmount - paymentAmount);
-    // If we cleared arrears, the pending days count decreases
-    const newPendingDays = Math.ceil(newPendingAmount / schemeAmount);
+    const currentPendingAmount = selectedMemberForPayment.pendingAmount || 0;
+    const currentPendingDays = selectedMemberForPayment.pendingDays || 0;
+    
+    let newPendingAmount = currentPendingAmount;
+    let newPendingDays = currentPendingDays;
+
+    if (currentPendingAmount > 0) {
+      // Settle oldest debt unit
+      newPendingAmount = Math.max(0, currentPendingAmount - schemeAmount);
+      newPendingDays = Math.max(0, currentPendingDays - 1);
+    } else {
+      // No arrears, pay for today
+      // (Status check will handle flagging today as 'Paid')
+    }
 
     setIsActionPending(true);
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -156,8 +167,8 @@ export default function RoundsPage() {
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
-        pendingDays: newPendingDays,
         pendingAmount: newPendingAmount,
+        pendingDays: newPendingDays,
         lastPendingUpdateDate: todayStr
       });
 
@@ -166,7 +177,7 @@ export default function RoundsPage() {
 
       setPaymentData(INITIAL_PAYMENT_STATE);
       setIsQuickPaymentDialogOpen(false);
-      toast({ title: "Payment Processed", description: "Fixed scheme amount applied successfully." });
+      toast({ title: "Payment Processed", description: "Fixed installment applied. Arrears settled first." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
@@ -336,7 +347,7 @@ export default function RoundsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {/* RULE 2d: Clicking date count shows small popup with pending amount */}
+                      {/* RULE: Show only Date counts. Clicking shows amount in popup. */}
                       <button 
                         onClick={() => { setSelectedPendingMember(m); setIsPendingDetailsOpen(true); }}
                         className={cn(
@@ -380,11 +391,12 @@ export default function RoundsPage() {
         </div>
       </div>
 
+      {/* Pending Details Popup */}
       <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
         <DialogContent className="sm:max-w-[400px]">
           {selectedPendingMember && (
             <>
-              <DialogHeader><DialogTitle>Pending Details</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Pending Arrears</DialogTitle></DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="p-4 bg-muted/30 rounded-xl space-y-3">
                    <div className="flex justify-between items-center text-sm">
@@ -392,18 +404,17 @@ export default function RoundsPage() {
                       <span className="font-bold">{selectedPendingMember.name}</span>
                    </div>
                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground font-medium">Scheme Amount</span>
-                      <span className="font-bold">₹{currentRound?.monthlyAmount?.toLocaleString()}</span>
+                      <span className="text-muted-foreground font-medium">Missed Installments</span>
+                      <span className="font-bold">{selectedPendingMember.pendingDays} Dates</span>
                    </div>
                    <div className="flex justify-between items-center pt-2 border-t">
-                      <span className="text-xs font-bold uppercase text-destructive tracking-widest">Pending Amount</span>
-                      {/* RULE 2d: The popup amount equals the real payment applied */}
+                      <span className="text-xs font-bold uppercase text-destructive tracking-widest">Total Pending Amount</span>
                       <span className="text-lg font-bold text-destructive">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
                    </div>
                 </div>
-                <div className="p-4 bg-primary/5 rounded-xl border border-primary/10">
-                   <p className="text-[10px] text-primary font-bold uppercase tracking-wider mb-2">Policy: Priority Clearing</p>
-                   <p className="text-xs text-muted-foreground leading-relaxed italic">Payments first settle previous arrears. Only the fixed scheme amount is accepted daily.</p>
+                <div className="p-3 bg-primary/5 rounded-lg border border-primary/10">
+                   <p className="text-[10px] text-primary font-bold uppercase tracking-wider mb-1">Policy: Priority Clearing</p>
+                   <p className="text-xs text-muted-foreground leading-relaxed italic">Next payment will first settle the oldest pending dates before applying to today.</p>
                 </div>
               </div>
               <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-bold">Close</Button></DialogFooter>
@@ -416,13 +427,13 @@ export default function RoundsPage() {
         <DialogContent className="sm:max-w-[425px]">
           {selectedMemberForPayment && (
             <form onSubmit={handleQuickPayment}>
-              <DialogHeader><DialogTitle>Quick Payment</DialogTitle><DialogDescription>Process fixed installment for {selectedMemberForPayment.name}.</DialogDescription></DialogHeader>
+              <DialogHeader><DialogTitle>Process Fixed Payment</DialogTitle><DialogDescription>Installment for {selectedMemberForPayment.name}.</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label>Fixed Scheme Amount (₹)</Label>
-                  {/* RULE 3 & 4: Fixed amount, no manual override below or above */}
-                  <Input type="number" value={currentRound?.monthlyAmount} readOnly className="bg-muted font-bold" />
-                  <p className="text-[10px] text-muted-foreground italic">Only the exact scheme amount is accepted for daily settlement.</p>
+                  <Label>Scheme Amount (₹) - Fixed</Label>
+                  {/* RULE: Locked to scheme amount. No override. */}
+                  <Input type="number" value={currentRound?.monthlyAmount} readOnly className="bg-muted font-bold text-lg" />
+                  <p className="text-[10px] text-muted-foreground italic">Only the exact scheme amount is accepted. Overpayments or partials are prohibited.</p>
                 </div>
                 <div className="grid gap-2">
                   <Label>Method</Label>
@@ -432,7 +443,7 @@ export default function RoundsPage() {
                   </Select>
                 </div>
               </div>
-              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full font-bold bg-emerald-600 hover:bg-emerald-700">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : <CheckCircle2 className="mr-2 size-4" />}Confirm Payment</Button></DialogFooter>
+              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full font-bold bg-emerald-600 hover:bg-emerald-700">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : <CheckCircle2 className="mr-2 size-4" />}Confirm Installment</Button></DialogFooter>
             </form>
           )}
         </DialogContent>
