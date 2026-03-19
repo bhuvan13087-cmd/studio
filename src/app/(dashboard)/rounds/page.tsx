@@ -34,7 +34,6 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, writeBatch } from "firebase/firestore"
-import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
@@ -143,17 +142,29 @@ export default function RoundsPage() {
         createdAt: serverTimestamp()
       });
 
-      // Update Member Balance - 10 PM Batch handles the pendingDay increment/decrement
-      // But we update pendingAmount instantly to reflect the payment
+      // Update Member Balance
+      // Priority Rule: Payment first clears existing pendingAmount (Yesterday's debt)
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       const currentArrears = selectedMemberForPayment.pendingAmount || 0;
       
-      // PRODUCTION RULE: Payment first clears arrears
+      // Calculate remaining debt after this payment
       const newArrears = Math.max(0, currentArrears - paymentAmount);
       
+      // Auto-clear pendingDays logic:
+      // If payment settles a full unit of schemeAmount debt, decrement days.
+      // If arrears become 0, pendingDays becomes 0.
+      let newPendingDays = selectedMemberForPayment.pendingDays || 0;
+      if (newArrears === 0) {
+        newPendingDays = 0;
+      } else if (newArrears < currentArrears) {
+        // Reduced debt by one scheme amount unit
+        newPendingDays = Math.max(0, newPendingDays - 1);
+      }
+
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
-        pendingAmount: newArrears
+        pendingAmount: newArrears,
+        pendingDays: newPendingDays
       });
 
       await withTimeout(batch.commit());
@@ -174,12 +185,18 @@ export default function RoundsPage() {
     if (!db || isActionPending) return;
     setIsActionPending(true);
     try {
-      await withTimeout(addDocumentNonBlocking(collection(db, 'chitRounds'), {
+      const chitRef = doc(collection(db, 'chitRounds'));
+      const chitData = {
+        id: chitRef.id,
         ...newChit,
         monthlyAmount: Number(newChit.monthlyAmount),
         totalMembers: Number(newChit.totalMembers),
         createdAt: serverTimestamp()
-      }));
+      };
+      const batch = writeBatch(db);
+      batch.set(chitRef, chitData);
+      await withTimeout(batch.commit());
+      
       await createAuditLog(db, user, `Created new scheme: ${newChit.name}`)
       setIsAddChitDialogOpen(false); 
       setNewChit(INITIAL_CHIT_STATE);
@@ -196,7 +213,9 @@ export default function RoundsPage() {
     if (!db || !currentRound || isActionPending) return;
     setIsActionPending(true);
     try {
-      await withTimeout(addDocumentNonBlocking(collection(db, 'members'), {
+      const memberRef = doc(collection(db, 'members'));
+      const memberData = {
+        id: memberRef.id,
         ...newMember,
         chitGroup: currentRound.name,
         monthlyAmount: currentRound.monthlyAmount,
@@ -206,7 +225,11 @@ export default function RoundsPage() {
         pendingAmount: 0,
         lastPendingUpdateDate: format(new Date(), 'yyyy-MM-dd'),
         createdAt: serverTimestamp(),
-      }));
+      };
+      const batch = writeBatch(db);
+      batch.set(memberRef, memberData);
+      await withTimeout(batch.commit());
+
       await createAuditLog(db, user, `Registered ${newMember.name} to scheme ${currentRound.name}`);
       setIsAddMemberDialogOpen(false);
       setNewMember(INITIAL_MEMBER_STATE);
@@ -338,7 +361,7 @@ export default function RoundsPage() {
                           pDays > 0 ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "bg-muted text-muted-foreground"
                         )}
                       >
-                        {pDays} {pDays === 1 ? 'Date' : 'Dates'}
+                        ⏳ {pDays} {pDays === 1 ? 'Date' : 'Dates'}
                       </button>
                     </TableCell>
                     <TableCell>
@@ -378,7 +401,7 @@ export default function RoundsPage() {
         <DialogContent className="sm:max-w-[400px]">
           {selectedPendingMember && (
             <>
-              <DialogHeader><DialogTitle>Pending Arrears</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>💬 Pending Arrears</DialogTitle></DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="p-4 bg-muted/30 rounded-xl space-y-3">
                    <div className="flex justify-between items-center text-sm">

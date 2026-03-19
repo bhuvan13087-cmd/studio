@@ -40,6 +40,7 @@ export default function DashboardLayout({
   }, [user, isUserLoading, router])
 
   // PRODUCTION 10 PM AUTOMATED CALCULATION
+  // Formula: today_pending = (scheme_amount - today_payment) + yesterday_pending
   useEffect(() => {
     if (!user || !members || !payments || !currentTime) return;
 
@@ -73,21 +74,21 @@ export default function DashboardLayout({
         );
         const todayPaymentSum = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
 
-        // PRODUCTION FORMULA: today_pending = (scheme_amount - today_payment) + yesterday_pending
-        let todayPending = 0;
-        if (todayPaymentSum >= schemeAmount && yesterdayPending === 0) {
-          todayPending = 0;
-        } else {
-          // Calculate debt including arrears
-          todayPending = Math.max(0, (schemeAmount - todayPaymentSum) + yesterdayPending);
-        }
+        // PRODUCTION FORMULA
+        let todayPending = (schemeAmount - todayPaymentSum) + yesterdayPending;
+        // Ensure pending amount doesn't go negative if they paid extra (though prompt says extra ignored, we handle clearing)
+        todayPending = Math.max(0, todayPending);
 
-        // Counter Logic: Increment if pending exists, decrement if cleared
+        // Counter Logic: Increment if debt exists/increases, decrement/clear if settled
         let newPendingDays = member.pendingDays || 0;
-        if (todayPending > 0) {
-          newPendingDays += 1;
-        } else {
-          newPendingDays = Math.max(0, newPendingDays - 1);
+        if (todayPending > yesterdayPending) {
+           newPendingDays += 1;
+        } else if (todayPending < yesterdayPending && todayPending === 0) {
+           newPendingDays = 0; // Fully cleared
+        } else if (todayPending < yesterdayPending) {
+           // Partially cleared debt units
+           const unitsPaid = Math.floor((yesterdayPending - todayPending) / schemeAmount);
+           newPendingDays = Math.max(0, newPendingDays - unitsPaid);
         }
 
         const memberRef = doc(db, 'members', member.id);

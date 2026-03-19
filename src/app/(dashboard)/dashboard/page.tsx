@@ -105,6 +105,7 @@ export default function DashboardPage() {
     });
 
     // SCHEME SUMMARIES (The 🗂️ Cards)
+    // Production Requirement: 4-Group setup (A, B, C, D)
     const schemeSummaries = (rounds || []).map(round => {
       const groupMembers = (members || []).filter(m => m.chitGroup === round.name && m.status !== 'inactive');
       const totalPendingDays = groupMembers.reduce((acc, m) => acc + (m.pendingDays || 0), 0);
