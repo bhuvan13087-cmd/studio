@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock, AlertCircle, PlusCircle, Calendar as CalendarIcon, RefreshCw } from "lucide-react"
+import { History, Plus, Users, MoreVertical, ChevronLeft, Loader2, Pencil, Trash2, IndianRupee, CalendarDays, UserPlus, CheckCircle2, User, Info, Save, X, Clock, AlertCircle, PlusCircle, Calendar as CalendarIcon, RefreshCw, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -186,7 +186,7 @@ export default function RoundsPage() {
           batch.update(doc(db, 'members', m.id), {
             pendingDays: 1,
             lastPendingUpdateDate: todayStr
-          });
+            });
           updatedCount++;
         }
       }
@@ -442,6 +442,32 @@ export default function RoundsPage() {
       )
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
   }, [allPayments, assignedMembers])
+
+  const handlePrintHistory = () => {
+    if (!historyMember || !allPayments) return;
+    window.print();
+  };
+
+  const historyPrintData = useMemo(() => {
+    if (!historyMember || !allPayments) return null;
+    const successful = allPayments.filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success'));
+    const { totalCredits } = analyzePaymentStatus(historyMember);
+    const pendingAmount = (historyMember.pendingDays || 0) * (currentRound?.monthlyAmount || 0);
+
+    return {
+      name: historyMember.name,
+      group: historyMember.chitGroup,
+      history: successful.map(p => ({
+        date: format(parseISO(p.targetDate || p.paymentDate), 'dd MMM yy'),
+        month: format(parseISO(p.targetDate || p.paymentDate), 'MMM yy'),
+        status: 'paid',
+        amt: p.amountPaid || 0
+      })),
+      totalPaid: totalCredits,
+      pending: pendingAmount,
+      timestamp: format(new Date(), 'dd/MM/yyyy HH:mm')
+    };
+  }, [historyMember, allPayments, currentRound]);
 
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
@@ -1041,10 +1067,15 @@ export default function RoundsPage() {
           {isHistoryDialogOpen && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-xl font-headline font-bold tracking-tight text-primary flex items-center gap-2">
-                  <History className="size-5 text-primary/40" /> 
-                  Financial Record: {historyMember?.name}
-                </DialogTitle>
+                <div className="flex items-center justify-between w-full pr-8">
+                  <DialogTitle className="text-xl font-headline font-bold tracking-tight text-primary flex items-center gap-2">
+                    <History className="size-5 text-primary/40" /> 
+                    Financial Record: {historyMember?.name}
+                  </DialogTitle>
+                  <Button variant="outline" size="sm" onClick={handlePrintHistory} className="h-8 gap-2 font-bold print:hidden">
+                    <Printer className="size-4" /> Print History
+                  </Button>
+                </div>
               </DialogHeader>
               <div className="py-4 overflow-x-auto">
                 <Table>
@@ -1072,11 +1103,59 @@ export default function RoundsPage() {
                   </TableBody>
                 </Table>
               </div>
-              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close History</Button></DialogFooter>
+              <DialogFooter><Button className="w-full sm:w-auto font-bold print:hidden" onClick={() => setIsHistoryDialogOpen(false)}>Close History</Button></DialogFooter>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Hidden Thermal Print Content */}
+      <div id="thermal-receipt" className="hidden">
+        {historyPrintData && (
+          <div className="font-mono text-[10px] leading-tight w-full">
+            <div className="text-center font-bold mb-2 uppercase">CHIT FUND</div>
+            <div className="border-b border-dashed border-black mb-2"></div>
+            
+            <div className="mb-1">Member Name: {historyPrintData.name}</div>
+            <div className="mb-2">Group: {historyPrintData.group}</div>
+            
+            <div className="border-b border-dashed border-black mb-2"></div>
+            
+            {/* Headers with fixed character widths */}
+            <div className="flex justify-between font-bold mb-1">
+              <span className="w-[10ch]">Date</span>
+              <span className="w-[8ch]">Month</span>
+              <span className="w-[6ch]">Stat</span>
+              <span className="w-[6ch] text-right">Amt</span>
+            </div>
+            
+            {historyPrintData.history.map((row, idx) => (
+              <div key={idx} className="flex justify-between mb-0.5">
+                <span className="w-[10ch]">{row.date}</span>
+                <span className="w-[8ch]">{row.month}</span>
+                <span className="w-[6ch]">{row.status}</span>
+                <span className="w-[6ch] text-right">{row.amt}</span>
+              </div>
+            ))}
+            
+            <div className="border-b border-dashed border-black my-2"></div>
+            
+            <div className="flex justify-between font-bold">
+              <span>Total Paid:</span>
+              <span>₹{historyPrintData.totalPaid.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between font-bold">
+              <span>Pending:</span>
+              <span>₹{historyPrintData.pending.toLocaleString()}</span>
+            </div>
+            
+            <div className="border-b border-dashed border-black my-2"></div>
+            
+            <div className="text-center font-bold mt-2">Thank You</div>
+            <div className="text-center text-[8px] mt-1 opacity-60">{historyPrintData.timestamp}</div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
