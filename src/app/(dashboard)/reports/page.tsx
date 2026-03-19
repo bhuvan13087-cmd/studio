@@ -112,17 +112,23 @@ export default function ReportsPage() {
     const yesterday = subDays(focusDate, 1);
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
-    // 1. COLLECTION TOTALS: Across all groups for the focus date
+    // 1. COLLECTION TOTALS: Across all groups for the focus date based on paymentDate
     const focusDatePayments = payments.filter(p => {
       if (p.status !== 'paid' && p.status !== 'success') return false;
-      const pDate = p.targetDate || (p.paymentDate ? format(parseISO(p.paymentDate), 'yyyy-MM-dd') : null);
-      return pDate === focusDateStr;
+      if (!p.paymentDate) return false;
+      try {
+        const pDateStr = format(parseISO(p.paymentDate), 'yyyy-MM-dd');
+        return pDateStr === focusDateStr;
+      } catch {
+        return false;
+      }
     });
 
     const totalCollection = focusDatePayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     const totalTransactions = focusDatePayments.length;
 
-    // 2. TODAY PENDING (Daily Only): Exclude if payment exists for today
+    // 2. TODAY PENDING (Daily Only): REUSE GROUP LOGIC
+    // A member is pending if NO payment exists for the focus focus date in targetDate OR paymentDate
     const unpaidTodayDaily = dailyMembers.filter(m => {
       const hasPaidToday = payments.some(p => 
         p.memberId === m.id && 
@@ -132,7 +138,7 @@ export default function ReportsPage() {
       return !hasPaidToday;
     });
 
-    // 3. YESTERDAY PENDING (Daily Only): Exclude if paid yesterday OR if total paid today >= dailyAmount
+    // 3. YESTERDAY PENDING (Daily Only): Missed yesterday AND not settled today
     const unpaidYesterdayDaily = dailyMembers.filter(m => {
       // Step 1: Check if payment exists for yesterday
       const hasPaidYesterday = payments.some(p => 
@@ -143,7 +149,7 @@ export default function ReportsPage() {
       
       if (hasPaidYesterday) return false;
 
-      // Step 2: Check total payment done today
+      // Step 2: Check if dues are covered by extra payment today
       const dailyAmount = m.monthlyAmount || 0;
       const totalPaidToday = payments.filter(p => 
         p.memberId === m.id && 
@@ -151,12 +157,13 @@ export default function ReportsPage() {
         (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
       ).reduce((acc, p) => acc + (p.amountPaid || 0), 0);
 
-      // IF totalPaidToday >= dailyAmount: remove (covered yesterday's due)
+      // If totalPaidToday covers at least one installment, we consider yesterday settled for this view
       return totalPaidToday < dailyAmount;
     });
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthPayments = payments.filter(p => {
+        if (!p.paymentDate) return false;
         const d = parseISO(p.paymentDate);
         return (p.status === 'paid' || p.status === 'success') && targetIds.has(p.memberId) && getYear(d).toString() === selectedYear && getMonth(d) === i;
       });
