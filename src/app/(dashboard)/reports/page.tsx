@@ -94,10 +94,10 @@ export default function ReportsPage() {
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
-    // PRIMARY FILTER: Get ONLY Daily members for pending lists
+    // PRIMARY FILTER: Identify all Daily members
     const dailyMembers = members.filter(m => {
         if (m.status === 'inactive') return false;
-        return m.paymentType === 'Daily';
+        return (m.paymentType || "").toLowerCase() === 'daily';
     });
 
     const targetMembers = members.filter(m => {
@@ -127,8 +127,9 @@ export default function ReportsPage() {
     const yesterday = subDays(focusDate, 1);
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
-    // Dynamic TODAY Pending Check: STRICTLY DAILY MEMBERS ONLY
+    // REUSED GROUP LOGIC: Today Pending check
     const unpaidFocusDateDaily = dailyMembers.filter(m => {
+      // Identical condition to Rounds page
       const hasPaid = payments.some(p => 
         p.memberId === m.id && 
         (p.status === 'success' || p.status === 'paid') && 
@@ -137,8 +138,9 @@ export default function ReportsPage() {
       return !hasPaid;
     });
 
-    // Dynamic YESTERDAY Pending Check
+    // REUSED GROUP LOGIC: Yesterday Pending check
     const unpaidYesterdayDaily = dailyMembers.filter(m => {
+      // Identical condition to Rounds page, checking for yesterdayStr
       const hasPaidYesterday = payments.some(p => 
         p.memberId === m.id && 
         (p.status === 'success' || p.status === 'paid') && 

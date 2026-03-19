@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO, startOfDay } from "date-fns"
+import { format, isSameMonth, parseISO } from "date-fns"
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
@@ -71,13 +71,18 @@ export default function DashboardPage() {
       }
     }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
+    // REUSED GROUP LOGIC: Only Daily members who haven't paid today
     const pendingMembersList = (members || []).filter(m => {
         if (m.status === 'inactive') return false;
-        if (m.paymentType !== 'Daily') return false; // Strictly Daily members only
         
+        // Match Group view type check
+        const isDaily = (m.paymentType || "").toLowerCase() === 'daily';
+        if (!isDaily) return false;
+        
+        // Exact Group view payment check
         const hasPaidToday = (payments || []).some(p => 
           p.memberId === m.id &&
-          (p.status === 'paid' || p.status === 'success') && 
+          (p.status === 'success' || p.status === 'paid') &&
           (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
         );
         
