@@ -94,7 +94,7 @@ export default function ReportsPage() {
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
-    // PRIMARY FILTER: Identify all Daily members
+    // PRIMARY FILTER: Identify all Daily members for lists
     const dailyMembers = members.filter(m => {
         if (m.status === 'inactive') return false;
         return (m.paymentType || "").toLowerCase() === 'daily';
@@ -115,21 +115,23 @@ export default function ReportsPage() {
       return matchYear && matchMonth;
     };
 
-    const periodPayments = payments.filter(p => 
-      (p.status === 'paid' || p.status === 'success') && 
-      targetIds.has(p.memberId) && 
-      p.paymentDate && 
-      isMatchingPeriod(p.paymentDate)
-    );
-
     const focusDate = isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date();
     const focusDateStr = format(focusDate, 'yyyy-MM-dd');
     const yesterday = subDays(focusDate, 1);
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
-    // REUSED GROUP LOGIC: Today Pending check
+    // 1. DYNAMIC REVENUE CALCULATION: Sum ALL successful payments for the selected focus date across ALL groups
+    const focusDatePayments = payments.filter(p => {
+      if (p.status !== 'paid' && p.status !== 'success') return false;
+      const pDate = p.targetDate || (p.paymentDate ? format(parseISO(p.paymentDate), 'yyyy-MM-dd') : null);
+      return pDate === focusDateStr;
+    });
+
+    const totalCollection = focusDatePayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+    const totalTransactions = focusDatePayments.length;
+
+    // 2. REUSED GROUP LOGIC: Today Pending check (Daily Only)
     const unpaidFocusDateDaily = dailyMembers.filter(m => {
-      // Identical condition to Rounds page
       const hasPaid = payments.some(p => 
         p.memberId === m.id && 
         (p.status === 'success' || p.status === 'paid') && 
@@ -138,15 +140,29 @@ export default function ReportsPage() {
       return !hasPaid;
     });
 
-    // REUSED GROUP LOGIC: Yesterday Pending check
+    // 3. REUSED GROUP LOGIC: Yesterday Pending check (Daily Only + settlement logic)
     const unpaidYesterdayDaily = dailyMembers.filter(m => {
-      // Identical condition to Rounds page, checking for yesterdayStr
-      const hasPaidYesterday = payments.some(p => 
+      // Step 1: Check specific payment on yesterday's date
+      const hasPaidOnYesterday = payments.some(p => 
         p.memberId === m.id && 
         (p.status === 'success' || p.status === 'paid') && 
         (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
       );
-      return !hasPaidYesterday;
+      
+      if (hasPaidOnYesterday) return false;
+
+      // Step 2: Check for full settlement today (Yesterday's Due + Today's Due)
+      const dailyAmount = m.monthlyAmount || 0;
+      const totalDue = dailyAmount * 2; // Arrears from yesterday + Current due today
+
+      const todayPaymentsTotal = payments.filter(p => 
+        p.memberId === m.id && 
+        (p.status === 'success' || p.status === 'paid') && 
+        (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
+      ).reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+
+      // If they haven't paid at least double today, they are still "Pending Yesterday"
+      return todayPaymentsTotal < totalDue;
     });
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
@@ -169,24 +185,11 @@ export default function ReportsPage() {
       unpaidTodayDaily: unpaidFocusDateDaily,
       unpaidYesterdayDaily: unpaidYesterdayDaily,
       focusStats: {
-        collection: (payments.filter(p => 
-          (p.status === 'paid' || p.status === 'success') && 
-          targetIds.has(p.memberId) &&
-          (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
-        ).reduce((acc, p) => acc + (p.amountPaid || 0), 0)),
-        txCount: payments.filter(p => 
-          (p.status === 'paid' || p.status === 'success') && 
-          targetIds.has(p.memberId) &&
-          (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
-        ).length,
+        collection: totalCollection,
+        txCount: totalTransactions,
         pendingCount: unpaidFocusDateDaily.length, 
         dateLabel: format(focusDate, 'EEEE, dd MMMM yyyy'),
         dateShort: format(focusDate, 'dd-MM-yyyy')
-      },
-      metrics: {
-        totalCollected: periodPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0),
-        txCount: periodPayments.length,
-        membersCount: targetMembers.length
       }
     };
   }, [mounted, reportType, selectedMonth, selectedYear, selectedDate, members, payments, rounds]);
