@@ -133,15 +133,18 @@ export default function RoundsPage() {
 
   // Automatic Pending Days Increment Effect
   useEffect(() => {
-    if (!db || !assignedMembers.length || !currentRound || currentRound.collectionType !== 'Daily' || isActionPending) return;
+    if (!db || !assignedMembers.length || !currentRound || isActionPending) return;
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
     
     const syncPendingDays = async () => {
       const membersToUpdate = assignedMembers.filter(m => {
-        // Only daily users with active status
-        if (m.paymentType !== 'Daily' && currentRound.collectionType !== 'Daily') return false;
-        // Last update was before today
+        // Condition 1: Member type must be DAILY
+        const isDaily = m.paymentType === 'Daily' || currentRound.collectionType === 'Daily';
+        if (!isDaily) return false;
+        
+        // Condition 2: Ensure it runs only once per day (last update was before today)
         return !m.lastPendingUpdateDate || m.lastPendingUpdateDate < todayStr;
       });
 
@@ -153,47 +156,21 @@ export default function RoundsPage() {
         let updatedCount = 0;
 
         for (const member of membersToUpdate) {
-          const lastUpdate = member.lastPendingUpdateDate ? parseISO(member.lastPendingUpdateDate) : subDays(new Date(), 1);
-          const yesterday = subDays(new Date(), 1);
+          // Condition 3: Check if yesterday payment exists
+          const hasPaymentYesterday = (allPayments || []).some(p => 
+            p.memberId === member.id && 
+            (p.status === 'success' || p.status === 'paid') &&
+            (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
+          );
+
+          // If NO payment for yesterday, increment pendingDays (+1)
+          const newPendingDays = !hasPaymentYesterday ? (member.pendingDays || 0) + 1 : (member.pendingDays || 0);
           
-          if (isBefore(lastUpdate, yesterday) || format(lastUpdate, 'yyyy-MM-dd') !== format(yesterday, 'yyyy-MM-dd')) {
-            // Find missed days between lastUpdate + 1 and yesterday
-            const intervalStart = lastUpdate; 
-            const intervalEnd = yesterday;
-            
-            if (isBefore(intervalStart, intervalEnd)) {
-              const days = eachDayOfInterval({ start: intervalStart, end: intervalEnd });
-              // We skip the lastUpdate itself if it was already processed, but for safety we check all days
-              let missedCount = 0;
-              for (const day of days) {
-                const dayStr = format(day, 'yyyy-MM-dd');
-                if (dayStr === member.lastPendingUpdateDate) continue; // Skip day already processed
-
-                const hasPayment = (allPayments || []).some(p => 
-                  p.memberId === member.id && 
-                  (p.status === 'success' || p.status === 'paid') &&
-                  (p.targetDate === dayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === dayStr))
-                );
-
-                if (!hasPayment) missedCount++;
-              }
-
-              if (missedCount > 0 || member.lastPendingUpdateDate !== todayStr) {
-                batch.update(doc(db, 'members', member.id), {
-                  pendingDays: (member.pendingDays || 0) + missedCount,
-                  lastPendingUpdateDate: todayStr
-                });
-                updatedCount++;
-              }
-            } else if (member.lastPendingUpdateDate !== todayStr) {
-               // Just update the sync date if no days have passed
-               batch.update(doc(db, 'members', member.id), { lastPendingUpdateDate: todayStr });
-               updatedCount++;
-            }
-          } else if (member.lastPendingUpdateDate !== todayStr) {
-            batch.update(doc(db, 'members', member.id), { lastPendingUpdateDate: todayStr });
-            updatedCount++;
-          }
+          batch.update(doc(db, 'members', member.id), {
+            pendingDays: newPendingDays,
+            lastPendingUpdateDate: todayStr // Mark today's check as complete
+          });
+          updatedCount++;
         }
 
         if (updatedCount > 0) {
