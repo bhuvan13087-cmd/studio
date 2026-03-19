@@ -207,8 +207,8 @@ export default function ReportsPage() {
 
     switch (activeTab) {
       case "collections": exportData = filteredData.collectionData.map(d => ({ Period: d.month, Amount: d.amount })); break;
-      case "yesterday-pending": exportData = filteredData.unpaidYesterdayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, PendingDays: m.pendingDays || 0, Status: "Unpaid" })); break;
-      case "today-pending": exportData = filteredData.unpaidTodayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, PendingDays: m.pendingDays || 0, Status: "Unpaid" })); break;
+      case "yesterday-pending": exportData = filteredData.unpaidYesterdayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, PendingDays: (m.pendingDays || 0) === 0 ? 1 : m.pendingDays, Status: "Unpaid" })); break;
+      case "today-pending": exportData = filteredData.unpaidTodayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, PendingDays: (m.pendingDays || 0) === 0 ? 1 : m.pendingDays, Status: "Unpaid" })); break;
     }
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -423,7 +423,7 @@ export default function ReportsPage() {
                         <span className="font-bold text-sm">{m.name}</span>
                       </TableCell>
                       <TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup}</TableCell>
-                      <TableCell className="text-right pr-6 tabular-nums font-bold text-destructive text-sm">{m.pendingDays || 0}</TableCell>
+                      <TableCell className="text-right pr-6 tabular-nums font-bold text-destructive text-sm">{(m.pendingDays || 0) === 0 ? 1 : m.pendingDays}</TableCell>
                     </TableRow>
                   )) : (
                     <TableRow><TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-sm">Clear for previous day.</TableCell></TableRow>
@@ -460,7 +460,7 @@ export default function ReportsPage() {
                         <span className="font-bold text-sm">{m.name}</span>
                       </TableCell>
                       <TableCell className="text-[10px] font-bold text-primary uppercase">{m.chitGroup}</TableCell>
-                      <TableCell className="text-right pr-6 tabular-nums font-bold text-destructive text-sm">{m.pendingDays || 0}</TableCell>
+                      <TableCell className="text-right pr-6 tabular-nums font-bold text-destructive text-sm">{(m.pendingDays || 0) === 0 ? 1 : m.pendingDays}</TableCell>
                     </TableRow>
                   )) : (
                     <TableRow><TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-sm">Clear for selected date.</TableCell></TableRow>
