@@ -2,7 +2,7 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
-import { Users, IndianRupee, AlertCircle, Calendar, Clock, CheckCircle2, Loader2, Database } from "lucide-react"
+import { Users, IndianRupee, AlertCircle, Calendar, Clock, CheckCircle2, Loader2, Database, Info, ArrowRight } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
   Table,
@@ -19,6 +19,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
 import { format, isSameMonth, parseISO } from "date-fns"
@@ -26,6 +35,9 @@ import { format, isSameMonth, parseISO } from "date-fns"
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
   const [revenueView, setRevenueView] = useState<'month' | 'today'>('month')
+  const [selectedSchemeDetail, setSelectedSchemeDetail] = useState<any>(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
+  
   const db = useFirestore()
 
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
@@ -89,11 +101,27 @@ export default function DashboardPage() {
         return !hasPaidToday;
     });
 
+    // SCHEME AGGREGATES
+    const schemeSummaries = (rounds || []).map(round => {
+      const groupMembers = (members || []).filter(m => m.chitGroup === round.name && m.status !== 'inactive');
+      const totalPendingDays = groupMembers.reduce((acc, m) => acc + (m.pendingDays || 0), 0);
+      const totalPendingAmount = groupMembers.reduce((acc, m) => acc + (m.pendingAmount || 0), 0);
+      const lastUpdate = groupMembers[0]?.lastPendingUpdateDate || todayStr;
+
+      return {
+        ...round,
+        totalPendingDays,
+        totalPendingAmount,
+        lastUpdate
+      };
+    });
+
     return {
       activeMembersCount: members?.filter(m => m.status !== 'inactive').length || 0,
       collectedThisMonth,
       collectedToday,
       pendingMembersList,
+      schemeSummaries,
       recentWinners: (rounds || []).filter(r => r.winnerName).slice(0, 4),
       recentPaymentsList: (payments || []).filter(p => p.status === 'paid' || p.status === 'success').slice(0, 5)
     }
@@ -107,7 +135,12 @@ export default function DashboardPage() {
     )
   }
 
-  const { activeMembersCount, collectedThisMonth, collectedToday, pendingMembersList, recentWinners, recentPaymentsList } = dashboardData;
+  const { activeMembersCount, collectedThisMonth, collectedToday, pendingMembersList, schemeSummaries, recentWinners, recentPaymentsList } = dashboardData;
+
+  const handleSchemeClick = (scheme: any) => {
+    setSelectedSchemeDetail(scheme);
+    setIsDetailOpen(true);
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 overflow-x-hidden">
@@ -164,6 +197,45 @@ export default function DashboardPage() {
             <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium italic">Daily members who haven't paid today</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* SCHEMES HEALTH OVERVIEW - NEW SECTION */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 border-l-4 border-primary pl-3 py-1">
+          <h3 className="text-lg font-bold tracking-tight font-headline">Schemes & Arrears</h3>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {schemeSummaries.map((scheme, i) => (
+            <Card 
+              key={i} 
+              className="group cursor-pointer hover:border-primary/50 transition-all border-border/50 overflow-hidden relative"
+              onClick={() => handleSchemeClick(scheme)}
+            >
+              <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Info className="size-3 text-primary" />
+              </div>
+              <CardHeader className="p-4 pb-2">
+                <CardTitle className="text-xs font-bold uppercase text-muted-foreground tracking-widest truncate">{scheme.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <div className={cn(
+                      "text-2xl font-bold tabular-nums",
+                      scheme.totalPendingDays > 0 ? "text-destructive" : "text-emerald-600"
+                    )}>
+                      {scheme.totalPendingDays}
+                    </div>
+                    <p className="text-[9px] font-bold uppercase tracking-tight text-muted-foreground">Pending Dates</p>
+                  </div>
+                  <div className="h-8 w-8 rounded-full bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                    <ArrowRight className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -266,6 +338,59 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ARREARS DETAIL DIALOG */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          {selectedSchemeDetail && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Database className="size-5 text-primary" />
+                  Scheme Arrears Detail
+                </DialogTitle>
+                <DialogDescription>Financial breakdown for {selectedSchemeDetail.name}</DialogDescription>
+              </DialogHeader>
+              <div className="py-6 space-y-4">
+                <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-dashed border-border/50 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1">Total Pending Amount</p>
+                  <div className="text-3xl font-bold text-destructive">
+                    ₹{selectedSchemeDetail.totalPendingAmount?.toLocaleString()}
+                  </div>
+                  <div className="mt-2 px-3 py-1 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold uppercase tracking-widest">
+                    {selectedSchemeDetail.totalPendingDays} Dates Owed
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                   <div className="p-3 bg-muted/20 rounded-xl">
+                      <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-tighter mb-0.5">Collection Type</p>
+                      <p className="text-sm font-bold">{selectedSchemeDetail.collectionType}</p>
+                   </div>
+                   <div className="p-3 bg-muted/20 rounded-xl">
+                      <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-tighter mb-0.5">As Of Date</p>
+                      <p className="text-sm font-bold">{selectedSchemeDetail.lastUpdate ? format(parseISO(selectedSchemeDetail.lastUpdate), 'dd MMM yyyy') : '-'}</p>
+                   </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-start gap-3">
+                  <Info className="size-4 text-primary shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-muted-foreground leading-relaxed italic">
+                    This amount reflects the cumulative currency deficit across all active daily members in this scheme. Values are calculated automatically based on the 10 PM production batch.
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setIsDetailOpen(false)} className="w-full font-bold uppercase tracking-widest h-10">Close Breakdown</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
+}
+
+function cn(...inputs: any[]) {
+  return inputs.filter(Boolean).join(' ');
 }
