@@ -485,7 +485,7 @@ export default function RoundsPage() {
             const monthlyColl = getMonthlyCollectionForScheme(group.name);
             const pendingCount = (members || []).filter(m => {
               if (m.status === 'inactive' || m.chitGroup !== group.name) return false;
-              if (m.paymentType !== 'Daily') return false; // Exclude Monthly from daily pending count
+              if (m.paymentType !== 'Daily') return false; 
               const { paid } = analyzePaymentStatus(m);
               return !paid;
             }).length;
@@ -858,25 +858,20 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Hidden Thermal Print Content */}
       <div id="thermal-receipt" className="hidden">
         {historyPrintData && (
           <div className="font-mono text-[10px] leading-tight w-full">
             <div className="text-center font-bold mb-2 uppercase">CHIT FUND</div>
             <div className="border-b border-dashed border-black mb-2"></div>
-            
             <div className="mb-1">Member Name: {historyPrintData.name}</div>
             <div className="mb-2">Group: {historyPrintData.group}</div>
-            
             <div className="border-b border-dashed border-black mb-2"></div>
-            
             <div className="flex justify-between font-bold mb-1">
               <span className="w-[10ch]">Date</span>
               <span className="w-[8ch]">Month</span>
               <span className="w-[6ch]">Stat</span>
               <span className="w-[6ch] text-right">Amt</span>
             </div>
-            
             {historyPrintData.history.map((row, idx) => (
               <div key={idx} className="flex justify-between mb-0.5">
                 <span className="w-[10ch]">{row.date}</span>
@@ -885,9 +880,7 @@ export default function RoundsPage() {
                 <span className="w-[6ch] text-right">{row.amt}</span>
               </div>
             ))}
-            
             <div className="border-b border-dashed border-black my-2"></div>
-            
             <div className="flex justify-between font-bold">
               <span>Total Paid:</span>
               <span>₹{historyPrintData.totalPaid.toLocaleString()}</span>
@@ -896,9 +889,7 @@ export default function RoundsPage() {
               <span>Pending:</span>
               <span>₹{historyPrintData.pending.toLocaleString()}</span>
             </div>
-            
             <div className="border-b border-dashed border-black my-2"></div>
-            
             <div className="text-center font-bold mt-2">Thank You</div>
             <div className="text-center text-[8px] mt-1 opacity-60">{historyPrintData.timestamp}</div>
           </div>

@@ -94,18 +94,15 @@ export default function ReportsPage() {
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
-    // PRIMARY FILTER: Get ONLY Daily members for pending lists
+    // PRIMARY FILTER: Get ONLY Daily members for pending lists (Stored value only)
     const dailyMembers = members.filter(m => {
         if (m.status === 'inactive') return false;
-        const round = rounds.find(r => r.name === m.chitGroup);
-        const type = (m.paymentType || round?.collectionType || "Monthly");
-        return type === 'Daily';
+        return m.paymentType === 'Daily';
     });
 
     const targetMembers = members.filter(m => {
       if (m.status === 'inactive') return false;
-      const round = rounds.find(r => r.name === m.chitGroup);
-      const schemeType = (m.paymentType || round?.collectionType || "Monthly").toLowerCase();
+      const schemeType = (m.paymentType || "").toLowerCase();
       return schemeType === reportType;
     });
     const targetIds = new Set(targetMembers.map(m => m.id));
@@ -140,21 +137,16 @@ export default function ReportsPage() {
       return !hasPaid;
     });
 
-    // Dynamic YESTERDAY Pending Check with FULL SETTLEMENT RULE:
-    // Exclude if:
-    // 1. Paid specifically on yesterday's date
-    // 2. OR Paid total today >= (yesterdayAmount + todayAmount)
+    // Dynamic YESTERDAY Pending Check
     const unpaidYesterdayDaily = dailyMembers.filter(m => {
-      // Step 1: Check if payment exists for yesterday
       const hasPaidYesterday = payments.some(p => 
         p.memberId === m.id && 
         (p.status === 'success' || p.status === 'paid') && 
         (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
       );
       
-      if (hasPaidYesterday) return false; // Not pending for yesterday
+      if (hasPaidYesterday) return false;
 
-      // Step 2 & 3: Check if fully settled today
       const yesterdayAmount = m.monthlyAmount || 0;
       const todayAmount = m.monthlyAmount || 0;
       const totalDueAmount = yesterdayAmount + todayAmount;
@@ -167,10 +159,9 @@ export default function ReportsPage() {
         )
         .reduce((sum, p) => sum + (p.amountPaid || 0), 0);
 
-      // If they paid >= totalDue (both yesterday and today), they are fully settled for yesterday miss
       if (totalPaidToday >= totalDueAmount) return false;
 
-      return true; // Still pending yesterday
+      return true;
     });
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {

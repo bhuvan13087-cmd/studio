@@ -85,7 +85,6 @@ export default function MembersPage() {
   const chitRoundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: chitRounds } = useCollection(chitRoundsQuery);
 
-  // Recovery effect to ensure UI isn't locked after dialogs close
   useEffect(() => {
     const recoveryInterval = setInterval(() => {
       if (document.body.style.pointerEvents === 'none') {
@@ -96,7 +95,6 @@ export default function MembersPage() {
     return () => clearInterval(recoveryInterval)
   }, [])
 
-  // Dynamic Total Paid Calculation
   const totalPaidByMember = useMemo(() => {
     if (!payments) return new Map<string, number>();
     const map = new Map<string, number>();
