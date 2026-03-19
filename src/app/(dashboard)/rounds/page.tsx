@@ -131,16 +131,20 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Automatic Pending Days Synchronization Effect
+  // Automatic Pending Days Synchronization Logic
   useEffect(() => {
     if (!db || !assignedMembers.length || !currentRound || isActionPending) return;
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
     
     const syncPendingDays = async () => {
       const membersToUpdate = assignedMembers.filter(m => {
         const isDaily = m.paymentType === 'Daily' || currentRound.collectionType === 'Daily';
-        return isDaily && m.lastPendingUpdateDate !== todayStr;
+        if (!isDaily) return false;
+        
+        // Check if field doesn't exist (Initialization) OR if update needed for today
+        return m.pendingDays === undefined || m.lastPendingUpdateDate !== todayStr;
       });
 
       if (membersToUpdate.length === 0) return;
@@ -151,25 +155,25 @@ export default function RoundsPage() {
         let updatedCount = 0;
 
         for (const member of membersToUpdate) {
-          // Check if payment done for today
-          const todayPaymentQuery = query(
+          let currentPending = member.pendingDays ?? 0;
+
+          // Check for yesterday's payment status to decide increment
+          const yesterdayPaymentQuery = query(
             collection(db, 'payments'),
             where('memberId', '==', member.id),
-            where('targetDate', '==', todayStr),
+            where('targetDate', '==', yesterdayStr),
             limit(1)
           );
           
-          const todayPaymentSnap = await getDocs(todayPaymentQuery);
+          const yesterdayPaymentSnap = await getDocs(yesterdayPaymentQuery);
           
-          let currentPendingDays = member.pendingDays || 0;
-
-          if (todayPaymentSnap.empty) {
-            // No payment today -> Increment pending
-            currentPendingDays += 1;
+          // Initial creation or daily check
+          if (yesterdayPaymentSnap.empty) {
+            currentPending += 1; // Increment if missed
           }
 
           batch.update(doc(db, 'members', member.id), {
-            pendingDays: currentPendingDays,
+            pendingDays: currentPending,
             lastPendingUpdateDate: todayStr
           });
           updatedCount++;
@@ -333,10 +337,10 @@ export default function RoundsPage() {
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       
-      // Reset Pending Days on payment as they are now clear for today
+      // Auto-update PendingDays and last update date on successful payment
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + amountToSave,
-        pendingDays: 0,
+        pendingDays: 0, // Reset as today is clear
         lastPendingUpdateDate: todayStr
       });
 
