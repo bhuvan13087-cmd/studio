@@ -2,7 +2,7 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
-import { Users, IndianRupee, AlertCircle, Clock, CheckCircle2, Loader2, Info, ArrowRight, FolderKanban, User, CalendarDays } from "lucide-react"
+import { Users, IndianRupee, Clock, CheckCircle2, Loader2, Info, ArrowRight, FolderKanban, User, CalendarDays } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
   Table,
@@ -65,6 +65,7 @@ export default function DashboardPage() {
     const now = new Date()
     const todayStr = format(now, 'yyyy-MM-dd')
 
+    // Revenue calculations
     const currentMonthPayments = (payments || []).filter(p => {
       if (!p.paymentDate) return false;
       try {
@@ -89,7 +90,7 @@ export default function DashboardPage() {
       }
     }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
-    // Today Pending logic (Daily only)
+    // Today Pending Logic (Reuse Group Logic: Daily only, no payment today)
     const pendingMembersList = (members || []).filter(m => {
         if (m.status === 'inactive') return false;
         const scheme = (rounds || []).find(r => r.name === m.chitGroup);
@@ -104,16 +105,16 @@ export default function DashboardPage() {
         return !hasPaidToday;
     });
 
-    // 4-Group Summaries (Group A, B, C, D)
-    const schemeSummaries = (rounds || []).map(round => {
-      const groupMembers = (members || []).filter(m => m.chitGroup === round.name && m.status !== 'inactive');
+    // 4-Group Logic (Group A, B, C, D cards)
+    const fixedGroupNames = ['A', 'B', 'C', 'D'];
+    const schemeSummaries = fixedGroupNames.map(name => {
+      const schemeInfo = (rounds || []).find(r => r.name === name) || { name, collectionType: 'Daily', monthlyAmount: 800 };
+      const groupMembers = (members || []).filter(m => m.chitGroup === name && m.status !== 'inactive');
       const totalPendingDays = groupMembers.reduce((acc, m) => acc + (m.pendingDays || 0), 0);
-      const totalPendingAmount = groupMembers.reduce((acc, m) => acc + (m.pendingAmount || 0), 0);
       
       return {
-        ...round,
+        ...schemeInfo,
         totalPendingDays,
-        totalPendingAmount,
         memberCount: groupMembers.length,
         members: groupMembers
       };
@@ -125,7 +126,6 @@ export default function DashboardPage() {
       collectedToday,
       pendingMembersList,
       schemeSummaries,
-      recentWinners: (rounds || []).filter(r => r.winnerName).slice(0, 4),
       recentPaymentsList: (payments || []).filter(p => p.status === 'paid' || p.status === 'success').slice(0, 5)
     }
   }, [mounted, members, payments, rounds, membersLoading, paymentsLoading, roundsLoading])
@@ -145,7 +145,7 @@ export default function DashboardPage() {
     setIsGroupDetailOpen(true);
   }
 
-  const handleMemberDebtClick = (member: any) => {
+  const handleMemberArrearsClick = (member: any) => {
     setSelectedMemberDebt(member);
     setIsMemberArrearsOpen(true);
   }
@@ -199,16 +199,16 @@ export default function DashboardPage() {
         <Card className="hover:shadow-md transition-shadow duration-200 border-border/50 border-l-4 border-l-destructive">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-destructive">Unpaid Today</CardTitle>
-            <AlertCircle className="size-4 text-destructive" />
+            <Clock className="size-4 text-destructive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl sm:text-3xl font-bold text-destructive">{pendingMembersList.length}</div>
-            <p className="text-[10px] text-muted-foreground mt-1 font-medium italic">Daily participants with no activity</p>
+            <p className="text-[10px] text-muted-foreground mt-1 font-medium italic">Daily members with no transaction</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Schemes Overview (Group A, B, C, D cards) */}
+      {/* Schemes Overview (Group A, B, C, D cards) 🗂️ */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 border-l-4 border-primary pl-3 py-1">
           <h3 className="text-lg font-bold tracking-tight font-headline">🗂️ Schemes Monitor (4-Group System)</h3>
@@ -307,8 +307,7 @@ export default function DashboardPage() {
                     <TableRow>
                       <TableHead className="text-[10px] uppercase font-bold tracking-widest pl-6">Participant</TableHead>
                       <TableHead className="text-[10px] uppercase font-bold tracking-widest">Payment Status</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold tracking-widest">Pending Days</TableHead>
-                      <TableHead className="text-right pr-6"></TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-widest text-center">⏳ Pending Days</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -321,7 +320,7 @@ export default function DashboardPage() {
 
                       return (
                         <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
-                          <TableCell className="pl-6">
+                          <TableCell className="pl-6 py-4">
                             <div className="flex flex-col">
                               <span className="text-sm font-bold">{m.name}</span>
                               <span className="text-[10px] text-muted-foreground">{m.phone}</span>
@@ -335,32 +334,22 @@ export default function DashboardPage() {
                               {isPaidToday ? "PAID TODAY" : "UNPAID"}
                             </Badge>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="text-center">
                             <button 
                               className={cn(
-                                "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase transition-all active:scale-95",
+                                "inline-flex items-center justify-center px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all active:scale-95",
                                 m.pendingDays > 0 ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                               )}
-                              onClick={() => handleMemberDebtClick(m)}
+                              onClick={() => handleMemberArrearsClick(m)}
                             >
-                              ⏳ {m.pendingDays}
+                              ⏳ {m.pendingDays || 0}
                             </button>
-                          </TableCell>
-                          <TableCell className="text-right pr-6">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-primary/40 hover:text-primary"
-                              onClick={() => handleMemberDebtClick(m)}
-                            >
-                              <Info className="size-4" />
-                            </Button>
                           </TableCell>
                         </TableRow>
                       );
                     }) : (
                       <TableRow>
-                        <TableCell colSpan={4} className="h-32 text-center text-muted-foreground italic text-xs">
+                        <TableCell colSpan={3} className="h-32 text-center text-muted-foreground italic text-xs">
                           No active members in this group.
                         </TableCell>
                       </TableRow>
@@ -377,7 +366,7 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MEMBER ARREARS POPUP (💬 Details) */}
+      {/* MEMBER ARREARS POPUP 💬 */}
       <Dialog open={isMemberArrearsOpen} onOpenChange={setIsMemberArrearsOpen}>
         <DialogContent className="sm:max-w-[400px]">
           {selectedMemberDebt && (
@@ -403,17 +392,17 @@ export default function DashboardPage() {
                     ₹{(selectedMemberDebt.pendingAmount || 0).toLocaleString()}
                   </div>
                   <div className="mt-3 px-3 py-1 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
-                    ⏳ {selectedMemberDebt.pendingDays} Missed Cycles
+                    ⏳ {selectedMemberDebt.pendingDays || 0} Missed Installments
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                    <div className="p-3 bg-muted/20 rounded-xl border border-transparent">
                       <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-tighter mb-0.5">Scheme Unit</p>
-                      <p className="text-sm font-bold">₹{selectedMemberDebt.monthlyAmount?.toLocaleString()}</p>
+                      <p className="text-sm font-bold">₹{(selectedMemberDebt.monthlyAmount || 800).toLocaleString()}</p>
                    </div>
                    <div className="p-3 bg-muted/20 rounded-xl border border-transparent">
-                      <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-tighter mb-0.5">Last Reconciliation</p>
+                      <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-tighter mb-0.5">Last Sync</p>
                       <div className="flex items-center gap-1.5">
                         <CalendarDays className="size-3 text-primary opacity-50" />
                         <p className="text-sm font-bold">
@@ -426,7 +415,7 @@ export default function DashboardPage() {
                 <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-start gap-3">
                   <Info className="size-4 text-primary shrink-0 mt-0.5" />
                   <p className="text-[10px] text-muted-foreground leading-relaxed italic">
-                    All data is synchronized with the nightly 10 PM production batch. This reflects the total currency deficit up to the last automated aging cycle.
+                    Pending amounts and dates are automatically aged daily at 10 PM. This reflects the total currency deficit up to the last reconciliation cycle.
                   </p>
                 </div>
               </div>

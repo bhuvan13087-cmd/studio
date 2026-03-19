@@ -7,7 +7,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { useRouter } from "next/navigation"
-import { format, isAfter, setHours, setMinutes, parseISO, startOfDay, endOfDay } from "date-fns"
+import { format, parseISO } from "date-fns"
 import { Clock } from "lucide-react"
 import { collection, query, writeBatch, doc } from "firebase/firestore"
 
@@ -39,21 +39,24 @@ export default function DashboardLayout({
     }
   }, [user, isUserLoading, router])
 
-  // PRODUCTION 10 PM AUTOMATED CALCULATION
-  // Formula: today_pending = (scheme_amount - today_payment) + yesterday_pending
+  /**
+   * PRODUCTION 10 PM AUTOMATED CALCULATION
+   * Executes daily at 10 PM (Hour 22).
+   * Formula: today_pending = (scheme_amount - today_payment) + yesterday_pending
+   */
   useEffect(() => {
     if (!user || !members || !payments || !currentTime) return;
 
-    const runBatchUpdate = async () => {
+    const runProductionBatch = async () => {
       const todayStr = format(currentTime, 'yyyy-MM-dd');
       const scheduledHour = 22; // 10 PM
       
-      // Only run if current hour is 10 PM or later
+      // Only run at 10 PM or later
       if (currentTime.getHours() < scheduledHour) return;
 
       const dailyMembers = members.filter(m => 
         m.status === 'active' && 
-        (m.paymentType === 'Daily' || m.paymentType === 'daily') && 
+        (m.paymentType?.toLowerCase() === 'daily' || m.chitGroup) && // Ensure daily context
         m.lastPendingUpdateDate !== todayStr
       );
       
@@ -74,21 +77,20 @@ export default function DashboardLayout({
         );
         const todayPaymentSum = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
 
-        // PRODUCTION FORMULA
-        let todayPending = (schemeAmount - todayPaymentSum) + yesterdayPending;
-        // Ensure pending amount doesn't go negative if they paid extra (though prompt says extra ignored, we handle clearing)
-        todayPending = Math.max(0, todayPending);
+        // PRODUCTION CALCULATION LOGIC
+        let todayPending = 0;
+        if (todayPaymentSum >= schemeAmount) {
+          todayPending = 0; // Fully cleared or overpaid
+        } else {
+          todayPending = (schemeAmount - todayPaymentSum) + yesterdayPending;
+        }
 
-        // Counter Logic: Increment if debt exists/increases, decrement/clear if settled
+        // PENDING DAYS COUNTER LOGIC
         let newPendingDays = member.pendingDays || 0;
-        if (todayPending > yesterdayPending) {
-           newPendingDays += 1;
-        } else if (todayPending < yesterdayPending && todayPending === 0) {
-           newPendingDays = 0; // Fully cleared
-        } else if (todayPending < yesterdayPending) {
-           // Partially cleared debt units
-           const unitsPaid = Math.floor((yesterdayPending - todayPending) / schemeAmount);
-           newPendingDays = Math.max(0, newPendingDays - unitsPaid);
+        if (todayPending > 0) {
+          newPendingDays += 1;
+        } else {
+          newPendingDays = Math.max(0, newPendingDays - 1);
         }
 
         const memberRef = doc(db, 'members', member.id);
@@ -105,7 +107,7 @@ export default function DashboardLayout({
       }
     };
 
-    runBatchUpdate();
+    runProductionBatch();
   }, [user, members, payments, currentTime, db]);
 
   if (isUserLoading) {
