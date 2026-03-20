@@ -99,6 +99,10 @@ export default function RoundsPage() {
   const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
   
+  // Manual Pending Days Override State
+  const [manualPendingValue, setManualPendingValue] = useState<number>(0)
+  const [isManualPendingEdit, setIsManualPendingEdit] = useState(false)
+  
   const { toast } = useToast()
   const db = useFirestore()
   const { user } = useUser()
@@ -230,6 +234,25 @@ export default function RoundsPage() {
       toast({ title: "Payment Recorded", description: "Arrears updated." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
+    } finally {
+      setIsActionPending(false);
+    }
+  }
+
+  const handleUpdatePendingDays = async () => {
+    if (!db || !selectedPendingMember || isActionPending) return;
+    setIsActionPending(true);
+    try {
+      const memberRef = doc(db, 'members', selectedPendingMember.id);
+      await updateDoc(memberRef, {
+        pendingDays: Number(manualPendingValue)
+      });
+      await createAuditLog(db, user, `Manually updated pending days for ${selectedPendingMember.name} to ${manualPendingValue}`);
+      toast({ title: "Days Updated", description: "Pending counter adjusted manually." });
+      setIsPendingDetailsOpen(false);
+      setIsManualPendingEdit(false);
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update days." });
     } finally {
       setIsActionPending(false);
     }
@@ -617,7 +640,11 @@ export default function RoundsPage() {
                     </TableCell>
                     <TableCell>
                       <button 
-                        onClick={() => { setSelectedPendingMember(m); setIsPendingDetailsOpen(true); }}
+                        onClick={() => { 
+                          setSelectedPendingMember(m); 
+                          setManualPendingValue(m.pendingDays || 0);
+                          setIsPendingDetailsOpen(true); 
+                        }}
                         className={cn(
                           "px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest tabular-nums transition-all active:scale-95 shadow-sm border",
                           pDays > 0 ? "bg-destructive/5 text-destructive border-destructive/20 hover:bg-destructive/10" : "bg-muted/50 text-muted-foreground/60 border-transparent"
@@ -700,7 +727,10 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
+      <Dialog open={isPendingDetailsOpen} onOpenChange={(open) => { 
+        setIsPendingDetailsOpen(open); 
+        if (!open) setIsManualPendingEdit(false); 
+      }}>
         <DialogContent className="sm:max-w-[400px]">
           {selectedPendingMember && (
             <>
@@ -723,11 +753,46 @@ export default function RoundsPage() {
                       <span className="text-3xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
                    </div>
                 </div>
+
+                {!isManualPendingEdit ? (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full text-[10px] font-bold uppercase tracking-widest gap-2 h-10 border-dashed"
+                    onClick={() => {
+                      setManualPendingValue(selectedPendingMember.pendingDays || 0);
+                      setIsManualPendingEdit(true);
+                    }}
+                  >
+                    <Pencil className="size-3" /> Manual Override Days
+                  </Button>
+                ) : (
+                  <div className="space-y-3 p-4 bg-muted/20 rounded-xl border border-dashed border-primary/20 animate-in fade-in slide-in-from-top-2">
+                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Adjust Manual Days</Label>
+                     <div className="flex gap-2">
+                        <Input 
+                          type="number" 
+                          value={manualPendingValue} 
+                          onChange={e => setManualPendingValue(Number(e.target.value))}
+                          className="h-10 rounded-xl font-bold"
+                          min="0"
+                        />
+                        <Button 
+                          onClick={handleUpdatePendingDays} 
+                          disabled={isActionPending}
+                          className="font-bold h-10 px-6 rounded-xl"
+                        >
+                          {isActionPending ? <Loader2 className="size-4 animate-spin" /> : "Save"}
+                        </Button>
+                     </div>
+                  </div>
+                )}
+
                 <div className="p-4 bg-primary/5 rounded-xl border border-primary/10 flex gap-3">
                    <div className="size-4 text-primary shrink-0 mt-0.5">
                       <Info className="size-4" />
                    </div>
-                   <p className="text-[10px] text-muted-foreground leading-relaxed italic font-medium">Arrears aging occurs automatically at 10 PM. All incoming payments settle earliest debt first.</p>
+                   <p className="text-[10px] text-muted-foreground leading-relaxed italic font-medium">Arrears aging occurs automatically at 10 PM. Manual overrides provide immediate corrections for administrative discrepancies.</p>
                 </div>
               </div>
               <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full h-11 font-black uppercase tracking-widest active:scale-95 transition-all">Close Summary</Button></DialogFooter>
