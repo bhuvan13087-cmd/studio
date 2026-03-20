@@ -85,7 +85,7 @@ export default function RoundsPage() {
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
   const chitSchemes = roundsData || [];
 
-  const membersQuery = useMemoFirebase(() => query(collection(db, 'members'), orderBy('name', 'asc')), [db]);
+  const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
   const { data: members } = useCollection(membersQuery);
 
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
@@ -103,14 +103,6 @@ export default function RoundsPage() {
 
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
-
-  const overallMonthlyCollection = useMemo(() => {
-    if (!allPayments) return 0;
-    const currentMonth = format(new Date(), 'MMMM yyyy');
-    return allPayments
-      .filter(p => p.month === currentMonth && (p.status === 'success' || p.status === 'paid'))
-      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-  }, [allPayments]);
 
   const getGroupMonthlyCollection = (groupName: string) => {
     if (!allPayments || !members) return 0;
@@ -263,23 +255,6 @@ export default function RoundsPage() {
           <Button onClick={() => setIsAddChitDialogOpen(true)} className="font-bold gap-2 px-6 h-11 shadow-lg bg-primary hover:bg-primary/90 transition-all active:scale-95">
             <Plus className="size-5" /> Add Scheme
           </Button>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Card className="bg-primary text-primary-foreground shadow-lg border-none overflow-hidden relative rounded-2xl">
-            <div className="absolute top-0 right-0 p-8 opacity-10">
-              <TrendingUp className="size-24" />
-            </div>
-            <CardHeader className="p-6 pb-2">
-              <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-80">Overall Monthly Collection</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 pt-0">
-              <div className="text-4xl font-black tracking-tighter tabular-nums">₹{overallMonthlyCollection.toLocaleString()}</div>
-              <p className="text-[10px] font-bold mt-2 opacity-70 uppercase tracking-widest flex items-center gap-1.5">
-                <CheckCircle2 className="size-3" /> All Groups Unified Revenue
-              </p>
-            </CardContent>
-          </Card>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
