@@ -608,7 +608,7 @@ export default function RoundsPage() {
                           pDays > 0 ? "bg-destructive/5 text-destructive border-destructive/20 hover:bg-destructive/10" : "bg-muted/50 text-muted-foreground/60 border-transparent"
                         )}
                       >
-                        ⏳ {pDays} {pDays === 1 ? 'Day' : 'Days'}
+                        {pDays}
                       </button>
                     </TableCell>
                     <TableCell>

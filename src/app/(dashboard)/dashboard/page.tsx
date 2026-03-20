@@ -354,7 +354,7 @@ export default function DashboardPage() {
                               )}
                               onClick={() => handleMemberArrearsClick(m)}
                             >
-                              ⏳ {m.pendingDays || 0} Days
+                              {m.pendingDays || 0}
                             </button>
                           </TableCell>
                         </TableRow>
