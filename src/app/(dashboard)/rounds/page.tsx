@@ -549,9 +549,6 @@ export default function RoundsPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-           <Button variant="outline" className="font-bold gap-2 h-11 px-4 shadow-sm border-border/60 hover:bg-muted/50">
-             <RefreshCcw className="size-4 text-muted-foreground" /> Sync Pending
-           </Button>
            <Button onClick={() => setIsAddMemberDialogOpen(true)} className="font-bold gap-2 h-11 px-6 shadow-lg active:scale-95 transition-all">
              <UserPlus className="size-5" /> Add Member
            </Button>
