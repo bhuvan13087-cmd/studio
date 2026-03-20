@@ -132,7 +132,8 @@ export default function RoundsPage() {
 
   const getDisplayName = (name: string) => {
     if (!name) return "";
-    return name.replace(/Group/gi, '').trim().split(' ')[0] === 'Group' ? name : `Group ${name.replace(/Group/gi, '').trim()}`;
+    const clean = name.replace(/Group/gi, '').trim();
+    return `Group ${clean}`;
   };
 
   const getGroupTodayCollection = (groupName: string) => {
@@ -144,19 +145,6 @@ export default function RoundsPage() {
         groupMemberIds.has(p.memberId) && 
         (p.status === 'success' || p.status === 'paid') &&
         (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
-      )
-      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-  };
-
-  const getGroupMonthlyCollection = (groupName: string) => {
-    if (!allPayments || !members) return 0;
-    const now = new Date();
-    const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
-    return allPayments
-      .filter(p => 
-        groupMemberIds.has(p.memberId) && 
-        (p.status === 'success' || p.status === 'paid') &&
-        p.paymentDate && isSameMonth(parseISO(p.paymentDate), now)
       )
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
   };
@@ -192,7 +180,6 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
     const paymentAmount = Number(paymentData.amount);
-    const schemeAmount = selectedMemberForPayment.monthlyAmount || 800;
     
     setIsActionPending(true);
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -215,16 +202,8 @@ export default function RoundsPage() {
       });
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
-      
-      // PRODUCTION RULE: Deduct oldest pending first (FIFO logic)
-      const currentArrears = selectedMemberForPayment.pendingAmount || 0;
-      const newArrears = Math.max(0, currentArrears - paymentAmount);
-      const newPendingDays = Math.ceil(newArrears / schemeAmount);
-
       batch.update(memberRef, {
-        totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
-        pendingAmount: newArrears,
-        pendingDays: newPendingDays
+        totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount
       });
 
       await withTimeout(batch.commit());
@@ -232,7 +211,7 @@ export default function RoundsPage() {
 
       setPaymentData(INITIAL_PAYMENT_STATE);
       setIsQuickPaymentDialogOpen(false);
-      toast({ title: "Payment Recorded", description: "Arrears updated automatically." });
+      toast({ title: "Payment Recorded", description: "Ledger updated successfully." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
@@ -382,7 +361,6 @@ export default function RoundsPage() {
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
             const groupPendingCount = getGroupPendingCount(group.name);
-            const monthlyCollection = getGroupMonthlyCollection(group.name);
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-0 right-0 p-3">
@@ -725,46 +703,46 @@ export default function RoundsPage() {
       </Dialog>
 
       <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
-        <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
+        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
           {selectedPendingMember && (
             <>
-              <DialogHeader className="p-5 bg-muted/30 border-b">
-                <DialogTitle className="text-lg font-bold tracking-tight">Pending Member Details</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Financial deficit summary</DialogDescription>
+              <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b">
+                <DialogTitle className="text-xl font-bold tracking-tight text-primary">Pending Member Details</DialogTitle>
+                <DialogDescription className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Financial deficit summary</DialogDescription>
               </DialogHeader>
               
-              <div className="p-5 space-y-4">
-                <div className="flex flex-col gap-1 border-b pb-3 border-border/40">
-                  <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Member Name</span>
-                  <span className="text-sm font-bold">{selectedPendingMember.name}</span>
+              <div className="p-6 space-y-6 bg-background">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[10px] font-black uppercase text-muted-foreground/50 tracking-widest ml-1">Member Name</span>
+                  <div className="p-3 bg-muted/30 rounded-xl border border-border/40 font-bold text-sm">{selectedPendingMember.name}</div>
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Missed Installments (Days)</span>
-                  <Input 
-                    type="number" 
-                    value={manualPendingValue} 
-                    onChange={e => setManualPendingValue(Number(e.target.value))}
-                    className="h-10 font-bold text-sm"
-                    placeholder="Enter pending days"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1 pt-2">
-                  <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Calculated Pending Amount</span>
-                  <div className="p-4 bg-destructive/5 rounded-xl border border-dashed border-destructive/20 text-center">
-                    <span className="text-2xl font-black text-destructive tabular-nums tracking-tight">
-                      ₹{(Number(manualPendingValue) * (selectedPendingMember.monthlyAmount || 800)).toLocaleString()}
+                  <span className="text-[10px] font-black uppercase text-muted-foreground/50 tracking-widest ml-1">Total Arrears Amount</span>
+                  <div className="p-5 bg-destructive/5 rounded-2xl border border-dashed border-destructive/20 text-center">
+                    <span className="text-3xl font-black text-destructive tabular-nums tracking-tighter">
+                      ₹{(Number(manualPendingValue || 0) * (selectedPendingMember.monthlyAmount || 800)).toLocaleString()}
                     </span>
                   </div>
                 </div>
+
+                <div className="flex flex-col gap-2">
+                  <span className="text-[10px] font-black uppercase text-muted-foreground/50 tracking-widest ml-1">Missed Installments (Days)</span>
+                  <Input 
+                    type="number" 
+                    value={manualPendingValue || ""} 
+                    onChange={e => setManualPendingValue(e.target.value === "" ? 0 : Number(e.target.value))}
+                    className="h-11 font-bold text-sm rounded-xl [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="Enter pending days"
+                  />
+                </div>
               </div>
               
-              <DialogFooter className="p-5 pt-0">
+              <DialogFooter className="p-6 pt-0 bg-background">
                 <Button 
                   onClick={handleUpdatePendingArrears} 
                   disabled={isActionPending}
-                  className="w-full h-11 font-black uppercase tracking-widest text-[10px] rounded-xl active:scale-95 transition-all shadow-md"
+                  className="w-full h-12 font-black uppercase tracking-widest text-[10px] rounded-xl active:scale-95 transition-all shadow-lg"
                 >
                   {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}
                   Update Arrears
