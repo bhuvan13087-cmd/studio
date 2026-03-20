@@ -98,7 +98,7 @@ export default function RoundsPage() {
   const [isActionPending, setIsActionPending] = useState(false)
   
   const [isCollectionPopupOpen, setIsCollectionPopupOpen] = useState(false)
-  const [collectionPopupData, setCollectionPopupData] = useState<{name: string, amount: number} | null>(null)
+  const [activePopupGroupName, setActivePopupGroupName] = useState<string | null>(null)
   
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [selectedMemberForPayment, setSelectedMemberForPayment] = useState<any>(null)
@@ -110,7 +110,7 @@ export default function RoundsPage() {
   
   const [manualPendingValue, setManualPendingValue] = useState<number>(0)
   
-  // Month/Year filter for group card collections
+  // Month/Year filter for group card collections (Shared state used in popups)
   const [viewMonth, setViewMonth] = useState<string>(format(new Date(), 'MMMM'))
   const [viewYear, setViewYear] = useState<string>(format(new Date(), 'yyyy'))
   
@@ -399,32 +399,6 @@ export default function RoundsPage() {
           </Button>
         </div>
 
-        {/* Month/Year Filter for Collection */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-card p-4 rounded-xl border border-border/50 shadow-sm">
-          <div className="flex items-center gap-2">
-            <Calendar className="size-4 text-primary" />
-            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Filter Collection:</span>
-          </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <Select value={viewMonth} onValueChange={setViewMonth}>
-              <SelectTrigger className="h-9 w-[140px] text-xs font-bold">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MONTHS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={viewYear} onValueChange={setViewYear}>
-              <SelectTrigger className="h-9 w-[100px] text-xs font-bold">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
@@ -462,7 +436,7 @@ export default function RoundsPage() {
                         className="h-6 w-6 rounded-full hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setCollectionPopupData({name: group.name, amount: monthlyCollection});
+                          setActivePopupGroupName(group.name);
                           setIsCollectionPopupOpen(true);
                         }}
                       >
@@ -518,31 +492,58 @@ export default function RoundsPage() {
           })}
         </div>
 
-        {/* Collection Summary Popup */}
+        {/* Collection Summary Popup with Period Selectors */}
         <Dialog open={isCollectionPopupOpen} onOpenChange={setIsCollectionPopupOpen}>
-          <DialogContent className="sm:max-w-[400px]">
-            {collectionPopupData && (
+          <DialogContent className="sm:max-w-[420px]">
+            {activePopupGroupName && (
               <>
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
                     <Wallet className="size-5 text-primary" />
-                    Monthly Summary
+                    Reconciliation Board
                   </DialogTitle>
                   <DialogDescription>
-                    Collection for {getDisplayName(collectionPopupData.name)} in {viewMonth} {viewYear}.
+                    Summary for {getDisplayName(activePopupGroupName)}.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="py-6">
+                
+                <div className="space-y-6 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Period Month</Label>
+                      <Select value={viewMonth} onValueChange={setViewMonth}>
+                        <SelectTrigger className="h-10 text-xs font-bold">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MONTHS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Period Year</Label>
+                      <Select value={viewYear} onValueChange={setViewYear}>
+                        <SelectTrigger className="h-10 text-xs font-bold">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-3xl border border-dashed border-emerald-200 text-center">
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Total Monthly Intake</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Verified Monthly Intake</p>
                     <div className="text-5xl font-black text-emerald-600 tabular-nums tracking-tighter">
-                      ₹{collectionPopupData.amount.toLocaleString()}
+                      ₹{getGroupMonthlyCollection(activePopupGroupName, `${viewMonth} ${viewYear}`).toLocaleString()}
                     </div>
                   </div>
                 </div>
+
                 <DialogFooter>
                   <Button onClick={() => setIsCollectionPopupOpen(false)} className="w-full font-bold">
-                    Close Summary
+                    Close Audit
                   </Button>
                 </DialogFooter>
               </>
