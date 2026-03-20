@@ -641,17 +641,25 @@ export default function RoundsPage() {
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="h-9 w-9 text-emerald-600 hover:bg-emerald-50 rounded-xl active:scale-90" 
+                          className={cn(
+                            "h-9 w-9 rounded-xl transition-all",
+                            paidToday 
+                              ? "text-emerald-500 bg-emerald-50 cursor-default" 
+                              : "text-emerald-600 hover:bg-emerald-50 active:scale-90"
+                          )}
+                          disabled={paidToday || isActionPending}
                           onClick={() => { 
-                            setSelectedMemberForPayment(m); 
-                            setPaymentData({
-                                ...INITIAL_PAYMENT_STATE,
-                                amount: currentRound?.monthlyAmount || 0
-                            });
-                            setIsQuickPaymentDialogOpen(true); 
+                            if (!paidToday) {
+                              setSelectedMemberForPayment(m); 
+                              setPaymentData({
+                                  ...INITIAL_PAYMENT_STATE,
+                                  amount: currentRound?.monthlyAmount || 0
+                              });
+                              setIsQuickPaymentDialogOpen(true); 
+                            }
                           }}
                         >
-                          <IndianRupee className="size-4.5" />
+                          {paidToday ? <CheckCircle2 className="size-4.5" /> : <IndianRupee className="size-4.5" />}
                         </Button>
                         <Button 
                           variant="ghost" 
