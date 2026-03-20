@@ -177,12 +177,24 @@ export default function RoundsPage() {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const groupMembers = members.filter(m => m.chitGroup === groupName && m.status !== 'inactive');
     
+    /**
+     * PRODUCTION FIX: DAILY ONLY PENDING LOGIC
+     * Replicates Reports page logic to include only Daily members who are unpaid.
+     */
     return groupMembers.filter(m => {
+      const scheme = chitSchemes.find(r => r.name === m.chitGroup);
+      const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
+      
+      // RULE: Include only Daily members in pending count
+      if (resolvedType !== 'daily') return false;
+
       const hasPaidToday = allPayments.some(p => 
         p.memberId === m.id && 
         (p.status === 'success' || p.status === 'paid') &&
         (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
       );
+      
+      // RULE: Only count as pending if not paid today
       return !hasPaidToday;
     }).length;
   };
@@ -588,7 +600,20 @@ export default function RoundsPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Scheme Amount</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Occupancy</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">{assignedMembers.length} <span className="text-sm font-bold text-muted-foreground">/ {currentRound?.totalMembers}</span></div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Pending Members</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums text-amber-600">{assignedMembers.filter(m => calculateStatus(m).paidToday === false).length}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-2xl">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Pending Members</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-2xl font-black tabular-nums text-amber-600">
+              {assignedMembers.filter(m => {
+                const isDaily = (m.paymentType || currentRound?.collectionType || "").toLowerCase() === 'daily';
+                if (!isDaily) return false;
+                return !calculateStatus(m).paidToday;
+              }).length}
+            </div>
+          </CardContent>
+        </Card>
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-2xl">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Today's Collection</CardTitle>
