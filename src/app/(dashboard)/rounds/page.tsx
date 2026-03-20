@@ -474,7 +474,7 @@ export default function RoundsPage() {
                       <span className="font-bold text-primary">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground font-semibold">Pending Members</span>
+                      <span className="text-amber-600 font-semibold">Pending Members</span>
                       <span className={cn("font-bold text-sm", groupPendingCount > 0 ? "text-destructive" : "text-emerald-600")}>
                         {groupPendingCount}
                       </span>
@@ -591,7 +591,7 @@ export default function RoundsPage() {
                   <Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="800" />
                 </div>
                 <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
+                  <Label className="text-[10px) font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
                   <Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="20" />
                 </div>
                 <div className="grid gap-2">
