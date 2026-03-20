@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2 } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -101,9 +101,6 @@ export default function RoundsPage() {
   
   // Manual Pending Overrides
   const [manualPendingValue, setManualPendingValue] = useState<number>(0)
-  const [isManualPendingEdit, setIsManualPendingEdit] = useState(false)
-  const [manualPendingAmountValue, setManualPendingAmountValue] = useState<number>(0)
-  const [isManualPendingAmountEdit, setIsManualPendingAmountEdit] = useState(false)
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -135,8 +132,7 @@ export default function RoundsPage() {
 
   const getDisplayName = (name: string) => {
     if (!name) return "";
-    const clean = name.replace(/Group/gi, '').trim();
-    return `Group ${clean}`;
+    return name.replace(/Group/gi, '').trim().split(' ')[0] === 'Group' ? name : `Group ${name.replace(/Group/gi, '').trim()}`;
   };
 
   const getGroupTodayCollection = (groupName: string) => {
@@ -220,6 +216,7 @@ export default function RoundsPage() {
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       
+      // PRODUCTION RULE: Deduct oldest pending first (FIFO logic)
       const currentArrears = selectedMemberForPayment.pendingAmount || 0;
       const newArrears = Math.max(0, currentArrears - paymentAmount);
       const newPendingDays = Math.ceil(newArrears / schemeAmount);
@@ -243,37 +240,24 @@ export default function RoundsPage() {
     }
   }
 
-  const handleUpdatePendingDays = async () => {
+  const handleUpdatePendingArrears = async () => {
     if (!db || !selectedPendingMember || isActionPending) return;
     setIsActionPending(true);
     try {
+      const schemeAmount = selectedPendingMember.monthlyAmount || 800;
+      const calculatedAmount = Number(manualPendingValue) * schemeAmount;
+      
       const memberRef = doc(db, 'members', selectedPendingMember.id);
       await updateDoc(memberRef, {
-        pendingDays: Number(manualPendingValue)
+        pendingDays: Number(manualPendingValue),
+        pendingAmount: calculatedAmount
       });
-      await createAuditLog(db, user, `Manually updated pending days for ${selectedPendingMember.name} to ${manualPendingValue}`);
-      toast({ title: "Days Updated", description: "Pending counter adjusted manually." });
-      setIsManualPendingEdit(false);
+      
+      await createAuditLog(db, user, `Manually set pending to ${manualPendingValue} days (₹${calculatedAmount}) for ${selectedPendingMember.name}`);
+      toast({ title: "Arrears Stored", description: "Pending status updated successfully." });
+      setIsPendingDetailsOpen(false);
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update days." });
-    } finally {
-      setIsActionPending(false);
-    }
-  }
-
-  const handleUpdatePendingAmount = async () => {
-    if (!db || !selectedPendingMember || isActionPending) return;
-    setIsActionPending(true);
-    try {
-      const memberRef = doc(db, 'members', selectedPendingMember.id);
-      await updateDoc(memberRef, {
-        pendingAmount: Number(manualPendingAmountValue)
-      });
-      await createAuditLog(db, user, `Manually updated pending amount for ${selectedPendingMember.name} to ₹${manualPendingAmountValue}`);
-      toast({ title: "Arrears Updated", description: "Pending amount adjusted manually." });
-      setIsManualPendingAmountEdit(false);
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update amount." });
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update arrears." });
     } finally {
       setIsActionPending(false);
     }
@@ -444,10 +428,6 @@ export default function RoundsPage() {
                       <span className="font-black tabular-nums">
                         {currentOccupancy} <span className="text-muted-foreground font-medium">/ {group.totalMembers}</span>
                       </span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs pt-1 border-t border-border/40">
-                      <span className="text-muted-foreground font-semibold">Monthly Intake</span>
-                      <span className="font-bold text-emerald-600">₹{monthlyCollection.toLocaleString()}</span>
                     </div>
                   </div>
                   <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
@@ -660,7 +640,6 @@ export default function RoundsPage() {
                         onClick={() => { 
                           setSelectedPendingMember(m); 
                           setManualPendingValue(m.pendingDays || 0);
-                          setManualPendingAmountValue(m.pendingAmount || 0);
                           setIsPendingDetailsOpen(true); 
                         }}
                         className={cn(
@@ -745,13 +724,7 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isPendingDetailsOpen} onOpenChange={(open) => { 
-        setIsPendingDetailsOpen(open); 
-        if (!open) {
-          setIsManualPendingEdit(false);
-          setIsManualPendingAmountEdit(false);
-        }
-      }}>
+      <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
         <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
           {selectedPendingMember && (
             <>
@@ -767,61 +740,35 @@ export default function RoundsPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Total Arrears Amount</span>
-                    {!isManualPendingAmountEdit && (
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-primary/40 hover:bg-primary/10" onClick={() => setIsManualPendingAmountEdit(true)}>
-                        <Pencil className="size-3" />
-                      </Button>
-                    )}
-                  </div>
-                  {!isManualPendingAmountEdit ? (
-                    <span className="text-xl font-black text-destructive tabular-nums tracking-tight">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
-                  ) : (
-                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <div className="relative flex-1">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground">₹</span>
-                        <Input 
-                          type="number" 
-                          value={manualPendingAmountValue} 
-                          onChange={e => setManualPendingAmountValue(Number(e.target.value))}
-                          className="h-8 pl-5 font-bold text-xs"
-                        />
-                      </div>
-                      <Button size="sm" className="h-8 px-3 text-[10px] font-bold" onClick={handleUpdatePendingAmount} disabled={isActionPending}>Save</Button>
-                      <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setIsManualPendingAmountEdit(false)}>X</Button>
-                    </div>
-                  )}
+                  <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Missed Installments (Days)</span>
+                  <Input 
+                    type="number" 
+                    value={manualPendingValue} 
+                    onChange={e => setManualPendingValue(Number(e.target.value))}
+                    className="h-10 font-bold text-sm"
+                    placeholder="Enter pending days"
+                  />
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Missed Installments (Days)</span>
-                    {!isManualPendingEdit && (
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-primary/40 hover:bg-primary/10" onClick={() => setIsManualPendingEdit(true)}>
-                        <Pencil className="size-3" />
-                      </Button>
-                    )}
+                <div className="flex flex-col gap-1 pt-2">
+                  <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Calculated Pending Amount</span>
+                  <div className="p-4 bg-destructive/5 rounded-xl border border-dashed border-destructive/20 text-center">
+                    <span className="text-2xl font-black text-destructive tabular-nums tracking-tight">
+                      ₹{(Number(manualPendingValue) * (selectedPendingMember.monthlyAmount || 800)).toLocaleString()}
+                    </span>
                   </div>
-                  {!isManualPendingEdit ? (
-                    <span className="text-base font-bold tabular-nums">{selectedPendingMember.pendingDays}</span>
-                  ) : (
-                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <Input 
-                        type="number" 
-                        value={manualPendingValue} 
-                        onChange={e => setManualPendingValue(Number(e.target.value))}
-                        className="h-8 w-20 font-bold text-xs"
-                      />
-                      <Button size="sm" className="h-8 px-3 text-[10px] font-bold" onClick={handleUpdatePendingDays} disabled={isActionPending}>Set</Button>
-                      <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setIsManualPendingEdit(false)}>X</Button>
-                    </div>
-                  )}
                 </div>
               </div>
               
               <DialogFooter className="p-5 pt-0">
-                <Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full h-10 font-black uppercase tracking-widest text-[10px] rounded-xl active:scale-95 transition-all shadow-md">Close Details</Button>
+                <Button 
+                  onClick={handleUpdatePendingArrears} 
+                  disabled={isActionPending}
+                  className="w-full h-11 font-black uppercase tracking-widest text-[10px] rounded-xl active:scale-95 transition-all shadow-md"
+                >
+                  {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}
+                  Update Arrears
+                </Button>
               </DialogFooter>
             </>
           )}
