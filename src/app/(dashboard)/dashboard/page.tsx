@@ -2,7 +2,7 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
-import { Users, IndianRupee, Clock, CheckCircle2, Loader2, Info, ArrowRight, FolderKanban, User, CalendarDays } from "lucide-react"
+import { Users, IndianRupee, Clock, CheckCircle2, Loader2, Info, ArrowRight, FolderKanban, User, CalendarDays, RefreshCcw, LayoutDashboard, ShieldCheck } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
   Table,
@@ -38,7 +38,6 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
   const [revenueView, setRevenueView] = useState<'month' | 'today'>('month')
   
-  // Dialog States
   const [selectedGroup, setSelectedGroup] = useState<any>(null)
   const [isGroupDetailOpen, setIsGroupDetailOpen] = useState(false)
   const [selectedMemberDebt, setSelectedMemberDebt] = useState<any>(null)
@@ -65,7 +64,6 @@ export default function DashboardPage() {
     const now = new Date()
     const todayStr = format(now, 'yyyy-MM-dd')
 
-    // Revenue calculations
     const currentMonthPayments = (payments || []).filter(p => {
       if (!p.paymentDate) return false;
       try {
@@ -90,7 +88,6 @@ export default function DashboardPage() {
       }
     }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
-    // Today Pending Logic (Reuse Group Logic: Daily only, no payment today)
     const pendingMembersList = (members || []).filter(m => {
         if (m.status === 'inactive') return false;
         const scheme = (rounds || []).find(r => r.name === m.chitGroup);
@@ -105,7 +102,6 @@ export default function DashboardPage() {
         return !hasPaidToday;
     });
 
-    // 4-Group Logic (Group A, B, C, D cards)
     const fixedGroupNames = ['A', 'B', 'C', 'D'];
     const schemeSummaries = fixedGroupNames.map(name => {
       const schemeInfo = (rounds || []).find(r => r.name === name) || { name, collectionType: 'Daily', monthlyAmount: 800 };
@@ -151,93 +147,106 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-10 overflow-x-hidden">
-      <div className="flex flex-col gap-1.5">
-        <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight">Financial Command Center</h2>
-        <p className="text-sm sm:text-base text-muted-foreground">Real-time health monitoring for Groups A, B, C, and D.</p>
+    <div className="space-y-10 animate-in fade-in duration-700 pb-10 overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-primary font-headline uppercase">Financial Command Center</h2>
+          <p className="text-sm sm:text-base text-muted-foreground font-medium flex items-center gap-2">
+            <ShieldCheck className="size-4 text-primary" /> Real-time monitoring for Groups A, B, C, and D.
+          </p>
+        </div>
+        <Button variant="outline" className="font-bold gap-2 h-11 px-6 shadow-sm border-border/60 hover:bg-muted/50 transition-all active:scale-95">
+          <RefreshCcw className="size-4 text-primary" /> Sync Status
+        </Button>
       </div>
 
-      {/* Main Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="hover:shadow-md transition-shadow duration-200 border-border/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Active Seats</CardTitle>
-            <Users className="size-4 text-primary" />
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <Card className="hover:shadow-xl transition-all duration-300 border-border/60 rounded-2xl bg-card shadow-sm group">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 p-6">
+            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Total Active Seats</CardTitle>
+            <div className="h-10 w-10 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
+               <Users className="size-5" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl sm:text-3xl font-bold">{activeMembersCount}</div>
-            <p className="text-[10px] text-muted-foreground mt-1 font-medium italic">Verified participants</p>
+          <CardContent className="p-6 pt-0">
+            <div className="text-4xl font-black tracking-tighter tabular-nums mb-1">{activeMembersCount}</div>
+            <div className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1.5 mt-2">
+               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Verified participants
+            </div>
           </CardContent>
         </Card>
         
-        <Card className="hover:shadow-md transition-shadow duration-200 border-border/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Collections</CardTitle>
-            <div className="flex items-center gap-2">
-              <Select value={revenueView} onValueChange={(v: any) => setRevenueView(v)}>
-                <SelectTrigger className="h-7 w-fit min-w-[90px] text-[10px] font-bold border-none bg-muted/50 focus:ring-0 shadow-none px-2">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="month" className="text-[10px] font-bold">This Month</SelectItem>
-                  <SelectItem value="today" className="text-[10px] font-bold">Today</SelectItem>
-                </SelectContent>
-              </Select>
-              <IndianRupee className="size-4 text-emerald-600" />
-            </div>
+        <Card className="hover:shadow-xl transition-all duration-300 border-border/60 rounded-2xl bg-card shadow-sm group">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 p-6">
+            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Group Collections</CardTitle>
+            <Select value={revenueView} onValueChange={(v: any) => setRevenueView(v)}>
+              <SelectTrigger className="h-8 w-fit min-w-[100px] text-[10px] font-black border-none bg-muted/50 focus:ring-0 shadow-none px-3 rounded-lg">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month" className="text-[10px] font-black uppercase">Month Cycle</SelectItem>
+                <SelectItem value="today" className="text-[10px] font-black uppercase">Captured Today</SelectItem>
+              </SelectContent>
+            </Select>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl sm:text-3xl font-bold text-primary">
+          <CardContent className="p-6 pt-0">
+            <div className="text-4xl font-black tracking-tighter text-primary tabular-nums mb-1">
               ₹{(revenueView === 'month' ? collectedThisMonth : collectedToday).toLocaleString()}
             </div>
-            <p className="text-[10px] text-muted-foreground font-medium mt-1 italic">
-              {revenueView === 'month' ? 'Total Revenue (Cycle)' : 'Captured Today'}
-            </p>
+            <div className="text-[11px] text-muted-foreground font-semibold mt-2 flex items-center gap-1.5">
+               <IndianRupee className="size-3.5 text-emerald-600" /> {revenueView === 'month' ? 'Total Period Revenue' : 'Real-time Daily Intake'}
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow duration-200 border-border/50 border-l-4 border-l-destructive">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-destructive">Unpaid Today</CardTitle>
-            <Clock className="size-4 text-destructive" />
+        <Card className="hover:shadow-xl transition-all duration-300 border-border/60 rounded-2xl bg-card shadow-sm group border-l-4 border-l-destructive">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 p-6">
+            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-destructive/70">Today Arrears</CardTitle>
+            <div className="h-10 w-10 rounded-xl bg-destructive/5 flex items-center justify-center text-destructive group-hover:bg-destructive group-hover:text-destructive-foreground transition-all duration-300">
+               <Clock className="size-5" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl sm:text-3xl font-bold text-destructive">{pendingMembersList.length}</div>
-            <p className="text-[10px] text-muted-foreground mt-1 font-medium italic">Daily members with no transaction</p>
+          <CardContent className="p-6 pt-0">
+            <div className="text-4xl font-black tracking-tighter text-destructive tabular-nums mb-1">{pendingMembersList.length}</div>
+            <div className="text-[11px] text-muted-foreground font-semibold mt-2 flex items-center gap-1.5 italic">
+               Unpaid Daily Installments
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Schemes Overview (Group A, B, C, D cards) 🗂️ */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 border-l-4 border-primary pl-3 py-1">
-          <h3 className="text-lg font-bold tracking-tight font-headline">🗂️ Schemes Monitor (4-Group System)</h3>
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 border-l-4 border-primary pl-4 py-1.5">
+          <LayoutDashboard className="size-5 text-primary" />
+          <h3 className="text-xl font-black tracking-tight font-headline uppercase text-foreground/80">Schemes Monitor Board</h3>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {schemeSummaries.map((scheme, i) => (
             <Card 
               key={i} 
-              className="group cursor-pointer hover:border-primary/50 transition-all border-border/50 overflow-hidden relative shadow-sm"
+              className="group cursor-pointer hover:border-primary hover:shadow-xl transition-all border-border/60 overflow-hidden relative shadow-sm rounded-2xl"
               onClick={() => handleGroupClick(scheme)}
             >
-              <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowRight className="size-3 text-primary" />
+              <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="size-4 text-primary" />
               </div>
-              <CardHeader className="p-4 pb-2 bg-muted/10">
-                <CardTitle className="text-[10px] font-bold uppercase text-muted-foreground tracking-[0.2em] truncate">Group {scheme.name}</CardTitle>
+              <CardHeader className="p-5 pb-2 bg-muted/10 border-b border-border/40">
+                <CardTitle className="text-[11px] font-black uppercase text-muted-foreground tracking-[0.3em] truncate">Group {scheme.name}</CardTitle>
               </CardHeader>
-              <CardContent className="p-4">
+              <CardContent className="p-5">
                 <div className="flex items-end justify-between">
                   <div>
                     <div className={cn(
-                      "text-2xl font-bold tabular-nums transition-colors flex items-center gap-2",
+                      "text-3xl font-black tabular-nums transition-colors flex items-center gap-3 mb-1",
                       scheme.totalPendingDays > 0 ? "text-destructive" : "text-emerald-600"
                     )}>
-                      <Clock className="size-4 opacity-50" /> {scheme.totalPendingDays}
+                      {scheme.totalPendingDays}
                     </div>
-                    <p className="text-[9px] font-bold uppercase tracking-tight text-muted-foreground">⏳ Pending Dates</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1.5">
+                      <Clock className="size-3" /> Pending Dates
+                    </p>
                   </div>
-                  <div className="text-[10px] font-bold text-muted-foreground/50">{scheme.memberCount} Members</div>
+                  <div className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-widest">{scheme.memberCount} Seats</div>
                 </div>
               </CardContent>
             </Card>
@@ -245,57 +254,58 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Latest Collections Log */}
-        <Card className="border-border/50 overflow-hidden shadow-sm lg:col-span-2">
-          <CardHeader className="bg-muted/10">
-            <CardTitle className="flex items-center gap-2 text-lg font-bold">
-               <CheckCircle2 className="size-5 text-emerald-500" />
+      <Card className="border-border/60 overflow-hidden shadow-sm rounded-2xl border bg-card">
+        <CardHeader className="bg-muted/20 p-6 flex flex-row items-center justify-between border-b border-border/50">
+          <div className="space-y-1">
+            <CardTitle className="flex items-center gap-2 text-xl font-black tracking-tight uppercase">
+               <CheckCircle2 className="size-6 text-emerald-500" />
                Recent Transactions
             </CardTitle>
-            <CardDescription className="text-xs">Audit log of latest verified payments.</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-             {recentPaymentsList.length > 0 ? (
-               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                 {recentPaymentsList.map((payment, i) => (
-                   <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50">
-                      <div className="flex flex-col min-w-0">
-                         <span className="font-bold text-sm truncate">{payment.memberName}</span>
-                         <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter">
-                            {payment.paymentDate ? format(parseISO(payment.paymentDate), 'MMM dd') : '-'}
-                         </span>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <span className="font-bold text-emerald-600 text-sm tabular-nums">₹{payment.amountPaid?.toLocaleString()}</span>
-                        <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-tight">{payment.method}</span>
-                      </div>
-                   </div>
-                 ))}
-               </div>
-             ) : (
-               <div className="h-[100px] flex items-center justify-center text-muted-foreground italic text-xs">
-                 No transactions captured in this session.
-               </div>
-             )}
-          </CardContent>
-        </Card>
-      </div>
+            <CardDescription className="text-xs font-medium">Verified automated collection logs.</CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" className="text-[10px] font-black uppercase tracking-widest hover:bg-muted">View Ledger</Button>
+        </CardHeader>
+        <CardContent className="p-6">
+           {recentPaymentsList.length > 0 ? (
+             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+               {recentPaymentsList.map((payment, i) => (
+                 <div key={i} className="flex flex-col p-5 rounded-2xl bg-muted/20 hover:bg-muted/40 transition-all border border-transparent hover:border-border/60 group">
+                    <div className="flex items-center justify-between mb-3">
+                      <Badge className="bg-emerald-100 text-emerald-700 border-none text-[9px] font-black uppercase tracking-widest">Verified</Badge>
+                      <span className="text-[10px] text-muted-foreground font-bold tabular-nums">
+                        {payment.paymentDate ? format(parseISO(payment.paymentDate), 'HH:mm a') : '-'}
+                      </span>
+                    </div>
+                    <span className="font-bold text-base truncate mb-1">{payment.memberName}</span>
+                    <div className="flex items-center justify-between mt-auto">
+                      <span className="text-lg font-black text-emerald-600 tabular-nums">₹{payment.amountPaid?.toLocaleString()}</span>
+                      <span className="text-[10px] uppercase font-black text-muted-foreground/50 tracking-widest">{payment.method}</span>
+                    </div>
+                 </div>
+               ))}
+             </div>
+           ) : (
+             <div className="h-[120px] flex items-center justify-center text-muted-foreground italic text-xs font-medium border-2 border-dashed rounded-2xl">
+               No transaction logs captured in this session.
+             </div>
+           )}
+        </CardContent>
+      </Card>
 
       {/* GROUP DETAIL DIALOG */}
       <Dialog open={isGroupDetailOpen} onOpenChange={setIsGroupDetailOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-[650px] max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-2xl">
           {selectedGroup && (
             <>
-              <DialogHeader className="p-6 border-b bg-muted/10">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
-                    <FolderKanban className="size-5" />
+              <DialogHeader className="p-6 border-b bg-muted/10 space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black shadow-inner">
+                    <FolderKanban className="size-6" />
                   </div>
                   <div>
-                    <DialogTitle className="text-xl">Group {selectedGroup.name} Registry</DialogTitle>
-                    <DialogDescription className="text-xs font-bold uppercase tracking-widest text-primary/70">
-                      Isolated member list for this scheme
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">Group {selectedGroup.name} Registry</DialogTitle>
+                    <DialogDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70 mt-1">
+                      Automated Isolated Member Board
                     </DialogDescription>
                   </div>
                 </div>
@@ -304,10 +314,10 @@ export default function DashboardPage() {
               <div className="flex-1 overflow-y-auto">
                 <Table>
                   <TableHeader className="bg-muted/30 sticky top-0 z-10">
-                    <TableRow>
-                      <TableHead className="text-[10px] uppercase font-bold tracking-widest pl-6">Participant</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold tracking-widest">Payment Status</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold tracking-widest text-center">⏳ Pending Days</TableHead>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] pl-8 h-12">Participant</TableHead>
+                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Cycle Status</TableHead>
+                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] text-center h-12">Pending Count</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -319,38 +329,38 @@ export default function DashboardPage() {
                       );
 
                       return (
-                        <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
-                          <TableCell className="pl-6 py-4">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-bold">{m.name}</span>
-                              <span className="text-[10px] text-muted-foreground">{m.phone}</span>
+                        <TableRow key={m.id} className="hover:bg-muted/10 transition-colors border-b last:border-none">
+                          <TableCell className="pl-8 py-5">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-sm font-bold tracking-tight">{m.name}</span>
+                              <span className="text-[10px] font-bold text-muted-foreground tracking-widest tabular-nums uppercase">{m.phone}</span>
                             </div>
                           </TableCell>
                           <TableCell>
                             <Badge variant={isPaidToday ? "default" : "secondary"} className={cn(
-                              "text-[8px] font-bold uppercase px-2",
+                              "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
                               isPaidToday ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
                             )}>
-                              {isPaidToday ? "PAID TODAY" : "UNPAID"}
+                              {isPaidToday ? "SUCCESS" : "UNPAID"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center pr-8">
                             <button 
                               className={cn(
-                                "inline-flex items-center justify-center px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all active:scale-95",
-                                m.pendingDays > 0 ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                "inline-flex items-center justify-center px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-90 shadow-sm border",
+                                m.pendingDays > 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
                               )}
                               onClick={() => handleMemberArrearsClick(m)}
                             >
-                              ⏳ {m.pendingDays || 0}
+                              ⏳ {m.pendingDays || 0} Dates
                             </button>
                           </TableCell>
                         </TableRow>
                       );
                     }) : (
                       <TableRow>
-                        <TableCell colSpan={3} className="h-32 text-center text-muted-foreground italic text-xs">
-                          No active members in this group.
+                        <TableCell colSpan={3} className="h-48 text-center text-muted-foreground italic text-xs font-bold uppercase tracking-widest">
+                          No board participants available.
                         </TableCell>
                       </TableRow>
                     )}
@@ -359,7 +369,7 @@ export default function DashboardPage() {
               </div>
 
               <DialogFooter className="p-4 border-t bg-muted/5">
-                <Button onClick={() => setIsGroupDetailOpen(false)} className="w-full font-bold uppercase tracking-widest h-10">Close Registry</Button>
+                <Button onClick={() => setIsGroupDetailOpen(false)} className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all">Close Board Registry</Button>
               </DialogFooter>
             </>
           )}
@@ -368,60 +378,61 @@ export default function DashboardPage() {
 
       {/* MEMBER ARREARS POPUP 💬 */}
       <Dialog open={isMemberArrearsOpen} onOpenChange={setIsMemberArrearsOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[420px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
           {selectedMemberDebt && (
             <>
-              <DialogHeader>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
-                    <User className="size-5" />
+              <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center font-black shadow-inner">
+                    <User className="size-7" />
                   </div>
-                  <div>
-                    <DialogTitle className="text-lg">💬 Arrears Summary</DialogTitle>
-                    <DialogDescription className="text-xs font-bold text-muted-foreground">
-                      Financial audit for {selectedMemberDebt.name}
+                  <div className="space-y-0.5">
+                    <DialogTitle className="text-xl font-black uppercase tracking-tight">Arrears Summary</DialogTitle>
+                    <DialogDescription className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">
+                      Financial Audit: {selectedMemberDebt.name}
                     </DialogDescription>
                   </div>
                 </div>
               </DialogHeader>
               
-              <div className="py-6 space-y-5">
-                <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-dashed border-border/50 text-center relative overflow-hidden">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1">Current Pending Amount</p>
-                  <div className="text-4xl font-bold text-destructive tabular-nums">
+              <div className="p-6 space-y-6 bg-background">
+                <div className="flex flex-col items-center justify-center p-8 bg-destructive/5 rounded-3xl border border-dashed border-destructive/20 text-center relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-destructive/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-destructive/60 mb-3 relative z-10">Current Currency Deficit</p>
+                  <div className="text-5xl font-black text-destructive tabular-nums tracking-tighter relative z-10 mb-4">
                     ₹{(selectedMemberDebt.pendingAmount || 0).toLocaleString()}
                   </div>
-                  <div className="mt-3 px-3 py-1 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                  <Badge className="bg-destructive text-destructive-foreground px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-destructive/20 relative z-10">
                     ⏳ {selectedMemberDebt.pendingDays || 0} Missed Installments
-                  </div>
+                  </Badge>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                   <div className="p-3 bg-muted/20 rounded-xl border border-transparent">
-                      <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-tighter mb-0.5">Scheme Unit</p>
-                      <p className="text-sm font-bold">₹{(selectedMemberDebt.monthlyAmount || 800).toLocaleString()}</p>
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="p-4 bg-muted/30 rounded-2xl border border-border/40">
+                      <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest mb-1.5">Scheme Unit</p>
+                      <p className="text-lg font-black tracking-tight">₹{(selectedMemberDebt.monthlyAmount || 800).toLocaleString()}</p>
                    </div>
-                   <div className="p-3 bg-muted/20 rounded-xl border border-transparent">
-                      <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-tighter mb-0.5">Last Sync</p>
-                      <div className="flex items-center gap-1.5">
-                        <CalendarDays className="size-3 text-primary opacity-50" />
-                        <p className="text-sm font-bold">
+                   <div className="p-4 bg-muted/30 rounded-2xl border border-border/40">
+                      <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest mb-1.5">Last Sync</p>
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="size-4 text-primary opacity-60" />
+                        <p className="text-sm font-bold tracking-tight">
                           {selectedMemberDebt.lastPendingUpdateDate ? format(parseISO(selectedMemberDebt.lastPendingUpdateDate), 'dd MMM yyyy') : '-'}
                         </p>
                       </div>
                    </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-start gap-3">
-                  <Info className="size-4 text-primary shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-muted-foreground leading-relaxed italic">
-                    Pending amounts and dates are automatically aged daily at 10 PM. This reflects the total currency deficit up to the last reconciliation cycle.
+                <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-4">
+                  <Info className="size-5 text-primary shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed italic font-medium">
+                    Debt aging is automated daily at 10 PM. This reflects the precise currency arrears identified during the last reconciliation cycle.
                   </p>
                 </div>
               </div>
               
-              <DialogFooter>
-                <Button onClick={() => setIsMemberArrearsOpen(false)} className="w-full font-bold uppercase tracking-widest h-10">Close Details</Button>
+              <DialogFooter className="p-6 pt-0 bg-background">
+                <Button onClick={() => setIsMemberArrearsOpen(false)} className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all shadow-lg">Close Audit</Button>
               </DialogFooter>
             </>
           )}

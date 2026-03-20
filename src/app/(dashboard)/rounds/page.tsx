@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2 } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -142,22 +142,14 @@ export default function RoundsPage() {
         createdAt: serverTimestamp()
       });
 
-      // Update Member Balance
-      // Priority Rule: Payment first clears existing pendingAmount (Yesterday's debt)
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       const currentArrears = selectedMemberForPayment.pendingAmount || 0;
-      
-      // Calculate remaining debt after this payment
       const newArrears = Math.max(0, currentArrears - paymentAmount);
       
-      // Auto-clear pendingDays logic:
-      // If payment settles a full unit of schemeAmount debt, decrement days.
-      // If arrears become 0, pendingDays becomes 0.
       let newPendingDays = selectedMemberForPayment.pendingDays || 0;
       if (newArrears === 0) {
         newPendingDays = 0;
       } else if (newArrears < currentArrears) {
-        // Reduced debt by one scheme amount unit
         newPendingDays = Math.max(0, newPendingDays - 1);
       }
 
@@ -172,7 +164,7 @@ export default function RoundsPage() {
 
       setPaymentData(INITIAL_PAYMENT_STATE);
       setIsQuickPaymentDialogOpen(false);
-      toast({ title: "Payment Recorded", description: "Arrears updated. Daily aging happens at 10 PM." });
+      toast({ title: "Payment Recorded", description: "Arrears updated." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
@@ -245,58 +237,105 @@ export default function RoundsPage() {
 
   if (!selectedChitId) {
     return (
-      <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Seat Reservations</h2>
-            <p className="text-sm text-muted-foreground">Manage schemes and seat availability.</p>
+      <div className="space-y-8 animate-in fade-in duration-500 pb-10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary font-headline">Seat Reservations</h2>
+            <p className="text-sm text-muted-foreground font-medium">Manage schemes and seat availability.</p>
           </div>
-          <Button onClick={() => setIsAddChitDialogOpen(true)} className="font-bold gap-2">
-            <Plus className="size-4" /> Add Scheme
+          <Button onClick={() => setIsAddChitDialogOpen(true)} className="font-bold gap-2 px-6 h-11 shadow-lg bg-primary hover:bg-primary/90 transition-all active:scale-95">
+            <Plus className="size-5" /> Add Scheme
           </Button>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {chitSchemes.map((group) => (
-            <Card key={group.id} className="hover:shadow-md transition-all border-border/50 overflow-hidden flex flex-col">
-              <CardHeader className="bg-muted/20 p-4 space-y-2">
-                <Badge variant="outline" className="text-[10px] font-bold uppercase w-fit">{group.collectionType}</Badge>
-                <CardTitle className="text-lg truncate font-bold">{group.name}</CardTitle>
-                <CardDescription className="text-xs">Capacity: {group.totalMembers} Seats</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 flex-1 space-y-3">
-                <div className="flex justify-between text-xs font-bold">
-                  <span className="text-muted-foreground">Scheme Amount:</span>
-                  <span className="text-primary">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-xs font-bold">
-                  <span className="text-muted-foreground">Occupancy:</span>
-                  <span>{(members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length} / {group.totalMembers}</span>
-                </div>
-              </CardContent>
-              <CardFooter className="p-0 border-t">
-                <Button variant="ghost" className="w-full h-10 rounded-none text-xs font-bold" onClick={() => setSelectedChitId(group.id)}>View Board</Button>
-              </CardFooter>
-            </Card>
-          ))}
+
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {chitSchemes.map((group) => {
+            const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
+            return (
+              <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
+                <CardHeader className="bg-muted/30 p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-background border-primary/20 text-primary">
+                      {group.collectionType}
+                    </Badge>
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                      <Users className="size-3" /> {group.totalMembers} Seats
+                    </div>
+                  </div>
+                  <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">{group.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 flex-1 space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground font-semibold">Scheme Amount</span>
+                      <span className="font-bold text-primary text-sm">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground font-semibold">Occupancy</span>
+                      <span className="font-black tabular-nums">
+                        {currentOccupancy} <span className="text-muted-foreground font-medium">/ {group.totalMembers}</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-primary h-full transition-all duration-500" 
+                      style={{ width: `${(currentOccupancy / group.totalMembers) * 100}%` }}
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter className="p-4 bg-muted/10 border-t border-border/50">
+                  <Button 
+                    variant="ghost" 
+                    className="w-full h-10 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition-all rounded-xl"
+                    onClick={() => setSelectedChitId(group.id)}
+                  >
+                    View Board
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
         </div>
 
         <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleAddChit}>
-              <DialogHeader><DialogTitle>New Scheme</DialogTitle><DialogDescription>Define a new chit fund scheme.</DialogDescription></DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2"><Label>Name</Label><Input value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required /></div>
-                <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required /></div>
-                <div className="grid gap-2"><Label>Max Members</Label><Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required /></div>
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold">New Scheme</DialogTitle>
+                <DialogDescription className="font-medium">Define a new chit fund scheme parameters.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-5 py-6">
                 <div className="grid gap-2">
-                  <Label>Collection Type</Label>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Scheme Name</Label>
+                  <Input value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required className="h-11 rounded-xl" placeholder="e.g. Group A" />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label>
+                  <Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="800" />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
+                  <Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="20" />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
                   <Select value={newChit.collectionType} onValueChange={(v) => setNewChit({...newChit, collectionType: v})}>
-                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                    <SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent>
+                    <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select frequency" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Daily">Daily</SelectItem>
+                      <SelectItem value="Monthly">Monthly</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
               </div>
-              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full font-bold">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Create Scheme</Button></DialogFooter>
+              <DialogFooter>
+                <Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold text-base shadow-lg active:scale-[0.98] transition-all">
+                  {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}
+                  Create Scheme
+                </Button>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
@@ -305,34 +344,54 @@ export default function RoundsPage() {
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-9 w-9"><ChevronLeft className="size-5" /></Button>
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-10 w-10 shadow-sm hover:shadow-md transition-all active:scale-95"><ChevronLeft className="size-5" /></Button>
           <div className="min-w-0">
-            <h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight text-primary">{currentRound?.name}</h2>
-            <p className="text-[10px] uppercase font-bold tracking-tight text-muted-foreground">Board Registry</p>
+            <div className="flex items-center gap-2 mb-1">
+              <h2 className="text-xl sm:text-2xl font-black truncate tracking-tight text-primary font-headline uppercase">{currentRound?.name}</h2>
+              <Badge variant="secondary" className="text-[9px] font-black tracking-tighter bg-primary/10 text-primary border-none">{currentRound?.collectionType}</Badge>
+            </div>
+            <p className="text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 flex items-center gap-1.5">
+              <LayoutDashboard className="size-3" /> Management Board Registry
+            </p>
           </div>
         </div>
-        <Button onClick={() => setIsAddMemberDialogOpen(true)} className="font-bold gap-2"><UserPlus className="size-4" /> Add Participant</Button>
+        <div className="flex items-center gap-3">
+           <Button variant="outline" className="font-bold gap-2 h-11 px-4 shadow-sm border-border/60 hover:bg-muted/50">
+             <RefreshCcw className="size-4 text-muted-foreground" /> Sync Pending
+           </Button>
+           <Button onClick={() => setIsAddMemberDialogOpen(true)} className="font-bold gap-2 h-11 px-6 shadow-lg active:scale-95 transition-all">
+             <UserPlus className="size-5" /> Add Member
+           </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-sm border-l-4 border-l-primary/40"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Type</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{currentRound?.collectionType}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-primary"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Seats</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-amber-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Scheme Base</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-amber-600">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-emerald-500"><CardHeader className="p-3 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Group Total</CardTitle></CardHeader><CardContent className="p-3 pt-0"><div className="text-lg font-bold text-emerald-600">₹{assignedMembers.reduce((acc, m) => acc + (m.totalPaid || 0), 0).toLocaleString()}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-widest">Base Scheme</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-widest">Occupancy</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">{assignedMembers.length} <span className="text-sm font-bold text-muted-foreground">/ {currentRound?.totalMembers}</span></div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-widest">Pending Count</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums text-amber-600">{assignedMembers.filter(m => calculateStatus(m).paidToday === false).length}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-widest">Board Revenue</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums text-emerald-600">₹{assignedMembers.reduce((acc, m) => acc + (m.totalPaid || 0), 0).toLocaleString()}</div></CardContent></Card>
       </div>
 
-      <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-        <div className="p-4 border-b bg-muted/20 flex justify-between items-center"><h3 className="text-sm font-bold flex items-center gap-2 tracking-tight"><Users className="size-4 text-primary" /> Active Board</h3></div>
+      <div className="rounded-2xl border bg-card shadow-sm overflow-hidden border-border/60">
+        <div className="p-5 border-b bg-muted/30 flex justify-between items-center">
+          <h3 className="text-sm font-bold flex items-center gap-2 tracking-tight text-foreground/80 uppercase">
+            <Users className="size-4 text-primary" /> Current Active Board
+          </h3>
+          <div className="relative w-full max-w-[240px]">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+             <Input placeholder="Search board..." className="h-8 pl-9 text-xs border-none bg-background/80" />
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30 hover:bg-muted/30">
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider pl-6">Member</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Pending Dates</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
+            <TableHeader className="bg-muted/10">
+              <TableRow className="hover:bg-transparent border-b">
+                <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 pl-6 text-muted-foreground/70">Member Participant</TableHead>
+                <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 text-muted-foreground/70">📅 Pending Dates</TableHead>
+                <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 text-muted-foreground/70">Status Indicator</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
             </TableHeader>
@@ -343,13 +402,15 @@ export default function RoundsPage() {
                 const pDays = m.pendingDays || 0;
                 
                 return (
-                  <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
-                    <TableCell className="pl-6">
-                      <div className="flex items-center gap-2 cursor-pointer group" onClick={() => { setSelectedProfileMember(m); setIsMemberProfileDialogOpen(true); }}>
-                        <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">{m.name.split(' ').map((n: string) => n[0]).join('')}</div>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-semibold group-hover:text-primary transition-colors">{m.name}</span>
-                          <span className="text-[9px] font-bold text-muted-foreground uppercase">{m.phone}</span>
+                  <TableRow key={m.id} className="hover:bg-muted/5 transition-colors group">
+                    <TableCell className="pl-6 py-4">
+                      <div className="flex items-center gap-4 cursor-pointer" onClick={() => { setSelectedProfileMember(m); setIsMemberProfileDialogOpen(true); }}>
+                        <div className="h-10 w-10 rounded-xl bg-secondary text-primary flex items-center justify-center font-black text-xs group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300 shadow-sm uppercase">
+                          {m.name.split(' ').map((n: string) => n[0]).join('')}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-bold truncate group-hover:text-primary transition-colors tracking-tight">{m.name}</span>
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest tabular-nums">{m.phone}</span>
                         </div>
                       </div>
                     </TableCell>
@@ -357,41 +418,44 @@ export default function RoundsPage() {
                       <button 
                         onClick={() => { setSelectedPendingMember(m); setIsPendingDetailsOpen(true); }}
                         className={cn(
-                          "px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums transition-colors",
-                          pDays > 0 ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "bg-muted text-muted-foreground"
+                          "px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest tabular-nums transition-all active:scale-95 shadow-sm border",
+                          pDays > 0 ? "bg-destructive/5 text-destructive border-destructive/20 hover:bg-destructive/10" : "bg-muted/50 text-muted-foreground/60 border-transparent"
                         )}
                       >
                         ⏳ {pDays} {pDays === 1 ? 'Date' : 'Dates'}
                       </button>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={paidToday ? 'default' : 'secondary'} className={cn("text-[8px] font-bold uppercase", paidToday ? "bg-emerald-500" : (isDaily ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"))}>
-                        {paidToday ? 'paid' : (isDaily ? 'pending' : 'Due (Month End)')}
+                      <Badge variant={paidToday ? 'default' : 'secondary'} className={cn(
+                        "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
+                        paidToday ? "bg-emerald-500 hover:bg-emerald-600" : (isDaily ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700")
+                      )}>
+                        {paidToday ? 'success' : (isDaily ? 'pending' : 'Due Cycle')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right pr-6">
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex items-center justify-end gap-1.5">
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="h-8 w-8 text-emerald-600" 
+                          className="h-9 w-9 text-emerald-600 hover:bg-emerald-50 rounded-xl active:scale-90" 
                           onClick={() => { setSelectedMemberForPayment(m); setIsQuickPaymentDialogOpen(true); }}
                         >
-                          <IndianRupee className="size-4" />
+                          <IndianRupee className="size-4.5" />
                         </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="h-8 w-8 text-muted-foreground" 
+                          className="h-9 w-9 text-muted-foreground hover:bg-muted/50 rounded-xl active:scale-90" 
                           onClick={() => { setHistoryMember(m); setIsHistoryDialogOpen(true); }}
                         >
-                          <History className="size-4" />
+                          <History className="size-4.5" />
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
                 )
-              }) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-xs text-muted-foreground italic">No participants found.</TableCell></TableRow>}
+              }) : <TableRow><TableCell colSpan={4} className="h-48 text-center text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60 font-bold italic">No participant records located on this board.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
@@ -401,28 +465,31 @@ export default function RoundsPage() {
         <DialogContent className="sm:max-w-[400px]">
           {selectedPendingMember && (
             <>
-              <DialogHeader><DialogTitle>💬 Pending Arrears</DialogTitle></DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="p-4 bg-muted/30 rounded-xl space-y-3">
-                   <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground font-medium">Member</span>
-                      <span className="font-bold">{selectedPendingMember.name}</span>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">💬 Pending Arrears</DialogTitle>
+                <DialogDescription className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Financial deficit summary</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-5 py-4">
+                <div className="p-5 bg-muted/40 rounded-2xl space-y-4 border border-border/50 shadow-inner">
+                   <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground font-bold uppercase tracking-widest">Member</span>
+                      <span className="font-bold text-foreground">{selectedPendingMember.name}</span>
                    </div>
-                   <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground font-medium">Missed Installments</span>
-                      <span className="font-bold">{selectedPendingMember.pendingDays} Dates</span>
+                   <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground font-bold uppercase tracking-widest">Missed Count</span>
+                      <span className="font-black tabular-nums">{selectedPendingMember.pendingDays} Installments</span>
                    </div>
-                   <div className="flex justify-between items-center pt-2 border-t">
-                      <span className="text-xs font-bold uppercase text-destructive tracking-widest">Total Pending Amount</span>
-                      <span className="text-lg font-bold text-destructive">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
+                   <div className="pt-4 border-t border-border/50 flex flex-col items-center justify-center">
+                      <span className="text-[9px] font-black uppercase text-destructive tracking-[0.3em] mb-2">Total Arrears Amount</span>
+                      <span className="text-3xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
                    </div>
                 </div>
-                <div className="p-3 bg-primary/5 rounded-lg border border-primary/10">
-                   <p className="text-[10px] text-primary font-bold uppercase tracking-wider mb-1">Production Policy</p>
-                   <p className="text-xs text-muted-foreground leading-relaxed italic">Arrears are aged daily at 10 PM. Payments first clear previous debt before applying to current cycle.</p>
+                <div className="p-4 bg-primary/5 rounded-xl border border-primary/10 flex gap-3">
+                   <Info className="size-4 text-primary shrink-0 mt-0.5" />
+                   <p className="text-[10px] text-muted-foreground leading-relaxed italic font-medium">Arrears aging occurs automatically at 10 PM. All incoming payments settle earliest debt first.</p>
                 </div>
               </div>
-              <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-bold">Close</Button></DialogFooter>
+              <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full h-11 font-black uppercase tracking-widest active:scale-95 transition-all">Close Summary</Button></DialogFooter>
             </>
           )}
         </DialogContent>
@@ -432,22 +499,33 @@ export default function RoundsPage() {
         <DialogContent className="sm:max-w-[425px]">
           {selectedMemberForPayment && (
             <form onSubmit={handleQuickPayment}>
-              <DialogHeader><DialogTitle>Process Fixed Payment</DialogTitle><DialogDescription>Installment for {selectedMemberForPayment.name}.</DialogDescription></DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label>Scheme Amount (₹) - Fixed</Label>
-                  <Input type="number" value={currentRound?.monthlyAmount || 800} readOnly className="bg-muted font-bold text-lg" />
-                  <p className="text-[10px] text-muted-foreground italic">Accepts only the full scheme amount. Debt age is calculated nightly at 10 PM.</p>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">Process Fixed Payment</DialogTitle>
+                <DialogDescription className="font-medium italic">Installment collection for {selectedMemberForPayment.name}.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-6 py-8">
+                <div className="flex flex-col items-center justify-center p-8 bg-muted/40 rounded-2xl border border-dashed border-border/60 text-center">
+                   <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.3em] mb-2">Scheme Installment</span>
+                   <div className="text-4xl font-black text-primary tabular-nums tracking-tighter">₹{(currentRound?.monthlyAmount || 800).toLocaleString()}</div>
                 </div>
                 <div className="grid gap-2">
-                  <Label>Method</Label>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Method</Label>
                   <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="UPI">UPI</SelectItem><SelectItem value="Transfer">Transfer</SelectItem></SelectContent>
+                    <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash">Cash (Primary)</SelectItem>
+                      <SelectItem value="UPI">UPI Transfer</SelectItem>
+                      <SelectItem value="Transfer">Bank Transfer</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
               </div>
-              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full font-bold bg-emerald-600 hover:bg-emerald-700">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : <CheckCircle2 className="mr-2 size-4" />}Confirm Installment</Button></DialogFooter>
+              <DialogFooter>
+                <Button type="submit" disabled={isActionPending} className="w-full h-12 font-black uppercase tracking-[0.2em] bg-emerald-600 hover:bg-emerald-700 shadow-lg active:scale-95 transition-all">
+                  {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : <CheckCircle2 className="mr-2 size-5" />}
+                  Confirm Installment
+                </Button>
+              </DialogFooter>
             </form>
           )}
         </DialogContent>
@@ -456,46 +534,31 @@ export default function RoundsPage() {
       <Dialog open={isAddMemberDialogOpen} onOpenChange={setIsAddMemberDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <form onSubmit={handleAddMemberToScheme}>
-            <DialogHeader><DialogTitle>Register Participant</DialogTitle><DialogDescription>Join {currentRound?.name} scheme.</DialogDescription></DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2"><Label>Full Name</Label><Input value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required /></div>
-              <div className="grid gap-2"><Label>Phone</Label><Input value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required /></div>
-              <div className="grid gap-2"><Label>Join Date</Label><Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required /></div>
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold">Register Participant</DialogTitle>
+              <DialogDescription className="font-medium">Enroll new member into {currentRound?.name} Board.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-5 py-6">
+              <div className="grid gap-2">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label>
+                <Input value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required className="h-11 rounded-xl" />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
+                <Input value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required className="h-11 rounded-xl" />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label>
+                <Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required className="h-11 rounded-xl" />
+              </div>
             </div>
-            <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full font-bold">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Register Member</Button></DialogFooter>
+            <DialogFooter>
+              <Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg">
+                {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}
+                Register Member
+              </Button>
+            </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader><DialogTitle>Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
-          <div className="py-4 overflow-x-auto">
-            <Table>
-              <TableHeader><TableRow><TableHead className="text-xs font-bold">Date</TableHead><TableHead className="text-xs font-bold">Amount</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {allPayments?.filter(p => p.memberId === historyMember?.id).map((p, i) => (
-                  <TableRow key={i}><TableCell className="text-xs font-medium">{format(parseISO(p.paymentDate), 'dd MMM yyyy')}</TableCell><TableCell className="text-xs font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell></TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <DialogFooter><Button onClick={() => setIsHistoryDialogOpen(false)} className="w-full font-bold">Close</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isMemberProfileDialogOpen} onOpenChange={setIsMemberProfileDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader><DialogTitle>Member Profile</DialogTitle></DialogHeader>
-          {selectedProfileMember && (
-            <div className="space-y-4 py-4">
-               <div className="flex justify-between items-center py-2 border-b"><span className="text-xs text-muted-foreground">Name</span><span className="font-bold text-sm">{selectedProfileMember.name}</span></div>
-               <div className="flex justify-between items-center py-2 border-b"><span className="text-xs text-muted-foreground">Phone</span><span className="font-bold text-sm">{selectedProfileMember.phone}</span></div>
-               <div className="flex justify-between items-center py-2 border-b"><span className="text-xs text-muted-foreground">Joined</span><span className="font-bold text-sm">{selectedProfileMember.joinDate}</span></div>
-               <div className="flex justify-between items-center py-2 border-b"><span className="text-xs text-muted-foreground">Total Contributed</span><span className="font-bold text-emerald-600 text-sm">₹{(selectedProfileMember.totalPaid || 0).toLocaleString()}</span></div>
-            </div>
-          )}
-          <DialogFooter><Button onClick={() => setIsMemberProfileDialogOpen(false)} className="w-full font-bold">Close</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
