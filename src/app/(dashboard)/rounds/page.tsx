@@ -99,7 +99,6 @@ export default function RoundsPage() {
   const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
   
-  // Manual Pending Overrides
   const [manualPendingValue, setManualPendingValue] = useState<number>(0)
   
   const { toast } = useToast()
@@ -423,10 +422,6 @@ export default function RoundsPage() {
                       <span className="font-bold text-primary text-sm">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground font-semibold">Monthly Collection</span>
-                      <span className="font-bold text-emerald-600 text-sm">₹{monthlyCollection.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Pending Members</span>
                       <span className="font-bold text-destructive text-sm">{groupPendingCount}</span>
                     </div>
@@ -435,6 +430,12 @@ export default function RoundsPage() {
                       <span className="font-black tabular-nums">
                         {currentOccupancy} <span className="text-muted-foreground font-medium">/ {group.totalMembers}</span>
                       </span>
+                    </div>
+                    <div className="pt-2 border-t border-dashed border-border/60 mt-2">
+                       <div className="flex justify-between items-center p-2 rounded-lg bg-emerald-50/50 border border-emerald-100/50">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Monthly Collection</span>
+                          <span className="font-black text-emerald-600 text-base tabular-nums">₹{monthlyCollection.toLocaleString()}</span>
+                       </div>
                     </div>
                   </div>
                   <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
@@ -736,7 +737,6 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Member Profile Modal */}
       <Dialog open={isMemberProfileDialogOpen} onOpenChange={setIsMemberProfileDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
           {selectedProfileMember && (
