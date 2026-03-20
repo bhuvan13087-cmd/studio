@@ -130,6 +130,17 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
+  const totalPaidByMember = useMemo(() => {
+    const map = new Map<string, number>();
+    (allPayments || []).forEach(p => {
+      if (p.status === 'paid' || p.status === 'success') {
+        const current = map.get(p.memberId) || 0;
+        map.set(p.memberId, current + (p.amountPaid || 0));
+      }
+    });
+    return map;
+  }, [allPayments]);
+
   const getDisplayName = (name: string) => {
     if (!name) return "";
     const clean = name.replace(/Group/gi, '').trim();
@@ -503,11 +514,11 @@ export default function RoundsPage() {
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label>
-                    <Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" />
+                    <Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(chitToEdit.monthlyAmount)})} required className="h-11 rounded-xl" />
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
-                    <Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" />
+                    <Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(chitToEdit.totalMembers)})} required className="h-11 rounded-xl" />
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
@@ -720,6 +731,51 @@ export default function RoundsPage() {
                 </Table>
               </div>
               <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button></DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Member Profile Modal */}
+      <Dialog open={isMemberProfileDialogOpen} onOpenChange={setIsMemberProfileDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          {selectedProfileMember && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <User className="size-5 text-primary" /> Member Profile
+                </DialogTitle>
+                <DialogDescription>
+                  Detailed participant information for {selectedProfileMember.name}.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                  <span className="text-xs font-bold uppercase text-muted-foreground">Phone</span>
+                  <span className="font-bold text-sm">{selectedProfileMember.phone}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                  <span className="text-xs font-bold uppercase text-muted-foreground">Joined</span>
+                  <span className="font-bold text-sm">
+                    {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'MMM dd, yyyy') : '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                  <span className="text-xs font-bold uppercase text-muted-foreground">Scheme Base</span>
+                  <span className="font-bold text-sm text-primary">₹{(selectedProfileMember.monthlyAmount || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
+                  <span className="text-xs font-bold uppercase text-emerald-600">Total Contribution</span>
+                  <span className="font-bold text-sm text-emerald-700">
+                    ₹{(totalPaidByMember.get(selectedProfileMember.id) || 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setIsMemberProfileDialogOpen(false)} className="w-full font-bold">
+                  Close
+                </Button>
+              </DialogFooter>
             </>
           )}
         </DialogContent>
