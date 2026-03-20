@@ -386,7 +386,6 @@ export default function RoundsPage() {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
             const groupPendingCount = getGroupPendingCount(group.name);
             const monthlyCollection = getGroupMonthlyCollection(group.name);
-            const todayCollection = getGroupTodayCollection(group.name);
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-0 right-0 p-3">
@@ -422,10 +421,6 @@ export default function RoundsPage() {
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Scheme Amount</span>
                       <span className="font-bold text-primary text-sm">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground font-semibold">Today's Collection</span>
-                      <span className="font-bold text-emerald-600 text-sm">₹{todayCollection.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Monthly Collection</span>
@@ -590,12 +585,12 @@ export default function RoundsPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Base Scheme</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Occupancy</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">{assignedMembers.length} <span className="text-sm font-bold text-muted-foreground">/ {currentRound?.totalMembers}</span></div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Pending Members</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums text-amber-600">{assignedMembers.filter(m => calculateStatus(m).paidToday === false).length}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Scheme Amount</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Occupancy</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">{assignedMembers.length} <span className="text-sm font-bold text-muted-foreground">/ {currentRound?.totalMembers}</span></div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Pending Members</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums text-amber-600">{assignedMembers.filter(m => calculateStatus(m).paidToday === false).length}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-2xl">
           <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Today's Collection</CardTitle>
+            <CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Today's Collection</CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-black tabular-nums text-emerald-600">₹{todayGroupCollection.toLocaleString()}</div>
@@ -664,7 +659,7 @@ export default function RoundsPage() {
                         "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
                         paidToday ? "bg-emerald-500 hover:bg-emerald-600" : (isDaily ? "bg-amber-100 text-amber-700" : "bg-indigo-50 text-indigo-600 border border-indigo-100/50")
                       )}>
-                        {paidToday ? 'success' : (isDaily ? 'pending' : 'awaiting')}
+                        {paidToday ? 'success' : (isDaily ? 'pending' : 'AWAITING')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right pr-6">
