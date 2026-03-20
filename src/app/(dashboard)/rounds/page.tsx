@@ -759,10 +759,6 @@ export default function RoundsPage() {
           <h3 className="text-sm font-bold flex items-center gap-2 tracking-tight text-foreground/80 uppercase">
             <Users className="size-4 text-primary" /> Current Active Board
           </h3>
-          <div className="relative w-full max-w-[240px]">
-             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-             <Input placeholder="Search board..." className="h-8 pl-9 text-xs border-none bg-background/80" />
-          </div>
         </div>
         <div className="overflow-x-auto">
           <Table>
@@ -1078,7 +1074,7 @@ export default function RoundsPage() {
                   <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest ml-1">Missed Installments (Days)</span>
                   <Input 
                     type="number" 
-                    value={manualPendingValue === 0 ? "" : manualPendingValue} 
+                    value={manualPendingValue} 
                     onChange={e => setManualPendingValue(e.target.value === "" ? 0 : Number(e.target.value))}
                     className="h-10 font-bold text-sm rounded-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder="Enter pending days"
