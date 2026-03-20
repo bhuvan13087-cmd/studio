@@ -443,57 +443,42 @@ export default function RoundsPage() {
             
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
-                <div className="absolute top-0 right-0 p-3">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted">
-                          <MoreVertical className="size-4 text-muted-foreground" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => { setChitToEdit({...group}); setIsEditChitDialogOpen(true); }}>
-                          <Pencil className="mr-2 size-4" /> Edit Scheme
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive" onClick={() => { setChitToDelete(group); setIsDeleteChitDialogOpen(true); }}>
-                          <Trash2 className="mr-2 size-4" /> Delete Scheme
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                {/* Monthly Collection Icon (ONLY management icon in top-right) */}
+                <div className="absolute top-3 right-3">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 rounded-full hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActivePopupGroupName(group.name);
+                      setIsCollectionPopupOpen(true);
+                    }}
+                  >
+                    <Wallet className="size-4" />
+                  </Button>
                 </div>
-                <CardHeader className="p-5 pb-2 bg-muted/30 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-background border-primary/20 text-primary">
-                        {group.collectionType}
-                      </Badge>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-6 w-6 rounded-full hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActivePopupGroupName(group.name);
-                          setIsCollectionPopupOpen(true);
-                        }}
-                      >
-                        <Wallet className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
+
+                <CardHeader className="p-5 pb-2 space-y-3">
+                  <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">
+                    {group.collectionType}
+                  </Badge>
                   <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">
                     {getDisplayName(group.name)}
                   </CardTitle>
                 </CardHeader>
+
                 <CardContent className="p-5 flex-1 space-y-4">
                   <div className="space-y-3">
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Scheme Amount</span>
-                      <span className="font-bold text-primary text-sm">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
+                      <span className="font-bold text-primary">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Pending Members</span>
-                      <span className="font-bold text-destructive text-sm">{groupPendingCount}</span>
+                      <span className={cn("font-bold text-sm", groupPendingCount > 0 ? "text-destructive" : "text-emerald-600")}>
+                        {groupPendingCount}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Occupancy</span>
@@ -501,24 +486,20 @@ export default function RoundsPage() {
                         {currentOccupancy} <span className="text-muted-foreground font-medium">/ {group.totalMembers}</span>
                       </span>
                     </div>
-                    <div className="pt-2 border-t border-dashed border-border/60 mt-2">
-                       <div className="flex justify-between items-center p-2 rounded-lg">
+                    
+                    <div className="pt-4 border-t border-dashed border-border/60 mt-4">
+                       <div className="flex justify-between items-center bg-emerald-50/50 p-2 rounded-lg">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Monthly Collection</span>
                           <span className="font-black text-emerald-600 text-base tabular-nums">₹{monthlyCollection.toLocaleString()}</span>
                        </div>
                     </div>
                   </div>
-                  <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
-                    <div 
-                      className="bg-primary h-full transition-all duration-500" 
-                      style={{ width: `${(currentOccupancy / group.totalMembers) * 100}%` }}
-                    />
-                  </div>
                 </CardContent>
-                <CardFooter className="p-2.5 bg-muted/5 border-t border-border/40">
+
+                <CardFooter className="p-4 bg-muted/10 border-t border-border/40">
                   <Button 
                     variant="ghost" 
-                    className="w-full h-8 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition-all rounded-xl"
+                    className="w-full h-9 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition-all rounded-xl"
                     onClick={() => setSelectedChitId(group.id)}
                   >
                     View Board
