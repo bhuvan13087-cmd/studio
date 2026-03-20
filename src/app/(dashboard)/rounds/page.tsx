@@ -443,7 +443,6 @@ export default function RoundsPage() {
             
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
-                {/* Monthly Collection Icon (ONLY management icon in top-right) */}
                 <div className="absolute top-3 right-3">
                   <Button 
                     variant="ghost" 
@@ -488,8 +487,8 @@ export default function RoundsPage() {
                     </div>
                     
                     <div className="pt-4 border-t border-dashed border-border/60 mt-4">
-                       <div className="flex justify-between items-center bg-emerald-50/50 p-2 rounded-lg">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Monthly Collection</span>
+                       <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold uppercase tracking-wider">Monthly Collection</span>
                           <span className="font-black text-emerald-600 text-base tabular-nums">₹{monthlyCollection.toLocaleString()}</span>
                        </div>
                     </div>

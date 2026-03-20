@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -32,11 +33,24 @@ export default function LoginPage() {
       // Redirect to Chit Rounds by default as per production requirement
       router.push("/rounds")
     } catch (error: any) {
-      console.error("Login error:", error)
+      let errorMessage = "Login failed. Please try again"
+      
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = "Email ID is incorrect"
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = "Password is incorrect"
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "Invalid email format"
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = "Network error. Check your connection"
+      } else if (error.code === 'auth/invalid-credential') {
+        errorMessage = "Invalid credentials. Please verify your email and password."
+      }
+      
       toast({
         variant: "destructive",
         title: "Access Denied",
-        description: error.message || "Invalid credentials. Please verify your email and password.",
+        description: errorMessage,
       })
     } finally {
       setLoading(false)
