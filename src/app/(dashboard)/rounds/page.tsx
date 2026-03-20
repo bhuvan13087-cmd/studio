@@ -761,7 +761,7 @@ export default function RoundsPage() {
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                  <span className="text-xs font-bold uppercase text-muted-foreground">Scheme Base</span>
+                  <span className="text-xs font-bold uppercase text-muted-foreground">Scheme Amount</span>
                   <span className="font-bold text-sm text-primary">₹{(selectedProfileMember.monthlyAmount || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
