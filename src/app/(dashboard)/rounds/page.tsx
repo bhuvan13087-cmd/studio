@@ -113,7 +113,7 @@ export default function RoundsPage() {
   
   const [manualPendingValue, setManualPendingValue] = useState<number>(0)
   
-  // Month/Year filter for group card collections (Shared state used in popups)
+  // Month/Year filter for popup audit collections only
   const [viewMonth, setViewMonth] = useState<string>(format(new Date(), 'MMMM'))
   const [viewYear, setViewYear] = useState<string>(format(new Date(), 'yyyy'))
   
@@ -200,6 +200,7 @@ export default function RoundsPage() {
       const scheme = chitSchemes.find(r => r.name === m.chitGroup);
       const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
       
+      // PRODUCTION RULE: ONLY DAILY PENDING MEMBERS COUNTED
       if (resolvedType !== 'daily') return false;
 
       const hasPaidToday = allPayments.some(p => 
@@ -409,7 +410,9 @@ export default function RoundsPage() {
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
             const groupPendingCount = getGroupPendingCount(group.name);
-            const monthlyCollection = getGroupMonthlyCollection(group.name, `${viewMonth} ${viewYear}`);
+            // Main card display ALWAYS shows current month
+            const monthlyCollection = getGroupMonthlyCollection(group.name, format(new Date(), 'MMMM yyyy'));
+            
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-0 right-0 p-3">
@@ -499,7 +502,15 @@ export default function RoundsPage() {
         </div>
 
         {/* Collection Summary Popup with Period Selectors */}
-        <Dialog open={isCollectionPopupOpen} onOpenChange={setIsCollectionPopupOpen}>
+        <Dialog open={isCollectionPopupOpen} onOpenChange={(open) => {
+          setIsCollectionPopupOpen(open);
+          if (!open) {
+            // Reset to current month/year when closed automatically
+            setViewMonth(format(new Date(), 'MMMM'));
+            setViewYear(format(new Date(), 'yyyy'));
+            setActivePopupGroupName(null);
+          }
+        }}>
           <DialogContent className="sm:max-w-[420px]">
             {activePopupGroupName && (
               <>
