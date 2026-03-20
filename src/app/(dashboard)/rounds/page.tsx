@@ -720,15 +720,33 @@ export default function RoundsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Scheme Amount</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Occupancy</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">{assignedMembers.length} <span className="text-sm font-bold text-muted-foreground">/ {currentRound?.totalMembers}</span></div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-2xl">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Pending Members</CardTitle>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-xl">
+          <CardHeader className="p-3 pb-1">
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Scheme Amount</CardTitle>
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-black tabular-nums text-amber-600">
+          <CardContent className="p-3 pt-0">
+            <div className="text-xl font-bold tabular-nums tracking-tight">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-xl">
+          <CardHeader className="p-3 pb-1">
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Occupancy</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0">
+            <div className="text-xl font-bold tabular-nums tracking-tight">
+              {assignedMembers.length} <span className="text-xs font-semibold text-muted-foreground">/ {currentRound?.totalMembers}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-xl">
+          <CardHeader className="p-3 pb-1">
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Pending Members</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0">
+            <div className="text-xl font-bold tabular-nums text-amber-600 tracking-tight">
               {assignedMembers.filter(m => {
                 const isDaily = (m.paymentType || currentRound?.collectionType || "").toLowerCase() === 'daily';
                 if (!isDaily) return false;
@@ -737,20 +755,21 @@ export default function RoundsPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-2xl">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Today's Collection</CardTitle>
+
+        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl">
+          <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between">
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today's Collection</CardTitle>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600 transition-colors"
+              className="h-7 w-7 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600 transition-colors"
               onClick={() => setIsDailyAuditOpen(true)}
             >
-              <Wallet className="size-3.5" />
+              <Wallet className="size-4" />
             </Button>
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-black tabular-nums text-emerald-600">₹{todayGroupCollection.toLocaleString()}</div>
+          <CardContent className="p-3 pt-0">
+            <div className="text-xl font-bold tabular-nums text-emerald-600 tracking-tight">₹{todayGroupCollection.toLocaleString()}</div>
           </CardContent>
         </Card>
       </div>
