@@ -495,10 +495,10 @@ export default function RoundsPage() {
                   </div>
                 </CardContent>
 
-                <CardFooter className="p-2.5 bg-muted/5 border-t border-border/40">
+                <CardFooter className="p-1.5 bg-muted/5 border-t border-border/40">
                   <Button 
                     variant="ghost" 
-                    className="w-full h-8 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition-all rounded-lg"
+                    className="w-full h-7 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition-all rounded-lg"
                     onClick={() => setSelectedChitId(group.id)}
                   >
                     View Board
@@ -591,7 +591,7 @@ export default function RoundsPage() {
                   <Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="800" />
                 </div>
                 <div className="grid gap-2">
-                  <Label className="text-[10px) font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
                   <Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="20" />
                 </div>
                 <div className="grid gap-2">
