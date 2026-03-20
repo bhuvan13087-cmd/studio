@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -96,6 +96,9 @@ export default function RoundsPage() {
   const [isPendingDetailsOpen, setIsPendingDetailsOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
+  
+  const [isCollectionPopupOpen, setIsCollectionPopupOpen] = useState(false)
+  const [collectionPopupData, setCollectionPopupData] = useState<{name: string, amount: number} | null>(null)
   
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [selectedMemberForPayment, setSelectedMemberForPayment] = useState<any>(null)
@@ -449,9 +452,23 @@ export default function RoundsPage() {
                 </div>
                 <CardHeader className="bg-muted/30 p-5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-background border-primary/20 text-primary">
-                      {group.collectionType}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-background border-primary/20 text-primary">
+                        {group.collectionType}
+                      </Badge>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 rounded-full hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCollectionPopupData({name: group.name, amount: monthlyCollection});
+                          setIsCollectionPopupOpen(true);
+                        }}
+                      >
+                        <Wallet className="size-3.5" />
+                      </Button>
+                    </div>
                   </div>
                   <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">
                     {getDisplayName(group.name)}
@@ -474,8 +491,8 @@ export default function RoundsPage() {
                       </span>
                     </div>
                     <div className="pt-2 border-t border-dashed border-border/60 mt-2">
-                       <div className="flex justify-between items-center p-2 rounded-lg bg-emerald-50/50 border border-emerald-100/50">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Monthly Collection</span>
+                       <div className="flex justify-between items-center p-2 rounded-lg">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Monthly Collection</span>
                           <span className="font-black text-emerald-600 text-base tabular-nums">₹{monthlyCollection.toLocaleString()}</span>
                        </div>
                     </div>
@@ -500,6 +517,38 @@ export default function RoundsPage() {
             );
           })}
         </div>
+
+        {/* Collection Summary Popup */}
+        <Dialog open={isCollectionPopupOpen} onOpenChange={setIsCollectionPopupOpen}>
+          <DialogContent className="sm:max-w-[400px]">
+            {collectionPopupData && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Wallet className="size-5 text-primary" />
+                    Monthly Summary
+                  </DialogTitle>
+                  <DialogDescription>
+                    Collection for {getDisplayName(collectionPopupData.name)} in {viewMonth} {viewYear}.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-6">
+                  <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-3xl border border-dashed border-emerald-200 text-center">
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Total Monthly Intake</p>
+                    <div className="text-5xl font-black text-emerald-600 tabular-nums tracking-tighter">
+                      ₹{collectionPopupData.amount.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button onClick={() => setIsCollectionPopupOpen(false)} className="w-full font-bold">
+                    Close Summary
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
