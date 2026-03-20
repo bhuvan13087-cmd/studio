@@ -113,7 +113,12 @@ export default function DashboardPage() {
     const schemeSummaries = fixedGroupNames.map(name => {
       const schemeInfo = (rounds || []).find(r => r.name === name) || { name, collectionType: 'Daily', monthlyAmount: 800 };
       const groupMembers = (members || []).filter(m => m.chitGroup === name && m.status !== 'inactive');
-      const totalPendingDays = groupMembers.reduce((acc, m) => acc + (m.pendingDays || 0), 0);
+      
+      const totalPendingDays = groupMembers.reduce((acc, m) => {
+        const resolvedType = (m.paymentType || schemeInfo.collectionType || "").toLowerCase();
+        if (resolvedType !== 'daily') return acc;
+        return acc + (m.pendingDays || 0);
+      }, 0);
       
       return {
         ...schemeInfo,

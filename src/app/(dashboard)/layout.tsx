@@ -27,6 +27,9 @@ export default function DashboardLayout({
   const paymentsQuery = useMemoFirebase(() => collection(db, 'payments'), [db]);
   const { data: payments } = useCollection(paymentsQuery);
 
+  const roundsQuery = useMemoFirebase(() => collection(db, 'chitRounds'), [db]);
+  const { data: chitRounds } = useCollection(roundsQuery);
+
   useEffect(() => {
     setCurrentTime(new Date())
     const timer = setInterval(() => setCurrentTime(new Date()), 60000)
@@ -44,9 +47,11 @@ export default function DashboardLayout({
    * Executes daily at 10 PM (Hour 22).
    * Formula: newPendingAmount = Math.max(0, (yesterdayPending + schemeAmount) - todayPaymentSum)
    * Formula: newPendingDays = Math.ceil(newPendingAmount / schemeAmount)
+   * 
+   * CRITICAL: Applies ONLY to DAILY members.
    */
   useEffect(() => {
-    if (!user || !members || !payments || !currentTime) return;
+    if (!user || !members || !payments || !currentTime || !chitRounds) return;
 
     const runProductionBatch = async () => {
       const todayStr = format(currentTime, 'yyyy-MM-dd');
@@ -55,10 +60,15 @@ export default function DashboardLayout({
       // Only run at 10 PM or later
       if (currentTime.getHours() < scheduledHour) return;
 
-      const dailyMembers = members.filter(m => 
-        m.status === 'active' && 
-        m.lastPendingUpdateDate !== todayStr
-      );
+      const dailyMembers = members.filter(m => {
+        if (m.status !== 'active' || m.lastPendingUpdateDate === todayStr) return false;
+        
+        // Resolve type: Member specific OR Group default
+        const scheme = chitRounds?.find(r => r.name === m.chitGroup);
+        const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
+        
+        return resolvedType === 'daily';
+      });
       
       if (dailyMembers.length === 0) return;
 
@@ -78,7 +88,6 @@ export default function DashboardLayout({
         const todayPaymentSum = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
 
         // PRODUCTION CALCULATION: FIFO Arrears Aging
-        // We add today's required installment to the previous arrears, then subtract what was paid today.
         const newPendingAmount = Math.max(0, (yesterdayPending + schemeAmount) - todayPaymentSum);
         
         // Derive days from amount: any fractional part of an installment counts as a pending day
@@ -99,7 +108,7 @@ export default function DashboardLayout({
     };
 
     runProductionBatch();
-  }, [user, members, payments, currentTime, db]);
+  }, [user, members, payments, currentTime, db, chitRounds]);
 
   if (isUserLoading) {
     return (

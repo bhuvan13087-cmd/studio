@@ -774,7 +774,7 @@ export default function RoundsPage() {
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
                 const { paidToday } = calculateStatus(m);
                 const isDaily = (m.paymentType || currentRound?.collectionType || "").toLowerCase() === 'daily';
-                const pDays = m.pendingDays || 0;
+                const pDays = isDaily ? (m.pendingDays || 0) : 0;
                 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors group">
