@@ -756,18 +756,16 @@ export default function RoundsPage() {
           {selectedPendingMember && (
             <>
               <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b">
-                <DialogTitle className="text-xl font-black uppercase tracking-tight">Arrears Analysis</DialogTitle>
+                <DialogTitle className="text-xl font-black uppercase tracking-tight">Pending Member Details</DialogTitle>
                 <DialogDescription className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">Financial deficit summary</DialogDescription>
               </DialogHeader>
               
               <div className="p-6 space-y-4">
-                {/* 1. Name */}
                 <div className="p-4 bg-muted/30 rounded-2xl border border-border/40 space-y-1">
                   <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Member Name</p>
                   <p className="text-base font-bold">{selectedPendingMember.name}</p>
                 </div>
 
-                {/* 2. Amount */}
                 <div className="p-5 bg-destructive/5 rounded-2xl border border-destructive/10 space-y-2">
                   <p className="text-[9px] font-black uppercase text-destructive/60 tracking-widest">Total Arrears Amount</p>
                   {!isManualPendingAmountEdit ? (
@@ -794,7 +792,6 @@ export default function RoundsPage() {
                   )}
                 </div>
 
-                {/* 3. Days Count */}
                 <div className="p-4 bg-muted/30 rounded-2xl border border-border/40 space-y-1">
                   <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Missed Installments (Days)</p>
                   {!isManualPendingEdit ? (
@@ -820,7 +817,7 @@ export default function RoundsPage() {
               </div>
               
               <DialogFooter className="p-6 pt-0">
-                <Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full h-12 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all shadow-lg">Close Analysis</Button>
+                <Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full h-12 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all shadow-lg">Close Details</Button>
               </DialogFooter>
             </>
           )}
