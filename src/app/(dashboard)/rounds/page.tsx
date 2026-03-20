@@ -410,7 +410,9 @@ export default function RoundsPage() {
                         </div>
                         <div className="flex flex-col min-w-0">
                           <span className="text-sm font-bold truncate group-hover:text-primary transition-colors tracking-tight">{m.name}</span>
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest tabular-nums">{m.phone}</span>
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest tabular-nums">
+                            {m.paymentType || currentRound?.collectionType}
+                          </span>
                         </div>
                       </div>
                     </TableCell>
@@ -485,7 +487,9 @@ export default function RoundsPage() {
                    </div>
                 </div>
                 <div className="p-4 bg-primary/5 rounded-xl border border-primary/10 flex gap-3">
-                   <Info className="size-4 text-primary shrink-0 mt-0.5" />
+                   <div className="size-4 text-primary shrink-0 mt-0.5">
+                      <Info className="size-4" />
+                   </div>
                    <p className="text-[10px] text-muted-foreground leading-relaxed italic font-medium">Arrears aging occurs automatically at 10 PM. All incoming payments settle earliest debt first.</p>
                 </div>
               </div>

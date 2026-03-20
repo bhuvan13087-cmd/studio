@@ -333,7 +333,9 @@ export default function DashboardPage() {
                           <TableCell className="pl-8 py-5">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-sm font-bold tracking-tight">{m.name}</span>
-                              <span className="text-[10px] font-bold text-muted-foreground tracking-widest tabular-nums uppercase">{m.phone}</span>
+                              <span className="text-[10px] font-bold text-muted-foreground tracking-widest tabular-nums uppercase">
+                                {m.paymentType || selectedGroup?.collectionType}
+                              </span>
                             </div>
                           </TableCell>
                           <TableCell>
