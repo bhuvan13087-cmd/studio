@@ -54,7 +54,7 @@ export default function LoginPage() {
       })
       setLoading(false)
     } finally {
-      // In success case, we redirect, so loading stays true until unmount
+      // Success is handled by redirect
     }
   }
 

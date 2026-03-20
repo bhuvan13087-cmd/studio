@@ -223,10 +223,6 @@ export default function DashboardPage() {
       </div>
 
       <div className="space-y-6">
-        <div className="flex items-center gap-3 border-l-4 border-primary pl-4 py-1.5">
-          <LayoutDashboard className="size-5 text-primary" />
-          <h3 className="text-xl font-black tracking-tight font-headline uppercase text-foreground/80">Schemes Monitor Board</h3>
-        </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {schemeSummaries.map((scheme, i) => (
             <Card 
