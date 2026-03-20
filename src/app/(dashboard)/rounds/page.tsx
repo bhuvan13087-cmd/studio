@@ -515,10 +515,10 @@ export default function RoundsPage() {
                     />
                   </div>
                 </CardContent>
-                <CardFooter className="p-4 bg-muted/10 border-t border-border/50">
+                <CardFooter className="p-2.5 bg-muted/5 border-t border-border/40">
                   <Button 
                     variant="ghost" 
-                    className="w-full h-10 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition-all rounded-xl"
+                    className="w-full h-8 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition-all rounded-xl"
                     onClick={() => setSelectedChitId(group.id)}
                   >
                     View Board
