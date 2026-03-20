@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet, CalendarDays } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -100,6 +100,9 @@ export default function RoundsPage() {
   const [isCollectionPopupOpen, setIsCollectionPopupOpen] = useState(false)
   const [activePopupGroupName, setActivePopupGroupName] = useState<string | null>(null)
   
+  const [isDailyAuditOpen, setIsDailyAuditOpen] = useState(false)
+  const [auditDate, setAuditDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [selectedMemberForPayment, setSelectedMemberForPayment] = useState<any>(null)
   const [selectedProfileMember, setSelectedProfileMember] = useState<any>(null)
@@ -159,17 +162,20 @@ export default function RoundsPage() {
     return `Group ${clean}`;
   };
 
-  const getGroupTodayCollection = (groupName: string) => {
+  const getGroupCollectionForDate = (groupName: string, dateStr: string) => {
     if (!allPayments || !members) return 0;
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
     return allPayments
       .filter(p => 
         groupMemberIds.has(p.memberId) && 
         (p.status === 'success' || p.status === 'paid') &&
-        (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
+        (p.targetDate === dateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === dateStr))
       )
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+  };
+
+  const getGroupTodayCollection = (groupName: string) => {
+    return getGroupCollectionForDate(groupName, format(new Date(), 'yyyy-MM-dd'));
   };
 
   const getGroupMonthlyCollection = (groupName: string, monthStr?: string) => {
@@ -695,8 +701,16 @@ export default function RoundsPage() {
           </CardContent>
         </Card>
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-2xl">
-          <CardHeader className="p-4 pb-2">
+          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-[11px] uppercase font-bold text-muted-foreground tracking-widest">Today's Collection</CardTitle>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600 transition-colors"
+              onClick={() => setIsDailyAuditOpen(true)}
+            >
+              <Wallet className="size-3.5" />
+            </Button>
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-black tabular-nums text-emerald-600">₹{todayGroupCollection.toLocaleString()}</div>
@@ -810,6 +824,53 @@ export default function RoundsPage() {
           </Table>
         </div>
       </div>
+
+      {/* Daily Reconciliation Popup */}
+      <Dialog open={isDailyAuditOpen} onOpenChange={setIsDailyAuditOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          {currentRound && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Wallet className="size-5 text-primary" />
+                  Daily Reconciliation
+                </DialogTitle>
+                <DialogDescription>
+                  Review collections for a specific date in {getDisplayName(currentRound.name)}.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-6 py-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Select Audit Date</Label>
+                  <div className="relative">
+                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                    <Input 
+                      type="date" 
+                      value={auditDate} 
+                      onChange={e => setAuditDate(e.target.value)} 
+                      className="pl-10 h-11 font-bold text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-3xl border border-dashed border-emerald-200 text-center">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Audit Total Intake</p>
+                  <div className="text-5xl font-black text-emerald-600 tabular-nums tracking-tighter">
+                    ₹{getGroupCollectionForDate(currentRound.name, auditDate).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-bold h-11 rounded-xl">
+                  Close Audit
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
         <DialogContent className="sm:max-w-[550px]">
