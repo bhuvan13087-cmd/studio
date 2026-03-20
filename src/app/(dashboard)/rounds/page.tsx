@@ -458,7 +458,7 @@ export default function RoundsPage() {
                   </Button>
                 </div>
 
-                <CardHeader className="p-5 pb-2 space-y-3">
+                <CardHeader className="p-5 pb-3 space-y-3 border-b border-border/40">
                   <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">
                     {group.collectionType}
                   </Badge>
@@ -488,7 +488,7 @@ export default function RoundsPage() {
                     
                     <div className="pt-4 border-t border-dashed border-border/60 mt-4">
                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold uppercase tracking-wider">Monthly Collection</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Monthly Collection</span>
                           <span className="font-black text-emerald-600 text-base tabular-nums">₹{monthlyCollection.toLocaleString()}</span>
                        </div>
                     </div>

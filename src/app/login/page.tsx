@@ -52,8 +52,9 @@ export default function LoginPage() {
         title: "Access Denied",
         description: errorMessage,
       })
-    } finally {
       setLoading(false)
+    } finally {
+      // In success case, we redirect, so loading stays true until unmount
     }
   }
 
