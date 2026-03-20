@@ -140,6 +140,19 @@ export default function RoundsPage() {
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
   };
 
+  const getGroupMonthlyCollection = (groupName: string) => {
+    if (!allPayments || !members) return 0;
+    const now = new Date();
+    const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
+    return allPayments
+      .filter(p => 
+        groupMemberIds.has(p.memberId) && 
+        (p.status === 'success' || p.status === 'paid') &&
+        p.paymentDate && isSameMonth(parseISO(p.paymentDate), now)
+      )
+      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+  };
+
   const getGroupPendingCount = (groupName: string) => {
     if (!allPayments || !members) return 0;
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -341,6 +354,7 @@ export default function RoundsPage() {
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
             const groupPendingCount = getGroupPendingCount(group.name);
+            const monthlyCollection = getGroupMonthlyCollection(group.name);
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-0 right-0 p-3">
@@ -374,6 +388,10 @@ export default function RoundsPage() {
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Scheme Amount</span>
                       <span className="font-bold text-primary text-sm">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground font-semibold">Monthly Collection</span>
+                      <span className="font-bold text-emerald-600 text-sm">₹{monthlyCollection.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Pending Members</span>
