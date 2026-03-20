@@ -646,9 +646,9 @@ export default function RoundsPage() {
                     <TableCell>
                       <Badge variant={paidToday ? 'default' : 'secondary'} className={cn(
                         "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
-                        paidToday ? "bg-emerald-500 hover:bg-emerald-600" : (isDaily ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700")
+                        paidToday ? "bg-emerald-500 hover:bg-emerald-600" : (isDaily ? "bg-amber-100 text-amber-700" : "bg-indigo-50 text-indigo-600 border border-indigo-100/50")
                       )}>
-                        {paidToday ? 'success' : (isDaily ? 'pending' : 'Due Cycle')}
+                        {paidToday ? 'success' : (isDaily ? 'pending' : 'awaiting')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right pr-6">
