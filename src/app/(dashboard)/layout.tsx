@@ -42,7 +42,8 @@ export default function DashboardLayout({
   /**
    * PRODUCTION 10 PM AUTOMATED CALCULATION
    * Executes daily at 10 PM (Hour 22).
-   * Formula: today_pending = (scheme_amount - today_payment) + yesterday_pending
+   * Formula: newPendingAmount = Math.max(0, (yesterdayPending + schemeAmount) - todayPaymentSum)
+   * Formula: newPendingDays = Math.ceil(newPendingAmount / schemeAmount)
    */
   useEffect(() => {
     if (!user || !members || !payments || !currentTime) return;
@@ -56,7 +57,6 @@ export default function DashboardLayout({
 
       const dailyMembers = members.filter(m => 
         m.status === 'active' && 
-        (m.paymentType?.toLowerCase() === 'daily' || m.chitGroup) && // Ensure daily context
         m.lastPendingUpdateDate !== todayStr
       );
       
@@ -69,7 +69,7 @@ export default function DashboardLayout({
         const schemeAmount = member.monthlyAmount || 800;
         const yesterdayPending = member.pendingAmount || 0;
         
-        // Sum today's payments
+        // Sum today's payments for this member
         const todayPayments = payments.filter(p => 
           p.memberId === member.id && 
           (p.status === 'success' || p.status === 'paid') &&
@@ -77,25 +77,16 @@ export default function DashboardLayout({
         );
         const todayPaymentSum = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
 
-        // PRODUCTION CALCULATION LOGIC
-        let todayPending = 0;
-        if (todayPaymentSum >= schemeAmount) {
-          todayPending = 0; // Fully cleared or overpaid
-        } else {
-          todayPending = (schemeAmount - todayPaymentSum) + yesterdayPending;
-        }
-
-        // PENDING DAYS COUNTER LOGIC
-        let newPendingDays = member.pendingDays || 0;
-        if (todayPending > 0) {
-          newPendingDays += 1;
-        } else {
-          newPendingDays = Math.max(0, newPendingDays - 1);
-        }
+        // PRODUCTION CALCULATION: FIFO Arrears Aging
+        // We add today's required installment to the previous arrears, then subtract what was paid today.
+        const newPendingAmount = Math.max(0, (yesterdayPending + schemeAmount) - todayPaymentSum);
+        
+        // Derive days from amount: any fractional part of an installment counts as a pending day
+        const newPendingDays = Math.ceil(newPendingAmount / schemeAmount);
 
         const memberRef = doc(db, 'members', member.id);
         batch.update(memberRef, {
-          pendingAmount: todayPending,
+          pendingAmount: newPendingAmount,
           pendingDays: newPendingDays,
           lastPendingUpdateDate: todayStr
         });

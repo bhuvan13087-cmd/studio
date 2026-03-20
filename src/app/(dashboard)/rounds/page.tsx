@@ -133,7 +133,6 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  // Helper to clean and format group names
   const getDisplayName = (name: string) => {
     if (!name) return "";
     const clean = name.replace(/Group/gi, '').trim();
@@ -197,6 +196,7 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
     const paymentAmount = Number(paymentData.amount);
+    const schemeAmount = selectedMemberForPayment.monthlyAmount || 800;
     
     setIsActionPending(true);
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -219,17 +219,15 @@ export default function RoundsPage() {
       });
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
+      
+      // FIFO Arrears Calculation
+      // Deduction starts from current arrears.
       const currentArrears = selectedMemberForPayment.pendingAmount || 0;
       const newArrears = Math.max(0, currentArrears - paymentAmount);
       
-      let newPendingDays = selectedMemberForPayment.pendingDays || 0;
-      if (newArrears === 0) {
-        newPendingDays = 0;
-      } else if (paymentAmount >= (selectedMemberForPayment.monthlyAmount || 800)) {
-        // Decrease pending days for each full installment paid
-        const installmentsCovered = Math.floor(paymentAmount / (selectedMemberForPayment.monthlyAmount || 800));
-        newPendingDays = Math.max(0, newPendingDays - installmentsCovered);
-      }
+      // Pending Days are recalculated based on the remaining debt.
+      // Math.ceil ensures that any fractional installment counts as 1 day.
+      const newPendingDays = Math.ceil(newArrears / schemeAmount);
 
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
@@ -242,7 +240,7 @@ export default function RoundsPage() {
 
       setPaymentData(INITIAL_PAYMENT_STATE);
       setIsQuickPaymentDialogOpen(false);
-      toast({ title: "Payment Recorded", description: "Arrears updated." });
+      toast({ title: "Payment Recorded", description: "Arrears updated automatically." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
@@ -480,7 +478,6 @@ export default function RoundsPage() {
           })}
         </div>
 
-        {/* Add Scheme Dialog */}
         <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleAddChit}>
@@ -522,7 +519,6 @@ export default function RoundsPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Edit Scheme Dialog */}
         <Dialog open={isEditChitDialogOpen} onOpenChange={setIsEditChitDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             {chitToEdit && (
@@ -566,7 +562,6 @@ export default function RoundsPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Scheme Alert */}
         <AlertDialog open={isDeleteChitDialogOpen} onOpenChange={setIsDeleteChitDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -597,7 +592,7 @@ export default function RoundsPage() {
           <Button variant="outline" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-10 w-10 shadow-sm hover:shadow-md transition-all active:scale-95"><ChevronLeft className="size-5" /></Button>
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-xl sm:text-2xl font-black truncate tracking-tight text-primary font-headline uppercase">{getDisplayName(currentRound?.name)}</h2>
+              <h2 className="text-xl sm:text-2xl font-black truncate tracking-tight text-primary font-headline uppercase">{currentRound?.name}</h2>
               <Badge variant="secondary" className="text-[9px] font-black tracking-tighter bg-primary/10 text-primary border-none">{currentRound?.collectionType}</Badge>
             </div>
           </div>
@@ -891,7 +886,7 @@ export default function RoundsPage() {
           <form onSubmit={handleAddMemberToScheme}>
             <DialogHeader>
               <DialogTitle className="text-xl font-bold">Register Participant</DialogTitle>
-              <DialogDescription className="font-medium">Enroll new member into {getDisplayName(currentRound?.name)} Board.</DialogDescription>
+              <DialogDescription className="font-medium">Enroll new member into {currentRound?.name} Board.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-5 py-6">
               <div className="grid gap-2">
