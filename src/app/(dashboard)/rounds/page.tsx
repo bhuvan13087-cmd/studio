@@ -474,7 +474,7 @@ export default function RoundsPage() {
                       <span className="font-bold text-primary">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground font-semibold">Pending Members</span>
+                      <span className="text-amber-600 font-semibold">Pending Members</span>
                       <span className={cn("font-bold text-sm", groupPendingCount > 0 ? "text-amber-500" : "text-emerald-600")}>
                         {groupPendingCount}
                       </span>
