@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc } from "firebase/firestore"
@@ -627,6 +627,37 @@ export default function RoundsPage() {
           </Table>
         </div>
       </div>
+
+      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
+        <DialogContent className="sm:max-w-[550px]">
+          {isHistoryDialogOpen && (
+            <>
+              <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
+              <div className="py-4 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Amount</TableHead>
+                      <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historyMember && (allPayments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="text-sm font-semibold">{p.month}</TableCell>
+                        <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy, hh:mm a') : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button></DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
         <DialogContent className="sm:max-w-[400px]">
