@@ -115,7 +115,6 @@ export default function RoundsPage() {
   
   const [manualPendingValue, setManualPendingValue] = useState<number>(0)
   
-  // Month/Year filter for popup audit collections only
   const [viewMonth, setViewMonth] = useState<string>(format(new Date(), 'MMMM'))
   const [viewYear, setViewYear] = useState<string>(format(new Date(), 'yyyy'))
   
@@ -805,7 +804,7 @@ export default function RoundsPage() {
                           setIsPendingDetailsOpen(true); 
                         }}
                         className={cn(
-                          "px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest tabular-nums transition-all active:scale-95 tabular-nums",
+                          "px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest tabular-nums transition-all active:scale-95 tabular-nums hover:underline cursor-pointer hover:bg-muted/5",
                           pDays > 0 ? "text-destructive font-bold" : "text-muted-foreground/40"
                         )}
                       >
@@ -1177,7 +1176,6 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Thermal Receipt Content (Hidden from Screen, Visible in Print) */}
       <div id="thermal-receipt" className="hidden">
         <div className="text-center font-bold border-b border-black pb-2 mb-2 uppercase">
           PAYMENT HISTORY: {historyMember?.name}
