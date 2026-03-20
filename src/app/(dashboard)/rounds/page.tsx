@@ -72,7 +72,8 @@ const INITIAL_MEMBER_STATE = {
 }
 
 const INITIAL_PAYMENT_STATE = {
-  method: "Cash"
+  method: "Cash",
+  amount: 0
 }
 
 export default function RoundsPage() {
@@ -172,8 +173,7 @@ export default function RoundsPage() {
     e.preventDefault();
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
-    const schemeAmount = currentRound.monthlyAmount || 800;
-    const paymentAmount = schemeAmount;
+    const paymentAmount = Number(paymentData.amount);
     
     setIsActionPending(true);
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -346,15 +346,10 @@ export default function RoundsPage() {
             const groupMonthlyCollection = getGroupMonthlyCollection(group.name);
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
-                <CardHeader className="bg-muted/30 p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-background border-primary/20 text-primary">
-                      {group.collectionType}
-                    </Badge>
+                <div className="absolute top-0 right-0 p-3">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full hover:bg-muted">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted">
                           <MoreVertical className="size-4 text-muted-foreground" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -368,6 +363,12 @@ export default function RoundsPage() {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                </div>
+                <CardHeader className="bg-muted/30 p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-background border-primary/20 text-primary">
+                      {group.collectionType}
+                    </Badge>
                   </div>
                   <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">Group {group.name}</CardTitle>
                 </CardHeader>
@@ -467,11 +468,11 @@ export default function RoundsPage() {
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label>
-                    <Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(chitToEdit.monthlyAmount)})} required className="h-11 rounded-xl" />
+                    <Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" />
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
-                    <Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(chitToEdit.totalMembers)})} required className="h-11 rounded-xl" />
+                    <Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" />
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
@@ -624,7 +625,14 @@ export default function RoundsPage() {
                           variant="ghost" 
                           size="icon" 
                           className="h-9 w-9 text-emerald-600 hover:bg-emerald-50 rounded-xl active:scale-90" 
-                          onClick={() => { setSelectedMemberForPayment(m); setIsQuickPaymentDialogOpen(true); }}
+                          onClick={() => { 
+                            setSelectedMemberForPayment(m); 
+                            setPaymentData({
+                                ...INITIAL_PAYMENT_STATE,
+                                amount: currentRound?.monthlyAmount || 0
+                            });
+                            setIsQuickPaymentDialogOpen(true); 
+                          }}
                         >
                           <IndianRupee className="size-4.5" />
                         </Button>
@@ -718,13 +726,20 @@ export default function RoundsPage() {
           {selectedMemberForPayment && (
             <form onSubmit={handleQuickPayment}>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">Process Fixed Payment</DialogTitle>
-                <DialogDescription className="font-medium italic">Installment collection for {selectedMemberForPayment.name}.</DialogDescription>
+                <DialogTitle className="flex items-center gap-2">Add Payment</DialogTitle>
+                <DialogDescription className="font-medium">Collecting installment for <span className="font-bold text-primary">{selectedMemberForPayment.name}</span>.</DialogDescription>
               </DialogHeader>
-              <div className="grid gap-6 py-8">
-                <div className="flex flex-col items-center justify-center p-8 bg-muted/40 rounded-2xl border border-dashed border-border/60 text-center">
-                   <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.3em] mb-2">Scheme Installment</span>
-                   <div className="text-4xl font-black text-primary tabular-nums tracking-tighter">₹{(currentRound?.monthlyAmount || 800).toLocaleString()}</div>
+              <div className="grid gap-6 py-4">
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Amount (₹)</Label>
+                  <Input 
+                    type="number" 
+                    value={paymentData.amount} 
+                    onChange={e => setPaymentData({...paymentData, amount: Number(e.target.value)})} 
+                    required 
+                    className="h-11 rounded-xl text-lg font-black text-primary" 
+                    placeholder="Enter amount"
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Method</Label>
@@ -738,10 +753,10 @@ export default function RoundsPage() {
                   </Select>
                 </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="mt-4">
                 <Button type="submit" disabled={isActionPending} className="w-full h-12 font-black uppercase tracking-[0.2em] bg-emerald-600 hover:bg-emerald-700 shadow-lg active:scale-95 transition-all">
                   {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : <CheckCircle2 className="mr-2 size-5" />}
-                  Confirm Installment
+                  Confirm Payment
                 </Button>
               </DialogFooter>
             </form>
