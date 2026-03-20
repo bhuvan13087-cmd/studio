@@ -600,9 +600,6 @@ export default function RoundsPage() {
               <h2 className="text-xl sm:text-2xl font-black truncate tracking-tight text-primary font-headline uppercase">{getDisplayName(currentRound?.name)}</h2>
               <Badge variant="secondary" className="text-[9px] font-black tracking-tighter bg-primary/10 text-primary border-none">{currentRound?.collectionType}</Badge>
             </div>
-            <p className="text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 flex items-center gap-1.5">
-              <LayoutDashboard className="size-3" /> Management Board Registry
-            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
