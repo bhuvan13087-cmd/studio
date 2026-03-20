@@ -27,9 +27,10 @@ export default function LoginPage() {
       await signInWithEmailAndPassword(auth, email, password)
       toast({
         title: "Welcome Back",
-        description: "Authentication successful. Accessing dashboard...",
+        description: "Authentication successful. Accessing seat reservations...",
       })
-      router.push("/dashboard")
+      // Redirect to Chit Rounds by default as per production requirement
+      router.push("/rounds")
     } catch (error: any) {
       console.error("Login error:", error)
       toast({
