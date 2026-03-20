@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -28,12 +28,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, writeBatch } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
@@ -61,6 +78,11 @@ const INITIAL_PAYMENT_STATE = {
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
+  const [isEditChitDialogOpen, setIsEditChitDialogOpen] = useState(false)
+  const [chitToEdit, setChitToEdit] = useState<any>(null)
+  const [isDeleteChitDialogOpen, setIsDeleteChitDialogOpen] = useState(false)
+  const [chitToDelete, setChitToDelete] = useState<any>(null)
+  
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false)
   const [isQuickPaymentDialogOpen, setIsQuickPaymentDialogOpen] = useState(false)
   const [isMemberProfileDialogOpen, setIsMemberProfileDialogOpen] = useState(false)
@@ -213,6 +235,45 @@ export default function RoundsPage() {
     }
   }
 
+  const handleUpdateChit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !chitToEdit || isActionPending) return;
+    setIsActionPending(true);
+    try {
+      const chitRef = doc(db, 'chitRounds', chitToEdit.id);
+      await withTimeout(updateDoc(chitRef, {
+        name: chitToEdit.name,
+        monthlyAmount: Number(chitToEdit.monthlyAmount),
+        totalMembers: Number(chitToEdit.totalMembers),
+        collectionType: chitToEdit.collectionType
+      }));
+      await createAuditLog(db, user, `Updated scheme: ${chitToEdit.name}`);
+      setIsEditChitDialogOpen(false);
+      setChitToEdit(null);
+      toast({ title: "Scheme Updated", description: "Changes saved." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update scheme." });
+    } finally {
+      setIsActionPending(false);
+    }
+  }
+
+  const handleDeleteChit = async () => {
+    if (!db || !chitToDelete || isActionPending) return;
+    setIsActionPending(true);
+    try {
+      await withTimeout(deleteDoc(doc(db, 'chitRounds', chitToDelete.id)));
+      await createAuditLog(db, user, `Deleted scheme: ${chitToDelete.name}`);
+      setIsDeleteChitDialogOpen(false);
+      setChitToDelete(null);
+      toast({ title: "Scheme Deleted", description: "Record removed." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to delete scheme." });
+    } finally {
+      setIsActionPending(false);
+    }
+  }
+
   const handleAddMemberToScheme = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || !currentRound || isActionPending) return;
@@ -273,9 +334,22 @@ export default function RoundsPage() {
                     <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-background border-primary/20 text-primary">
                       {group.collectionType}
                     </Badge>
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                      <Users className="size-3" /> {group.totalMembers} Seats
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full hover:bg-muted">
+                          <MoreVertical className="size-4 text-muted-foreground" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => { setChitToEdit({...group}); setIsEditChitDialogOpen(true); }}>
+                          <Pencil className="mr-2 size-4" /> Edit Scheme
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive" onClick={() => { setChitToDelete(group); setIsDeleteChitDialogOpen(true); }}>
+                          <Trash2 className="mr-2 size-4" /> Delete Scheme
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">Group {group.name}</CardTitle>
                 </CardHeader>
@@ -317,6 +391,7 @@ export default function RoundsPage() {
           })}
         </div>
 
+        {/* Add Scheme Dialog */}
         <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleAddChit}>
@@ -357,6 +432,69 @@ export default function RoundsPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Scheme Dialog */}
+        <Dialog open={isEditChitDialogOpen} onOpenChange={setIsEditChitDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            {chitToEdit && (
+              <form onSubmit={handleUpdateChit}>
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold">Edit Scheme</DialogTitle>
+                  <DialogDescription className="font-medium">Modify parameters for {chitToEdit.name}.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-5 py-6">
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Scheme Name</Label>
+                    <Input value={chitToEdit.name} onChange={e => setChitToEdit({...chitToEdit, name: e.target.value})} required className="h-11 rounded-xl" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label>
+                    <Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
+                    <Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
+                    <Select value={chitToEdit.collectionType} onValueChange={(v) => setChitToEdit({...chitToEdit, collectionType: v})}>
+                      <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select frequency" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Daily">Daily</SelectItem>
+                        <SelectItem value="Monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold">
+                    {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}
+                    Save Changes
+                  </Button>
+                </DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Scheme Alert */}
+        <AlertDialog open={isDeleteChitDialogOpen} onOpenChange={setIsDeleteChitDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{chitToDelete?.name}</strong>? This will permanently remove the scheme and its configuration.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeleteChit} disabled={isActionPending}>
+                {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                Delete Scheme
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     )
   }
