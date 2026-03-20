@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -76,6 +76,12 @@ const INITIAL_PAYMENT_STATE = {
   amount: 0
 }
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+const YEARS = ["2024", "2025", "2026", "2027", "2028"];
+
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
@@ -100,6 +106,10 @@ export default function RoundsPage() {
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
   
   const [manualPendingValue, setManualPendingValue] = useState<number>(0)
+  
+  // Month/Year filter for group card collections
+  const [viewMonth, setViewMonth] = useState<string>(format(new Date(), 'MMMM'))
+  const [viewYear, setViewYear] = useState<string>(format(new Date(), 'yyyy'))
   
   const { toast } = useToast()
   const db = useFirestore()
@@ -159,15 +169,15 @@ export default function RoundsPage() {
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
   };
 
-  const getGroupMonthlyCollection = (groupName: string) => {
+  const getGroupMonthlyCollection = (groupName: string, monthStr?: string) => {
     if (!allPayments || !members) return 0;
-    const currentMonth = format(new Date(), 'MMMM yyyy');
+    const targetMonth = monthStr || format(new Date(), 'MMMM yyyy');
     const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
     return allPayments
       .filter(p => 
         groupMemberIds.has(p.memberId) && 
         (p.status === 'success' || p.status === 'paid') &&
-        p.month === currentMonth
+        p.month === targetMonth
       )
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
   };
@@ -177,15 +187,10 @@ export default function RoundsPage() {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const groupMembers = members.filter(m => m.chitGroup === groupName && m.status !== 'inactive');
     
-    /**
-     * PRODUCTION FIX: DAILY ONLY PENDING LOGIC
-     * Replicates Reports page logic to include only Daily members who are unpaid.
-     */
     return groupMembers.filter(m => {
       const scheme = chitSchemes.find(r => r.name === m.chitGroup);
       const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
       
-      // RULE: Include only Daily members in pending count
       if (resolvedType !== 'daily') return false;
 
       const hasPaidToday = allPayments.some(p => 
@@ -194,7 +199,6 @@ export default function RoundsPage() {
         (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
       );
       
-      // RULE: Only count as pending if not paid today
       return !hasPaidToday;
     }).length;
   };
@@ -392,11 +396,37 @@ export default function RoundsPage() {
           </Button>
         </div>
 
+        {/* Month/Year Filter for Collection */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-card p-4 rounded-xl border border-border/50 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Calendar className="size-4 text-primary" />
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Filter Collection:</span>
+          </div>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <Select value={viewMonth} onValueChange={setViewMonth}>
+              <SelectTrigger className="h-9 w-[140px] text-xs font-bold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MONTHS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={viewYear} onValueChange={setViewYear}>
+              <SelectTrigger className="h-9 w-[100px] text-xs font-bold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
             const groupPendingCount = getGroupPendingCount(group.name);
-            const monthlyCollection = getGroupMonthlyCollection(group.name);
+            const monthlyCollection = getGroupMonthlyCollection(group.name, `${viewMonth} ${viewYear}`);
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-0 right-0 p-3">
