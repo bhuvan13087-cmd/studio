@@ -445,6 +445,10 @@ export default function RoundsPage() {
                         {currentOccupancy} <span className="text-muted-foreground font-medium">/ {group.totalMembers}</span>
                       </span>
                     </div>
+                    <div className="flex justify-between items-center text-xs pt-1 border-t border-border/40">
+                      <span className="text-muted-foreground font-semibold">Monthly Intake</span>
+                      <span className="font-bold text-emerald-600">₹{monthlyCollection.toLocaleString()}</span>
+                    </div>
                   </div>
                   <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
                     <div 
@@ -756,67 +760,68 @@ export default function RoundsPage() {
                 <DialogDescription className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">Financial deficit summary</DialogDescription>
               </DialogHeader>
               
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-muted/30 rounded-2xl border border-border/40 space-y-1">
-                    <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Member</p>
-                    <p className="text-sm font-bold truncate">{selectedPendingMember.name}</p>
-                  </div>
-                  
-                  <div className="p-4 bg-muted/30 rounded-2xl border border-border/40 space-y-1">
-                    <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Missed Count</p>
-                    {!isManualPendingEdit ? (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-black tabular-nums">{selectedPendingMember.pendingDays}</span>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-primary/10 hover:text-primary transition-colors" onClick={() => setIsManualPendingEdit(true)}>
-                          <Pencil className="size-3" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 mt-1">
-                        <Input 
-                          type="number" 
-                          value={manualPendingValue} 
-                          onChange={e => setManualPendingValue(Number(e.target.value))}
-                          className="h-7 w-12 text-[10px] font-bold px-1 rounded-md"
-                        />
-                        <Button size="sm" className="h-7 px-1.5 text-[9px] font-bold uppercase" onClick={handleUpdatePendingDays} disabled={isActionPending}>Set</Button>
-                        <Button variant="ghost" size="sm" className="h-7 px-1.5 text-[9px] font-bold uppercase" onClick={() => setIsManualPendingEdit(false)}>X</Button>
-                      </div>
-                    )}
-                  </div>
+              <div className="p-6 space-y-4">
+                {/* 1. Name */}
+                <div className="p-4 bg-muted/30 rounded-2xl border border-border/40 space-y-1">
+                  <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Member Name</p>
+                  <p className="text-base font-bold">{selectedPendingMember.name}</p>
                 </div>
 
-                <div className="p-8 bg-destructive/5 rounded-3xl border border-dashed border-destructive/20 text-center space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-destructive/60">Total Outstanding Debt</p>
+                {/* 2. Amount */}
+                <div className="p-5 bg-destructive/5 rounded-2xl border border-destructive/10 space-y-2">
+                  <p className="text-[9px] font-black uppercase text-destructive/60 tracking-widest">Total Arrears Amount</p>
                   {!isManualPendingAmountEdit ? (
-                    <div className="flex items-center justify-center gap-3">
-                      <span className="text-4xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/40 hover:bg-destructive/10 hover:text-destructive transition-all rounded-full" onClick={() => setIsManualPendingAmountEdit(true)}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl font-black text-destructive tabular-nums">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/40 hover:bg-destructive/10" onClick={() => setIsManualPendingAmountEdit(true)}>
                         <Pencil className="size-4" />
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center gap-2 mt-2">
-                      <div className="relative">
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
                         <Input 
                           type="number" 
                           value={manualPendingAmountValue} 
                           onChange={e => setManualPendingAmountValue(Number(e.target.value))}
-                          className="h-10 w-28 pl-5 font-bold text-sm rounded-xl"
+                          className="h-9 pl-5 font-bold text-sm"
                         />
                       </div>
-                      <Button onClick={handleUpdatePendingAmount} disabled={isActionPending} className="font-bold h-10 px-4 rounded-xl">Save</Button>
-                      <Button variant="ghost" onClick={() => setIsManualPendingAmountEdit(false)} className="h-10 px-3 rounded-xl">X</Button>
+                      <Button size="sm" onClick={handleUpdatePendingAmount} disabled={isActionPending}>Save</Button>
+                      <Button variant="ghost" size="sm" onClick={() => setIsManualPendingAmountEdit(false)}>X</Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Days Count */}
+                <div className="p-4 bg-muted/30 rounded-2xl border border-border/40 space-y-1">
+                  <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Missed Installments (Days)</p>
+                  {!isManualPendingEdit ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-base font-black tabular-nums">{selectedPendingMember.pendingDays}</span>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/40 hover:bg-muted" onClick={() => setIsManualPendingEdit(true)}>
+                        <Pencil className="size-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        type="number" 
+                        value={manualPendingValue} 
+                        onChange={e => setManualPendingValue(Number(e.target.value))}
+                        className="h-9 w-20 font-bold text-sm"
+                      />
+                      <Button size="sm" onClick={handleUpdatePendingDays} disabled={isActionPending}>Set</Button>
+                      <Button variant="ghost" size="sm" onClick={() => setIsManualPendingEdit(false)}>X</Button>
                     </div>
                   )}
                 </div>
 
                 <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 flex gap-4">
                   <Info className="size-5 text-primary shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-muted-foreground leading-relaxed italic font-medium">
-                    Manual overrides provide administrative precision. Calculations age automatically daily at 10 PM.
+                  <p className="text-[10px] text-muted-foreground leading-relaxed italic font-medium">
+                    Calculations age automatically daily at 10 PM. Manual overrides provide administrative precision.
                   </p>
                 </div>
               </div>
