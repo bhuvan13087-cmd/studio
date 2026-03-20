@@ -817,13 +817,6 @@ export default function RoundsPage() {
                     </div>
                   )}
                 </div>
-
-                <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 flex gap-4">
-                  <Info className="size-5 text-primary shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-muted-foreground leading-relaxed italic font-medium">
-                    Calculations age automatically daily at 10 PM. Manual overrides provide administrative precision.
-                  </p>
-                </div>
               </div>
               
               <DialogFooter className="p-6 pt-0">
