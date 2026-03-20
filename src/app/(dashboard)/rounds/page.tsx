@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -103,6 +103,23 @@ export default function RoundsPage() {
 
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
+
+  const overallMonthlyCollection = useMemo(() => {
+    if (!allPayments) return 0;
+    const currentMonth = format(new Date(), 'MMMM yyyy');
+    return allPayments
+      .filter(p => p.month === currentMonth && (p.status === 'success' || p.status === 'paid'))
+      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+  }, [allPayments]);
+
+  const getGroupMonthlyCollection = (groupName: string) => {
+    if (!allPayments || !members) return 0;
+    const currentMonth = format(new Date(), 'MMMM yyyy');
+    const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
+    return allPayments
+      .filter(p => groupMemberIds.has(p.memberId) && p.month === currentMonth && (p.status === 'success' || p.status === 'paid'))
+      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+  };
 
   const calculateStatus = (member: any) => {
     if (!allPayments) return { paidToday: false };
@@ -248,9 +265,27 @@ export default function RoundsPage() {
           </Button>
         </div>
 
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card className="bg-primary text-primary-foreground shadow-lg border-none overflow-hidden relative rounded-2xl">
+            <div className="absolute top-0 right-0 p-8 opacity-10">
+              <TrendingUp className="size-24" />
+            </div>
+            <CardHeader className="p-6 pb-2">
+              <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-80">Overall Monthly Collection</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0">
+              <div className="text-4xl font-black tracking-tighter tabular-nums">₹{overallMonthlyCollection.toLocaleString()}</div>
+              <p className="text-[10px] font-bold mt-2 opacity-70 uppercase tracking-widest flex items-center gap-1.5">
+                <CheckCircle2 className="size-3" /> All Groups Unified Revenue
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
+            const groupMonthCollection = getGroupMonthlyCollection(group.name);
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
@@ -263,13 +298,17 @@ export default function RoundsPage() {
                       <Users className="size-3" /> {group.totalMembers} Seats
                     </div>
                   </div>
-                  <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">{group.name}</CardTitle>
+                  <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">Group {group.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-5 flex-1 space-y-4">
                   <div className="space-y-3">
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Scheme Amount</span>
                       <span className="font-bold text-primary text-sm">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground font-semibold">Group Collection</span>
+                      <span className="font-bold text-emerald-600 text-sm">₹{groupMonthCollection.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Occupancy</span>
@@ -316,7 +355,7 @@ export default function RoundsPage() {
                   <Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="800" />
                 </div>
                 <div className="grid gap-2">
-                  <Label className="text-[10px) font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
                   <Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="20" />
                 </div>
                 <div className="grid gap-2">
