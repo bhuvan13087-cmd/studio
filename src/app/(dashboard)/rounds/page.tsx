@@ -316,7 +316,7 @@ export default function RoundsPage() {
                   <Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="800" />
                 </div>
                 <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
+                  <Label className="text-[10px) font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
                   <Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="20" />
                 </div>
                 <div className="grid gap-2">
@@ -390,7 +390,7 @@ export default function RoundsPage() {
             <TableHeader className="bg-muted/10">
               <TableRow className="hover:bg-transparent border-b">
                 <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 pl-6 text-muted-foreground/70">Member Participant</TableHead>
-                <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 text-muted-foreground/70">📅 Pending Dates</TableHead>
+                <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 text-muted-foreground/70">📅 Pending Days</TableHead>
                 <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 text-muted-foreground/70">Status Indicator</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
@@ -424,7 +424,7 @@ export default function RoundsPage() {
                           pDays > 0 ? "bg-destructive/5 text-destructive border-destructive/20 hover:bg-destructive/10" : "bg-muted/50 text-muted-foreground/60 border-transparent"
                         )}
                       >
-                        ⏳ {pDays} {pDays === 1 ? 'Date' : 'Dates'}
+                        ⏳ {pDays} {pDays === 1 ? 'Day' : 'Days'}
                       </button>
                     </TableCell>
                     <TableCell>

@@ -243,7 +243,7 @@ export default function DashboardPage() {
                       {scheme.totalPendingDays}
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1.5">
-                      <Clock className="size-3" /> Pending Dates
+                      <Clock className="size-3" /> Pending Days
                     </p>
                   </div>
                   <div className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-widest">{scheme.memberCount} Seats</div>
@@ -317,7 +317,7 @@ export default function DashboardPage() {
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] pl-8 h-12">Participant</TableHead>
                       <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Cycle Status</TableHead>
-                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] text-center h-12">Pending Count</TableHead>
+                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] text-center h-12">Pending Days</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -354,7 +354,7 @@ export default function DashboardPage() {
                               )}
                               onClick={() => handleMemberArrearsClick(m)}
                             >
-                              ⏳ {m.pendingDays || 0} Dates
+                              ⏳ {m.pendingDays || 0} Days
                             </button>
                           </TableCell>
                         </TableRow>
