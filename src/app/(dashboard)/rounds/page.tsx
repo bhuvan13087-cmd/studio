@@ -131,6 +131,13 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
+  // Helper to clean and format group names
+  const getDisplayName = (name: string) => {
+    if (!name) return "";
+    const clean = name.replace(/Group/gi, '').trim();
+    return `Group ${clean}`;
+  };
+
   const getGroupTodayCollection = (groupName: string) => {
     if (!allPayments || !members) return 0;
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -404,7 +411,9 @@ export default function RoundsPage() {
                       {group.collectionType}
                     </Badge>
                   </div>
-                  <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">Group {group.name}</CardTitle>
+                  <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">
+                    {getDisplayName(group.name)}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="p-5 flex-1 space-y-4">
                   <div className="space-y-3">
@@ -565,7 +574,7 @@ export default function RoundsPage() {
           <Button variant="outline" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-10 w-10 shadow-sm hover:shadow-md transition-all active:scale-95"><ChevronLeft className="size-5" /></Button>
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-xl sm:text-2xl font-black truncate tracking-tight text-primary font-headline uppercase">{currentRound?.name}</h2>
+              <h2 className="text-xl sm:text-2xl font-black truncate tracking-tight text-primary font-headline uppercase">{getDisplayName(currentRound?.name)}</h2>
               <Badge variant="secondary" className="text-[9px] font-black tracking-tighter bg-primary/10 text-primary border-none">{currentRound?.collectionType}</Badge>
             </div>
             <p className="text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 flex items-center gap-1.5">
@@ -849,7 +858,7 @@ export default function RoundsPage() {
           <form onSubmit={handleAddMemberToScheme}>
             <DialogHeader>
               <DialogTitle className="text-xl font-bold">Register Participant</DialogTitle>
-              <DialogDescription className="font-medium">Enroll new member into {currentRound?.name} Board.</DialogDescription>
+              <DialogDescription className="font-medium">Enroll new member into {getDisplayName(currentRound?.name)} Board.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-5 py-6">
               <div className="grid gap-2">

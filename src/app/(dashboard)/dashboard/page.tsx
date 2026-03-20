@@ -58,6 +58,13 @@ export default function DashboardPage() {
     setMounted(true)
   }, [])
 
+  // Helper to clean and format group names
+  const getDisplayName = (name: string) => {
+    if (!name) return "";
+    const clean = name.replace(/Group/gi, '').trim();
+    return `Group ${clean}`;
+  };
+
   const dashboardData = useMemo(() => {
     if (!mounted || membersLoading || paymentsLoading || roundsLoading) return null;
 
@@ -231,7 +238,9 @@ export default function DashboardPage() {
                 <ArrowRight className="size-4 text-primary" />
               </div>
               <CardHeader className="p-5 pb-2 bg-muted/10 border-b border-border/40">
-                <CardTitle className="text-[11px] font-black uppercase text-muted-foreground tracking-[0.3em] truncate">Group {scheme.name}</CardTitle>
+                <CardTitle className="text-[11px] font-black uppercase text-muted-foreground tracking-[0.3em] truncate">
+                  {getDisplayName(scheme.name)}
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-5">
                 <div className="flex items-end justify-between">
@@ -303,7 +312,9 @@ export default function DashboardPage() {
                     <FolderKanban className="size-6" />
                   </div>
                   <div>
-                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">Group {selectedGroup.name} Registry</DialogTitle>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">
+                      {getDisplayName(selectedGroup.name)} Registry
+                    </DialogTitle>
                     <DialogDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70 mt-1">
                       Automated Isolated Member Board
                     </DialogDescription>
