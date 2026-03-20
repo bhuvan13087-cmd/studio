@@ -752,72 +752,76 @@ export default function RoundsPage() {
           setIsManualPendingAmountEdit(false);
         }
       }}>
-        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+        <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
           {selectedPendingMember && (
             <>
-              <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b">
-                <DialogTitle className="text-xl font-black uppercase tracking-tight">Pending Member Details</DialogTitle>
-                <DialogDescription className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">Financial deficit summary</DialogDescription>
+              <DialogHeader className="p-5 bg-muted/30 border-b">
+                <DialogTitle className="text-lg font-bold tracking-tight">Pending Member Details</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Financial deficit summary</DialogDescription>
               </DialogHeader>
               
-              <div className="p-6 space-y-4">
-                <div className="p-4 bg-muted/30 rounded-2xl border border-border/40 space-y-1">
-                  <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Member Name</p>
-                  <p className="text-base font-bold">{selectedPendingMember.name}</p>
+              <div className="p-5 space-y-4">
+                <div className="flex flex-col gap-1 border-b pb-3 border-border/40">
+                  <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Member Name</span>
+                  <span className="text-sm font-bold">{selectedPendingMember.name}</span>
                 </div>
 
-                <div className="p-5 bg-destructive/5 rounded-2xl border border-destructive/10 space-y-2">
-                  <p className="text-[9px] font-black uppercase text-destructive/60 tracking-widest">Total Arrears Amount</p>
-                  {!isManualPendingAmountEdit ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl font-black text-destructive tabular-nums">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/40 hover:bg-destructive/10" onClick={() => setIsManualPendingAmountEdit(true)}>
-                        <Pencil className="size-4" />
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Total Arrears Amount</span>
+                    {!isManualPendingAmountEdit && (
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-primary/40 hover:bg-primary/10" onClick={() => setIsManualPendingAmountEdit(true)}>
+                        <Pencil className="size-3" />
                       </Button>
-                    </div>
+                    )}
+                  </div>
+                  {!isManualPendingAmountEdit ? (
+                    <span className="text-xl font-black text-destructive tabular-nums tracking-tight">₹{(selectedPendingMember.pendingAmount || 0).toLocaleString()}</span>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
                       <div className="relative flex-1">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground">₹</span>
                         <Input 
                           type="number" 
                           value={manualPendingAmountValue} 
                           onChange={e => setManualPendingAmountValue(Number(e.target.value))}
-                          className="h-9 pl-5 font-bold text-sm"
+                          className="h-8 pl-5 font-bold text-xs"
                         />
                       </div>
-                      <Button size="sm" onClick={handleUpdatePendingAmount} disabled={isActionPending}>Save</Button>
-                      <Button variant="ghost" size="sm" onClick={() => setIsManualPendingAmountEdit(false)}>X</Button>
+                      <Button size="sm" className="h-8 px-3 text-[10px] font-bold" onClick={handleUpdatePendingAmount} disabled={isActionPending}>Save</Button>
+                      <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setIsManualPendingAmountEdit(false)}>X</Button>
                     </div>
                   )}
                 </div>
 
-                <div className="p-4 bg-muted/30 rounded-2xl border border-border/40 space-y-1">
-                  <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Missed Installments (Days)</p>
-                  {!isManualPendingEdit ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-base font-black tabular-nums">{selectedPendingMember.pendingDays}</span>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/40 hover:bg-muted" onClick={() => setIsManualPendingEdit(true)}>
-                        <Pencil className="size-4" />
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest">Missed Installments (Days)</span>
+                    {!isManualPendingEdit && (
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-primary/40 hover:bg-primary/10" onClick={() => setIsManualPendingEdit(true)}>
+                        <Pencil className="size-3" />
                       </Button>
-                    </div>
+                    )}
+                  </div>
+                  {!isManualPendingEdit ? (
+                    <span className="text-base font-bold tabular-nums">{selectedPendingMember.pendingDays}</span>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
                       <Input 
                         type="number" 
                         value={manualPendingValue} 
                         onChange={e => setManualPendingValue(Number(e.target.value))}
-                        className="h-9 w-20 font-bold text-sm"
+                        className="h-8 w-20 font-bold text-xs"
                       />
-                      <Button size="sm" onClick={handleUpdatePendingDays} disabled={isActionPending}>Set</Button>
-                      <Button variant="ghost" size="sm" onClick={() => setIsManualPendingEdit(false)}>X</Button>
+                      <Button size="sm" className="h-8 px-3 text-[10px] font-bold" onClick={handleUpdatePendingDays} disabled={isActionPending}>Set</Button>
+                      <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setIsManualPendingEdit(false)}>X</Button>
                     </div>
                   )}
                 </div>
               </div>
               
-              <DialogFooter className="p-6 pt-0">
-                <Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full h-12 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all shadow-lg">Close Details</Button>
+              <DialogFooter className="p-5 pt-0">
+                <Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full h-10 font-black uppercase tracking-widest text-[10px] rounded-xl active:scale-95 transition-all shadow-md">Close Details</Button>
               </DialogFooter>
             </>
           )}
