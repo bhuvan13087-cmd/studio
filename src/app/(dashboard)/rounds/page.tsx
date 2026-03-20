@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet, CalendarDays } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet, CalendarDays, Edit3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -93,6 +93,8 @@ export default function RoundsPage() {
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false)
   const [isQuickPaymentDialogOpen, setIsQuickPaymentDialogOpen] = useState(false)
   const [isMemberProfileDialogOpen, setIsMemberProfileDialogOpen] = useState(false)
+  const [isEditMemberProfileOpen, setIsEditMemberProfileOpen] = useState(false)
+  const [memberProfileToEdit, setMemberProfileToEdit] = useState<any>(null)
   const [isPendingDetailsOpen, setIsPendingDetailsOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
@@ -386,6 +388,30 @@ export default function RoundsPage() {
       toast({ title: "Member Registered", description: `${newMember.name} joined.` });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to register member." });
+    } finally {
+      setIsActionPending(false);
+    }
+  }
+
+  const handleUpdateMemberProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !memberProfileToEdit || isActionPending) return;
+    setIsActionPending(true);
+    try {
+      const memberRef = doc(db, 'members', memberProfileToEdit.id);
+      await withTimeout(updateDoc(memberRef, {
+        name: memberProfileToEdit.name,
+        phone: memberProfileToEdit.phone,
+        joinDate: memberProfileToEdit.joinDate
+      }));
+      
+      await createAuditLog(db, user, `Updated member profile: ${memberProfileToEdit.name}`);
+      setIsEditMemberProfileOpen(false);
+      setMemberProfileToEdit(null);
+      setIsMemberProfileDialogOpen(false);
+      toast({ title: "Profile Updated", description: "Details saved successfully." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update profile." });
     } finally {
       setIsActionPending(false);
     }
@@ -948,12 +974,76 @@ export default function RoundsPage() {
                   </span>
                 </div>
               </div>
-              <DialogFooter>
-                <Button onClick={() => setIsMemberProfileDialogOpen(false)} className="w-full font-bold">
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <Button 
+                  variant="outline" 
+                  className="w-full sm:w-auto font-bold gap-2"
+                  onClick={() => {
+                    setMemberProfileToEdit({ ...selectedProfileMember });
+                    setIsEditMemberProfileOpen(true);
+                  }}
+                >
+                  <Edit3 className="size-4" />
+                  Edit Profile
+                </Button>
+                <Button onClick={() => setIsMemberProfileDialogOpen(false)} className="w-full sm:w-auto font-bold ml-auto">
                   Close
                 </Button>
               </DialogFooter>
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member Profile Dialog */}
+      <Dialog open={isEditMemberProfileOpen} onOpenChange={setIsEditMemberProfileOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          {memberProfileToEdit && (
+            <form onSubmit={handleUpdateMemberProfile}>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Edit3 className="size-5 text-primary" /> Edit Participant
+                </DialogTitle>
+                <DialogDescription>Update details for {memberProfileToEdit.name}.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-5 py-6">
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label>
+                  <Input 
+                    value={memberProfileToEdit.name} 
+                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} 
+                    required 
+                    className="h-11 rounded-xl" 
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
+                  <Input 
+                    value={memberProfileToEdit.phone} 
+                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} 
+                    required 
+                    className="h-11 rounded-xl" 
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label>
+                  <Input 
+                    type="date" 
+                    value={memberProfileToEdit.joinDate} 
+                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} 
+                    required 
+                    className="h-11 rounded-xl" 
+                  />
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" type="button" onClick={() => setIsEditMemberProfileOpen(false)} disabled={isActionPending} className="w-full sm:w-auto font-bold">Cancel</Button>
+                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold gap-2">
+                  {isActionPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
           )}
         </DialogContent>
       </Dialog>
