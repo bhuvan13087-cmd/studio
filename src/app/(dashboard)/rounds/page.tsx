@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet, CalendarDays, Edit3 } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet, CalendarDays, Edit3, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -202,7 +202,6 @@ export default function RoundsPage() {
       const scheme = chitSchemes.find(r => r.name === m.chitGroup);
       const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
       
-      // PRODUCTION RULE: ONLY DAILY PENDING MEMBERS COUNTED
       if (resolvedType !== 'daily') return false;
 
       const hasPaidToday = allPayments.some(p => 
@@ -417,6 +416,11 @@ export default function RoundsPage() {
     }
   }
 
+  const handlePrintHistory = () => {
+    if (!historyMember) return;
+    window.print();
+  }
+
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
   if (!selectedChitId) {
@@ -436,7 +440,6 @@ export default function RoundsPage() {
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
             const groupPendingCount = getGroupPendingCount(group.name);
-            // Main card display ALWAYS shows current month
             const monthlyCollection = getGroupMonthlyCollection(group.name, format(new Date(), 'MMMM yyyy'));
             
             return (
@@ -527,11 +530,9 @@ export default function RoundsPage() {
           })}
         </div>
 
-        {/* Collection Summary Popup with Period Selectors */}
         <Dialog open={isCollectionPopupOpen} onOpenChange={(open) => {
           setIsCollectionPopupOpen(open);
           if (!open) {
-            // Reset to current month/year when closed automatically
             setViewMonth(format(new Date(), 'MMMM'));
             setViewYear(format(new Date(), 'yyyy'));
             setActivePopupGroupName(null);
@@ -862,7 +863,6 @@ export default function RoundsPage() {
         </div>
       </div>
 
-      {/* Daily Reconciliation Popup */}
       <Dialog open={isDailyAuditOpen} onOpenChange={setIsDailyAuditOpen}>
         <DialogContent className="sm:max-w-[400px]">
           {currentRound && (
@@ -934,7 +934,12 @@ export default function RoundsPage() {
                   </TableBody>
                 </Table>
               </div>
-              <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button></DialogFooter>
+              <DialogFooter>
+                <Button variant="outline" className="gap-2 font-bold" onClick={handlePrintHistory}>
+                  <Printer className="size-4" /> Print History
+                </Button>
+                <Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button>
+              </DialogFooter>
             </>
           )}
         </DialogContent>
@@ -995,7 +1000,6 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Member Profile Dialog */}
       <Dialog open={isEditMemberProfileOpen} onOpenChange={setIsEditMemberProfileOpen}>
         <DialogContent className="sm:max-w-[425px]">
           {memberProfileToEdit && (
@@ -1132,7 +1136,7 @@ export default function RoundsPage() {
                 </div>
               </div>
               <DialogFooter className="mt-4">
-                <Button type="submit" disabled={isActionPending} className="w-full h-12 font-black uppercase tracking-[0.2em] bg-emerald-600 hover:bg-emerald-700 shadow-lg active:scale-95 transition-all">
+                <Button type="submit" disabled={isActionPending} className="w-full h-12 font-black uppercase tracking-[0.2em] bg-emerald-600 hover:bg-emerald-700 shadow-lg active:scale-[0.98] transition-all">
                   {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : <CheckCircle2 className="mr-2 size-5" />}
                   Confirm Payment
                 </Button>
@@ -1172,6 +1176,38 @@ export default function RoundsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Thermal Receipt Content (Hidden from Screen, Visible in Print) */}
+      <div id="thermal-receipt" className="hidden">
+        <div className="text-center font-bold border-b border-black pb-2 mb-2 uppercase">
+          PAYMENT HISTORY: {historyMember?.name}
+        </div>
+        <table className="w-full text-[10px] border-collapse">
+          <thead>
+            <tr className="border-b border-black">
+              <th className="text-left py-1">MONTH</th>
+              <th className="text-center py-1">AMT</th>
+              <th className="text-right py-1">DATE</th>
+            </tr>
+          </thead>
+          <tbody>
+            {historyMember && (allPayments || [])
+              .filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success'))
+              .map((p, i) => (
+                <tr key={i} className="border-b border-gray-300 border-dashed">
+                  <td className="py-1">{p.month}</td>
+                  <td className="text-center font-bold py-1">₹{p.amountPaid}</td>
+                  <td className="text-right text-[9px] py-1">
+                    {p.paymentDate ? format(parseISO(p.paymentDate), 'dd-MM-yy') : '-'}
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+        <div className="mt-4 text-center text-[9px] italic">
+          * {getDisplayName(currentRound?.name || "")} Official Record *
+        </div>
+      </div>
     </div>
   )
 }
