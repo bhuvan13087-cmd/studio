@@ -127,24 +127,6 @@ export default function RoundsPage() {
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
 
-  const getGroupMonthlyCollection = (groupName: string) => {
-    if (!allPayments || !members) return 0;
-    const now = new Date();
-    const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
-    return allPayments
-      .filter(p => {
-        if (p.status !== 'success' && p.status !== 'paid') return false;
-        if (!groupMemberIds.has(p.memberId)) return false;
-        if (!p.paymentDate) return false;
-        try {
-          return isSameMonth(parseISO(p.paymentDate), now);
-        } catch {
-          return false;
-        }
-      })
-      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-  };
-
   const getGroupTodayCollection = (groupName: string) => {
     if (!allPayments || !members) return 0;
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -156,6 +138,21 @@ export default function RoundsPage() {
         (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
       )
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+  };
+
+  const getGroupPendingCount = (groupName: string) => {
+    if (!allPayments || !members) return 0;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const groupMembers = members.filter(m => m.chitGroup === groupName && m.status !== 'inactive');
+    
+    return groupMembers.filter(m => {
+      const hasPaidToday = allPayments.some(p => 
+        p.memberId === m.id && 
+        (p.status === 'success' || p.status === 'paid') &&
+        (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
+      );
+      return !hasPaidToday;
+    }).length;
   };
 
   const calculateStatus = (member: any) => {
@@ -343,7 +340,7 @@ export default function RoundsPage() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
-            const groupMonthlyCollection = getGroupMonthlyCollection(group.name);
+            const groupPendingCount = getGroupPendingCount(group.name);
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-0 right-0 p-3">
@@ -379,8 +376,8 @@ export default function RoundsPage() {
                       <span className="font-bold text-primary text-sm">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground font-semibold">Monthly Collection</span>
-                      <span className="font-bold text-emerald-600 text-sm">₹{groupMonthlyCollection.toLocaleString()}</span>
+                      <span className="text-muted-foreground font-semibold">Pending Members</span>
+                      <span className="font-bold text-destructive text-sm">{groupPendingCount}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Occupancy</span>
@@ -548,7 +545,7 @@ export default function RoundsPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-widest">Base Scheme</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-widest">Occupancy</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums">{assignedMembers.length} <span className="text-sm font-bold text-muted-foreground">/ {currentRound?.totalMembers}</span></div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-widest">Pending Count</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums text-amber-600">{assignedMembers.filter(m => calculateStatus(m).paidToday === false).length}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-2xl"><CardHeader className="p-4 pb-2"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-widest">Pending Members</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black tabular-nums text-amber-600">{assignedMembers.filter(m => calculateStatus(m).paidToday === false).length}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-2xl">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-widest">Today's Collection</CardTitle>
@@ -574,7 +571,7 @@ export default function RoundsPage() {
             <TableHeader className="bg-muted/10">
               <TableRow className="hover:bg-transparent border-b">
                 <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 pl-6 text-muted-foreground/70">Member Participant</TableHead>
-                <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 text-muted-foreground/70">📅 Pending Days</TableHead>
+                <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 text-muted-foreground/70">Pending Days</TableHead>
                 <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 text-muted-foreground/70">Status Indicator</TableHead>
                 <TableHead className="w-[120px] pr-6"></TableHead>
               </TableRow>
