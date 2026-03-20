@@ -703,7 +703,7 @@ export default function RoundsPage() {
       </Dialog>
 
       <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
-        <DialogContent className="sm:max-w-[340px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+        <DialogContent className="sm:max-w-[340px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
           {selectedPendingMember && (
             <>
               <DialogHeader className="p-4 bg-gradient-to-br from-muted/50 to-background border-b">
@@ -717,10 +717,10 @@ export default function RoundsPage() {
                   <div className="p-2.5 bg-muted/30 rounded-lg border border-border/40 font-bold text-xs">{selectedPendingMember.name}</div>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1">
                   <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest ml-1">Total Arrears Amount</span>
-                  <div className="p-4 bg-destructive/5 rounded-xl border border-dashed border-destructive/20 text-center">
-                    <span className="text-2xl font-black text-destructive tabular-nums tracking-tighter">
+                  <div className="p-2.5 bg-destructive/5 rounded-lg border border-dashed border-destructive/20 text-center">
+                    <span className="text-xl font-black text-destructive tabular-nums tracking-tighter">
                       ₹{(Number(manualPendingValue || 0) * (selectedPendingMember.monthlyAmount || 800)).toLocaleString()}
                     </span>
                   </div>
@@ -745,7 +745,7 @@ export default function RoundsPage() {
                   className="w-full h-10 font-black uppercase tracking-widest text-[9px] rounded-lg active:scale-95 transition-all shadow-md"
                 >
                   {isActionPending ? <Loader2 className="mr-2 animate-spin size-3" /> : null}
-                  Update Arrears
+                  Save pending
                 </Button>
               </DialogFooter>
             </>
