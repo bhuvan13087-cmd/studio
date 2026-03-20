@@ -52,7 +52,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO } from "date-fns"
+import { format, parseISO, isSameMonth } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -125,6 +125,24 @@ export default function RoundsPage() {
 
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [members, currentRound])
+
+  const getGroupMonthlyCollection = (groupName: string) => {
+    if (!allPayments || !members) return 0;
+    const now = new Date();
+    const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
+    return allPayments
+      .filter(p => {
+        if (p.status !== 'success' && p.status !== 'paid') return false;
+        if (!groupMemberIds.has(p.memberId)) return false;
+        if (!p.paymentDate) return false;
+        try {
+          return isSameMonth(parseISO(p.paymentDate), now);
+        } catch {
+          return false;
+        }
+      })
+      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+  };
 
   const getGroupTodayCollection = (groupName: string) => {
     if (!allPayments || !members) return 0;
@@ -325,7 +343,7 @@ export default function RoundsPage() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
-            const groupTodayCollection = getGroupTodayCollection(group.name);
+            const groupMonthlyCollection = getGroupMonthlyCollection(group.name);
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
@@ -360,8 +378,8 @@ export default function RoundsPage() {
                       <span className="font-bold text-primary text-sm">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground font-semibold">Today's Collection</span>
-                      <span className="font-bold text-emerald-600 text-sm">₹{groupTodayCollection.toLocaleString()}</span>
+                      <span className="text-muted-foreground font-semibold">Monthly Collection</span>
+                      <span className="font-bold text-emerald-600 text-sm">₹{groupMonthlyCollection.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted-foreground font-semibold">Occupancy</span>
