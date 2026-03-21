@@ -61,7 +61,7 @@ const INITIAL_CHIT_STATE = {
   monthlyAmount: 0, 
   totalMembers: 0, 
   startDate: new Date().toISOString().split('T')[0], 
-  collectionType: "" 
+  collectionType: "Daily" 
 }
 
 const INITIAL_MEMBER_STATE = {
@@ -226,7 +226,6 @@ export default function RoundsPage() {
     
     const totalPaidToday = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     
-    // STRICT PRIORITY UI logic: Mark today as PAID only if they covered at least one full installment today.
     return { paidToday: totalPaidToday >= schemeAmount };
   };
 
@@ -263,7 +262,6 @@ export default function RoundsPage() {
       let currentPendingAmount = selectedMemberForPayment.pendingAmount || 0;
       let remainingAmount = 0;
 
-      // STRICT PRIORITY: Clear old pending first
       if (isDaily && currentPendingAmount > 0) {
         if (paymentAmount >= currentPendingAmount) {
           remainingAmount = paymentAmount - currentPendingAmount;
@@ -277,7 +275,6 @@ export default function RoundsPage() {
       }
 
       const newPendingAmount = currentPendingAmount;
-      // Recalculate pending days based on remaining debt
       const newPendingDays = Math.ceil(newPendingAmount / schemeAmount);
 
       batch.update(memberRef, {
@@ -399,6 +396,7 @@ export default function RoundsPage() {
       const memberData = {
         id: memberRef.id,
         ...newMember,
+        paymentType: newMember.paymentType || currentRound.collectionType,
         chitGroup: currentRound.name,
         monthlyAmount: currentRound.monthlyAmount,
         status: "active",
@@ -1011,7 +1009,10 @@ export default function RoundsPage() {
                   variant="outline" 
                   className="w-full sm:w-auto font-bold gap-2"
                   onClick={() => {
-                    setMemberProfileToEdit({ ...selectedProfileMember });
+                    setMemberProfileToEdit({ 
+                      ...selectedProfileMember,
+                      paymentType: selectedProfileMember.paymentType || currentRound?.collectionType || "Daily"
+                    });
                     setIsEditMemberProfileOpen(true);
                   }}
                 >
@@ -1068,9 +1069,9 @@ export default function RoundsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
-                  <Select value={memberProfileToEdit.paymentType} onValueChange={(v) => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}>
+                  <Select value={memberProfileToEdit.paymentType || "Daily"} onValueChange={(v) => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}>
                     <SelectTrigger className="h-11 rounded-xl">
-                      <SelectValue placeholder="Select frequency" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Daily">Daily</SelectItem>
@@ -1219,9 +1220,9 @@ export default function RoundsPage() {
               </div>
               <div className="grid gap-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
-                <Select value={newMember.paymentType} onValueChange={(v) => setNewMember({...newMember, paymentType: v})}>
+                <Select value={newMember.paymentType || (currentRound?.collectionType || "Daily")} onValueChange={(v) => setNewMember({...newMember, paymentType: v})}>
                   <SelectTrigger className="h-11 rounded-xl">
-                    <SelectValue placeholder="Select frequency" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Daily">Daily</SelectItem>
