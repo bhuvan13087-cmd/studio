@@ -432,7 +432,8 @@ export default function RoundsPage() {
       await withTimeout(updateDoc(memberRef, {
         name: memberProfileToEdit.name,
         phone: memberProfileToEdit.phone,
-        joinDate: memberProfileToEdit.joinDate
+        joinDate: memberProfileToEdit.joinDate,
+        paymentType: memberProfileToEdit.paymentType
       }));
       
       await createAuditLog(db, user, `Updated member profile: ${memberProfileToEdit.name}`);
@@ -1065,6 +1066,18 @@ export default function RoundsPage() {
                     className="h-11 rounded-xl" 
                   />
                 </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
+                  <Select value={memberProfileToEdit.paymentType} onValueChange={(v) => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}>
+                    <SelectTrigger className="h-11 rounded-xl">
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Daily">Daily</SelectItem>
+                      <SelectItem value="Monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <DialogFooter className="gap-2">
                 <Button variant="outline" type="button" onClick={() => setIsEditMemberProfileOpen(false)} disabled={isActionPending} className="w-full sm:w-auto font-bold">Cancel</Button>
@@ -1203,6 +1216,19 @@ export default function RoundsPage() {
               <div className="grid gap-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label>
                 <Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required className="h-11 rounded-xl" />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
+                <Select value={newMember.paymentType} onValueChange={(v) => setNewMember({...newMember, paymentType: v})}>
+                  <SelectTrigger className="h-11 rounded-xl">
+                    <SelectValue placeholder="Select frequency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Daily">Daily</SelectItem>
+                    <SelectItem value="Monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[9px] text-muted-foreground italic ml-1">Leave empty to use scheme default ({currentRound?.collectionType}).</p>
               </div>
             </div>
             <DialogFooter>
