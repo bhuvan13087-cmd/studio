@@ -113,7 +113,7 @@ export default function RoundsPage() {
   const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
   
-  const [manualPendingValue, setManualPendingValue] = useState<number>(0)
+  const [manualPendingValue, setManualPendingValue] = useState<number | string>(0)
   
   const [viewMonth, setViewMonth] = useState<string>(format(new Date(), 'MMMM'))
   const [viewYear, setViewYear] = useState<string>(format(new Date(), 'yyyy'))
@@ -272,16 +272,17 @@ export default function RoundsPage() {
     if (!db || !selectedPendingMember || isActionPending) return;
     setIsActionPending(true);
     try {
+      const pendingDays = Number(manualPendingValue || 0);
       const schemeAmount = selectedPendingMember.monthlyAmount || 800;
-      const calculatedAmount = Number(manualPendingValue) * schemeAmount;
+      const calculatedAmount = pendingDays * schemeAmount;
       
       const memberRef = doc(db, 'members', selectedPendingMember.id);
       await updateDoc(memberRef, {
-        pendingDays: Number(manualPendingValue),
+        pendingDays: pendingDays,
         pendingAmount: calculatedAmount
       });
       
-      await createAuditLog(db, user, `Manually set pending to ${manualPendingValue} days (₹${calculatedAmount}) for ${selectedPendingMember.name}`);
+      await createAuditLog(db, user, `Manually set pending to ${pendingDays} days (₹${calculatedAmount}) for ${selectedPendingMember.name}`);
       toast({ title: "Arrears Stored", description: "Pending status updated successfully." });
       setIsPendingDetailsOpen(false);
     } catch (e: any) {
@@ -1047,7 +1048,11 @@ export default function RoundsPage() {
       </Dialog>
 
       <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
-        <DialogContent className="sm:max-w-[340px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
+        <DialogContent 
+          className="sm:max-w-[340px] p-0 overflow-hidden rounded-xl border-none shadow-2xl"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           {selectedPendingMember && (
             <>
               <DialogHeader className="p-4 bg-gradient-to-br from-muted/50 to-background border-b">
@@ -1075,14 +1080,14 @@ export default function RoundsPage() {
                   <Input 
                     type="number" 
                     value={manualPendingValue} 
-                    onChange={e => setManualPendingValue(e.target.value === "" ? 0 : Number(e.target.value))}
+                    onChange={e => setManualPendingValue(e.target.value === "" ? "" : Number(e.target.value))}
                     className="h-10 font-bold text-sm rounded-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder="Enter pending days"
                   />
                 </div>
               </div>
               
-              <DialogFooter className="p-4 pt-0 bg-background">
+              <DialogFooter className="p-4 pt-0 bg-background flex flex-col gap-2">
                 <Button 
                   onClick={handleUpdatePendingArrears} 
                   disabled={isActionPending}
@@ -1090,6 +1095,14 @@ export default function RoundsPage() {
                 >
                   {isActionPending ? <Loader2 className="mr-2 animate-spin size-3" /> : null}
                   Save pending
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => setIsPendingDetailsOpen(false)}
+                  disabled={isActionPending}
+                  className="w-full h-10 font-black uppercase tracking-widest text-[9px] rounded-lg active:scale-95 transition-all"
+                >
+                  Close
                 </Button>
               </DialogFooter>
             </>
