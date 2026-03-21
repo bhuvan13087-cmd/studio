@@ -216,12 +216,18 @@ export default function RoundsPage() {
   const calculateStatus = (member: any) => {
     if (!allPayments) return { paidToday: false };
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const paidToday = (allPayments || []).some(p => 
+    const schemeAmount = member.monthlyAmount || 800;
+
+    const todayPayments = (allPayments || []).filter(p => 
       p.memberId === member.id && 
       (p.status === 'success' || p.status === 'paid') &&
       (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
     );
-    return { paidToday };
+    
+    const totalPaidToday = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+    
+    // STRICT PRIORITY UI logic: Mark today as PAID only if they covered at least one full installment today.
+    return { paidToday: totalPaidToday >= schemeAmount };
   };
 
   const handleQuickPayment = async (e: React.FormEvent) => {
@@ -229,6 +235,8 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
     const paymentAmount = Number(paymentData.amount);
+    const schemeAmount = selectedMemberForPayment.monthlyAmount || 800;
+    const isDaily = (selectedMemberForPayment.paymentType || currentRound.collectionType || "").toLowerCase() === 'daily';
     
     setIsActionPending(true);
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -252,29 +260,30 @@ export default function RoundsPage() {
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
       
-      const schemeAmount = selectedMemberForPayment.monthlyAmount || 800;
-      let newPendingDays = selectedMemberForPayment.pendingDays || 0;
-      let newPendingAmount = selectedMemberForPayment.pendingAmount || 0;
-      
-      const isDaily = (selectedMemberForPayment.paymentType || currentRound.collectionType || "").toLowerCase() === 'daily';
-      
-      // LOGIC: Clear ONLY past pending immediately
-      if (isDaily && newPendingDays > 0) {
-        const daysPaid = paymentAmount / schemeAmount;
-        
-        if (daysPaid >= newPendingDays) {
-          newPendingDays = 0;
-          newPendingAmount = 0;
+      let currentPendingAmount = selectedMemberForPayment.pendingAmount || 0;
+      let remainingAmount = 0;
+
+      // STRICT PRIORITY: Clear old pending first
+      if (isDaily && currentPendingAmount > 0) {
+        if (paymentAmount >= currentPendingAmount) {
+          remainingAmount = paymentAmount - currentPendingAmount;
+          currentPendingAmount = 0;
         } else {
-          newPendingDays = newPendingDays - daysPaid;
-          newPendingAmount = newPendingDays * schemeAmount;
+          currentPendingAmount = currentPendingAmount - paymentAmount;
+          remainingAmount = 0;
         }
+      } else {
+        remainingAmount = paymentAmount;
       }
+
+      const newPendingAmount = currentPendingAmount;
+      // Recalculate pending days based on remaining debt
+      const newPendingDays = Math.ceil(newPendingAmount / schemeAmount);
 
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
-        pendingDays: newPendingDays,
-        pendingAmount: newPendingAmount
+        pendingAmount: newPendingAmount,
+        pendingDays: newPendingDays
       });
 
       await withTimeout(batch.commit());
@@ -653,11 +662,11 @@ export default function RoundsPage() {
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label>
-                    <Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(chitToEdit.monthlyAmount)})} required className="h-11 rounded-xl" />
+                    <Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" />
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
-                    <Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(chitToEdit.totalMembers)})} required className="h-11 rounded-xl" />
+                    <Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" />
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
