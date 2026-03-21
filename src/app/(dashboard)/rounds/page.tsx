@@ -1058,16 +1058,6 @@ export default function RoundsPage() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label>
-                  <Input 
-                    type="date" 
-                    value={memberProfileToEdit.joinDate} 
-                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} 
-                    required 
-                    className="h-11 rounded-xl" 
-                  />
-                </div>
-                <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
                   <Select value={memberProfileToEdit.paymentType || "Daily"} onValueChange={(v) => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}>
                     <SelectTrigger className="h-11 rounded-xl">
@@ -1078,6 +1068,16 @@ export default function RoundsPage() {
                       <SelectItem value="Monthly">Monthly</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label>
+                  <Input 
+                    type="date" 
+                    value={memberProfileToEdit.joinDate} 
+                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} 
+                    required 
+                    className="h-11 rounded-xl" 
+                  />
                 </div>
               </div>
               <DialogFooter className="gap-2">
@@ -1215,10 +1215,6 @@ export default function RoundsPage() {
                 <Input value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required className="h-11 rounded-xl" />
               </div>
               <div className="grid gap-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label>
-                <Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required className="h-11 rounded-xl" />
-              </div>
-              <div className="grid gap-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
                 <Select value={newMember.paymentType || (currentRound?.collectionType || "Daily")} onValueChange={(v) => setNewMember({...newMember, paymentType: v})}>
                   <SelectTrigger className="h-11 rounded-xl">
@@ -1230,6 +1226,10 @@ export default function RoundsPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-[9px] text-muted-foreground italic ml-1">Leave empty to use scheme default ({currentRound?.collectionType}).</p>
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label>
+                <Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required className="h-11 rounded-xl" />
               </div>
             </div>
             <DialogFooter>
