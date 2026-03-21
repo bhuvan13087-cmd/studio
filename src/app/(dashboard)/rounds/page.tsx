@@ -251,8 +251,30 @@ export default function RoundsPage() {
       });
 
       const memberRef = doc(db, 'members', selectedMemberForPayment.id);
+      
+      const schemeAmount = selectedMemberForPayment.monthlyAmount || 800;
+      let newPendingDays = selectedMemberForPayment.pendingDays || 0;
+      let newPendingAmount = selectedMemberForPayment.pendingAmount || 0;
+      
+      const isDaily = (selectedMemberForPayment.paymentType || currentRound.collectionType || "").toLowerCase() === 'daily';
+      
+      // LOGIC: Clear ONLY past pending immediately
+      if (isDaily && newPendingDays > 0) {
+        const daysPaid = paymentAmount / schemeAmount;
+        
+        if (daysPaid >= newPendingDays) {
+          newPendingDays = 0;
+          newPendingAmount = 0;
+        } else {
+          newPendingDays = newPendingDays - daysPaid;
+          newPendingAmount = newPendingDays * schemeAmount;
+        }
+      }
+
       batch.update(memberRef, {
-        totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount
+        totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
+        pendingDays: newPendingDays,
+        pendingAmount: newPendingAmount
       });
 
       await withTimeout(batch.commit());
