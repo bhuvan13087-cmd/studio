@@ -50,5 +50,10 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
       allow update: if false; // Locks are usually replaced or deleted
     }
+
+    match /cycles/{cycleId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }
