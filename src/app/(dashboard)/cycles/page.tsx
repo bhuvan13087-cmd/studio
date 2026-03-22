@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo } from "react"
@@ -6,7 +7,7 @@ import {
   Users, IndianRupee, History, FolderKanban, 
   Loader2, CheckCircle2, AlertCircle, CalendarRange, 
   Trash2, Play, Pause, CreditCard, Search, CalendarDays,
-  Wallet
+  Wallet, TrendingUp, User
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
@@ -28,7 +29,7 @@ import {
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, orderBy, doc, addDoc, serverTimestamp, writeBatch, updateDoc, deleteDoc } from "firebase/firestore"
 import { format, parseISO, isWithinInterval, isValid, isSameDay } from "date-fns"
-import { cn, withTimeout } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 import { useToast } from "@/hooks/use-toast"
 
@@ -89,16 +90,40 @@ export default function CyclesDashboard() {
     })
   }, [selectedCycle, payments])
 
+  const cycleSummary = useMemo(() => {
+    if (!selectedCycle || !members || !filteredPayments) return null;
+    
+    const totalCollection = filteredPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+    const uniquePaidMemberIds = new Set(filteredPayments.map(p => p.memberId));
+    
+    // Sum total arrears for members currently in this cycle's groups
+    const totalPendingAmount = members
+      .filter(m => m.status !== 'inactive' && ['A', 'B', 'C', 'D'].includes(m.chitGroup))
+      .reduce((acc, m) => acc + (m.pendingAmount || 0), 0);
+
+    return {
+      totalCollection,
+      totalPendingAmount,
+      paidMembersCount: uniquePaidMemberIds.size
+    };
+  }, [selectedCycle, members, filteredPayments]);
+
   const groupStats = useMemo(() => {
     if (!selectedCycle || !members) return []
     const groupNames = ['A', 'B', 'C', 'D']
     return groupNames.map(name => {
       const groupMembers = members.filter(m => m.chitGroup === name && m.status !== 'inactive')
-      const totalInCycle = filteredPayments
-        .filter(p => groupMembers.some(m => m.id === p.memberId))
-        .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+      const groupPayments = filteredPayments.filter(p => groupMembers.some(m => m.id === p.memberId))
+      const totalInCycle = groupPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+      const paidInGroupCount = new Set(groupPayments.map(p => p.memberId)).size;
       
-      return { name, collection: totalInCycle, membersCount: groupMembers.length }
+      return { 
+        name, 
+        collection: totalInCycle, 
+        membersCount: groupMembers.length,
+        paidCount: paidInGroupCount,
+        pendingCount: groupMembers.length - paidInGroupCount
+      }
     })
   }, [selectedCycle, members, filteredPayments])
 
@@ -237,7 +262,7 @@ export default function CyclesDashboard() {
             <Button variant="outline" className="font-bold gap-2 h-11" onClick={() => setIsDailyAuditOpen(true)}>
               <Wallet className="size-4" /> Daily Audit
             </Button>
-            <Badge variant={selectedCycle.status === 'active' ? 'default' : 'secondary'} className="h-11 px-4 text-xs font-black uppercase tracking-widest border-none">
+            <Badge variant={selectedCycle.status === 'active' ? 'default' : 'secondary'} className="h-11 px-4 text-xs font-black uppercase tracking-widest border-none shadow-sm">
               {selectedCycle.status}
             </Badge>
           </div>
@@ -287,8 +312,38 @@ export default function CyclesDashboard() {
       )}
 
       {/* VIEW: GROUPS IN CYCLE */}
-      {view === 'groups' && (
+      {view === 'groups' && cycleSummary && (
         <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Card className="bg-primary/5 border-primary/10 shadow-none rounded-2xl">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">Cycle Collection</span>
+                  <IndianRupee className="size-4 text-emerald-600" />
+                </div>
+                <div className="text-3xl font-black text-emerald-600 tracking-tight">₹{cycleSummary.totalCollection.toLocaleString()}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-destructive/5 border-destructive/10 shadow-none rounded-2xl">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-destructive/60">Total Arrears</span>
+                  <AlertCircle className="size-4 text-destructive" />
+                </div>
+                <div className="text-3xl font-black text-destructive tracking-tight">₹{cycleSummary.totalPendingAmount.toLocaleString()}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-indigo-50 border-indigo-100 shadow-none rounded-2xl">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600/60">Paid Members</span>
+                  <CheckCircle2 className="size-4 text-indigo-600" />
+                </div>
+                <div className="text-3xl font-black text-indigo-600 tracking-tight">{cycleSummary.paidMembersCount} Members</div>
+              </CardContent>
+            </Card>
+          </div>
+
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {groupStats.map(group => (
               <Card 
@@ -303,7 +358,10 @@ export default function CyclesDashboard() {
                   <div className="flex justify-between items-end">
                     <div>
                       <div className="text-2xl font-black text-emerald-600">₹{group.collection.toLocaleString()}</div>
-                      <p className="text-[9px] font-bold text-muted-foreground uppercase">{group.membersCount} Active Seats</p>
+                      <div className="flex flex-col mt-1">
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase">{group.membersCount} Active Seats</p>
+                        <p className="text-[9px] font-bold text-indigo-600 uppercase">{group.paidCount} Paid / {group.pendingCount} Pending</p>
+                      </div>
                     </div>
                     <FolderKanban className="size-5 text-primary/20 group-hover:text-primary transition-colors" />
                   </div>
@@ -349,11 +407,16 @@ export default function CyclesDashboard() {
       {view === 'members' && (
         <Card className="rounded-2xl border-border/60 overflow-hidden shadow-sm animate-in slide-in-from-right-4 duration-300 bg-card">
           <CardHeader className="bg-muted/20 p-6 flex flex-row items-center justify-between border-b">
-            <div>
-              <CardTitle className="text-xl font-black uppercase">Group {selectedGroup} Members</CardTitle>
-              <CardDescription>Ledger for cycle: {selectedCycle.name}</CardDescription>
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black shadow-inner">
+                <Users className="size-6" />
+              </div>
+              <div>
+                <CardTitle className="text-xl font-black uppercase">Group {selectedGroup} Registry</CardTitle>
+                <CardDescription>Cycle Specific Ledger: {selectedCycle.name}</CardDescription>
+              </div>
             </div>
-            <Badge variant="outline" className="font-bold text-[10px] border-primary/20 text-primary">
+            <Badge variant="outline" className="font-bold text-[10px] border-primary/20 text-primary py-1 px-3">
               {members?.filter(m => m.chitGroup === selectedGroup && m.status !== 'inactive').length} Participants
             </Badge>
           </CardHeader>
@@ -363,40 +426,54 @@ export default function CyclesDashboard() {
                 <TableRow>
                   <TableHead className="text-[10px] font-black uppercase tracking-widest h-12 pl-6">Participant</TableHead>
                   <TableHead className="text-[10px] font-black uppercase tracking-widest h-12">Cycle Total</TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest h-12">Arrears</TableHead>
+                  <TableHead className="text-[10px] font-black uppercase tracking-widest h-12">Total Arrears</TableHead>
+                  <TableHead className="text-[10px] font-black uppercase tracking-widest h-12">Today Status</TableHead>
                   <TableHead className="text-[10px] font-black uppercase tracking-widest h-12 text-right pr-6">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {members?.filter(m => m.chitGroup === selectedGroup && m.status !== 'inactive').map(m => {
-                  const memberTotal = filteredPayments
+                  const memberTotalInCycle = filteredPayments
                     .filter(p => p.memberId === m.id)
                     .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
                   
+                  const todayStr = format(new Date(), 'yyyy-MM-dd');
+                  const isPaidToday = payments?.some(p => 
+                    p.memberId === m.id && 
+                    (p.status === 'success' || p.status === 'paid') &&
+                    (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
+                  );
+
                   return (
                     <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
                       <TableCell className="pl-6 py-4">
                         <div className="flex flex-col">
-                          <span className="text-sm font-bold">{m.name}</span>
-                          <span className="text-[9px] font-bold text-muted-foreground uppercase">{m.phone}</span>
+                          <span className="text-sm font-bold tracking-tight">{m.name}</span>
+                          <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{m.phone}</span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm font-bold text-emerald-600 tabular-nums">₹{memberTotal.toLocaleString()}</span>
+                        <span className="text-sm font-black text-emerald-600 tabular-nums">₹{memberTotalInCycle.toLocaleString()}</span>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn(
-                          "text-[9px] font-bold uppercase",
-                          (m.pendingDays || 0) > 0 ? "text-destructive border-destructive/20" : "text-emerald-600 border-emerald-200"
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-destructive tabular-nums">₹{(m.pendingAmount || 0).toLocaleString()}</span>
+                          <span className="text-[9px] font-bold text-muted-foreground uppercase">{m.pendingDays || 0} Days</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={isPaidToday ? "default" : "secondary"} className={cn(
+                          "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none",
+                          isPaidToday ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
                         )}>
-                          {(m.pendingDays || 0)} Days
+                          {isPaidToday ? "SUCCESS" : "UNPAID"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right pr-6">
                         {selectedCycle.status === 'active' ? (
                           <Button 
                             size="sm" 
-                            className="h-8 gap-2 font-bold px-4 rounded-lg"
+                            className="h-8 gap-2 font-bold px-4 rounded-lg shadow-sm"
                             onClick={() => {
                               const scheme = rounds?.find(r => r.name === m.chitGroup)
                               setTargetMemberForPayment(m)
@@ -407,7 +484,7 @@ export default function CyclesDashboard() {
                             <IndianRupee className="size-3.5" /> Pay
                           </Button>
                         ) : (
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase italic">Locked</span>
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase italic opacity-50">Locked</span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -533,9 +610,19 @@ export default function CyclesDashboard() {
                 value={auditDate} 
                 min={selectedCycle?.startDate}
                 max={selectedCycle?.endDate}
-                onChange={e => setAuditDate(e.target.value)} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  // Restrict to cycle range manually if browser doesn't respect min/max
+                  if (selectedCycle) {
+                    if (val < selectedCycle.startDate || val > selectedCycle.endDate) {
+                      return;
+                    }
+                  }
+                  setAuditDate(val);
+                }} 
                 className="h-11 font-bold rounded-xl"
               />
+              <p className="text-[9px] text-muted-foreground italic px-1">Restricted to: {selectedCycle?.startDate} to {selectedCycle?.endDate}</p>
             </div>
             <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-3xl border border-dashed border-emerald-200 text-center">
               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Verified Intake</p>
