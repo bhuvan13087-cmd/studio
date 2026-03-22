@@ -99,9 +99,6 @@ export default function RoundsPage() {
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
   
-  const [isDeletePaymentDialogOpen, setIsDeletePaymentDialogOpen] = useState(false)
-  const [paymentToDelete, setPaymentToDelete] = useState<any>(null)
-  
   const [isCollectionPopupOpen, setIsCollectionPopupOpen] = useState(false)
   const [activePopupGroupName, setActivePopupGroupName] = useState<string | null>(null)
   
@@ -152,7 +149,6 @@ export default function RoundsPage() {
   const totalPaidByMember = useMemo(() => {
     const map = new Map<string, number>();
     (allPayments || []).forEach(p => {
-      // Only include successful payments with positive amounts in the running total
       if ((p.status === 'paid' || p.status === 'success') && (p.amountPaid || 0) > 0) {
         const current = map.get(p.memberId) || 0;
         map.set(p.memberId, current + (p.amountPaid || 0));
@@ -268,7 +264,6 @@ export default function RoundsPage() {
       
       let currentPendingAmount = selectedMemberForPayment.pendingAmount || 0;
 
-      // Only reduce pending for Daily members if they have arrears
       if (isDaily && currentPendingAmount > 0) {
         currentPendingAmount = Math.max(0, currentPendingAmount - paymentAmount);
       }
@@ -291,33 +286,6 @@ export default function RoundsPage() {
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." });
     } finally {
-      setIsActionPending(false);
-    }
-  }
-
-  const handleDeletePayment = async () => {
-    if (!db || !paymentToDelete || isActionPending) return;
-    
-    setIsActionPending(true)
-    try {
-      const member = members?.find(m => m.id === paymentToDelete.memberId);
-      if (member) {
-        const memberRef = doc(db, 'members', member.id);
-        // Correct the member's total balance
-        await withTimeout(updateDoc(memberRef, { 
-          totalPaid: Math.max(0, (member.totalPaid || 0) - (paymentToDelete.amountPaid || 0)) 
-        }));
-      }
-      
-      await withTimeout(deleteDoc(doc(db, 'payments', paymentToDelete.id)));
-      await createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`);
-      
-      setIsDeletePaymentDialogOpen(false);
-      setPaymentToDelete(null);
-      toast({ title: "Record Deleted", description: "Payment removed successfully." });
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to delete record." });
-    } finally { 
       setIsActionPending(false);
     }
   }
@@ -972,7 +940,6 @@ export default function RoundsPage() {
                       <TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead>
                       <TableHead className="text-xs uppercase font-bold text-muted-foreground">Amount</TableHead>
                       <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -983,17 +950,6 @@ export default function RoundsPage() {
                         <TableCell className="text-sm font-semibold">{p.month}</TableCell>
                         <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground font-medium">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy, hh:mm a') : '-'}</TableCell>
-                        <TableCell className="text-right">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10" 
-                            onClick={() => { setPaymentToDelete(p); setIsDeletePaymentDialogOpen(true); }}
-                            disabled={isActionPending}
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1281,59 +1237,6 @@ export default function RoundsPage() {
           </form>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={isDeletePaymentDialogOpen} onOpenChange={setIsDeletePaymentDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-destructive">Delete Payment Record?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to permanently delete this payment of <strong>₹{paymentToDelete?.amountPaid?.toLocaleString()}</strong>? This action will adjust the member's total balance and cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              className="bg-destructive hover:bg-destructive/90 font-bold" 
-              onClick={handleDeletePayment} 
-              disabled={isActionPending}
-            >
-              {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-              Delete Record
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <div id="thermal-receipt" className="hidden">
-        <div className="text-center font-bold border-b border-black pb-2 mb-2 uppercase">
-          PAYMENT HISTORY: {historyMember?.name}
-        </div>
-        <table className="w-full text-[10px] border-collapse">
-          <thead>
-            <tr className="border-b border-black">
-              <th className="text-left py-1">MONTH</th>
-              <th className="text-center py-1">AMT</th>
-              <th className="text-right py-1">DATE</th>
-            </tr>
-          </thead>
-          <tbody>
-            {historyMember && (allPayments || [])
-              .filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success'))
-              .map((p, i) => (
-                <tr key={i} className="border-b border-gray-300 border-dashed">
-                  <td className="py-1">{p.month}</td>
-                  <td className="text-center font-bold py-1">₹{p.amountPaid}</td>
-                  <td className="text-right text-[9px] py-1">
-                    {p.paymentDate ? format(parseISO(p.paymentDate), 'dd-MM-yy') : '-'}
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-        <div className="mt-4 text-center text-[9px] italic">
-          * {getDisplayName(currentRound?.name || "")} Official Record *
-        </div>
-      </div>
     </div>
   )
 }
