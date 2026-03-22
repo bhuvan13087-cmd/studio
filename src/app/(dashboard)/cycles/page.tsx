@@ -76,7 +76,13 @@ export default function CyclesDashboard() {
   const roundsQuery = useMemoFirebase(() => collection(db, 'chitRounds'), [db])
   const { data: rounds } = useCollection(roundsQuery)
 
-  // Filtered Data for selected cycle
+  // Helper to normalize group names for matching (e.g. "Group A" -> "A")
+  const normalizeGroupName = (name: string) => {
+    if (!name) return "";
+    return name.replace(/Group/gi, '').trim().toUpperCase();
+  };
+
+  // Filtered Data for selected cycle - ISOLATED LOGIC
   const filteredPayments = useMemo(() => {
     if (!selectedCycle || !payments) return []
     const start = selectedCycle.startDate
@@ -84,9 +90,23 @@ export default function CyclesDashboard() {
     
     return payments.filter(p => {
       if (p.status !== 'success' && p.status !== 'paid') return false
-      const pDate = p.targetDate || (p.paymentDate ? format(parseISO(p.paymentDate), 'yyyy-MM-dd') : null)
-      if (!pDate) return false
-      return pDate >= start && pDate <= end
+      
+      // Extract date robustly
+      let pDateStr = p.targetDate; // Expected YYYY-MM-DD
+      
+      if (!pDateStr && p.paymentDate) {
+        try {
+          const dateObj = p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate);
+          if (isValid(dateObj)) {
+            pDateStr = format(dateObj, 'yyyy-MM-dd');
+          }
+        } catch (e) {
+          return false;
+        }
+      }
+
+      if (!pDateStr) return false;
+      return pDateStr >= start && pDateStr <= end;
     })
   }, [selectedCycle, payments])
 
@@ -96,9 +116,13 @@ export default function CyclesDashboard() {
     const totalCollection = filteredPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     const uniquePaidMemberIds = new Set(filteredPayments.map(p => p.memberId));
     
-    // Sum total arrears for members currently in this cycle's groups
+    // Sum total arrears for members currently in this cycle's groups (A, B, C, D)
     const totalPendingAmount = members
-      .filter(m => m.status !== 'inactive' && ['A', 'B', 'C', 'D'].includes(m.chitGroup))
+      .filter(m => {
+        if (m.status === 'inactive') return false;
+        const normalized = normalizeGroupName(m.chitGroup);
+        return ['A', 'B', 'C', 'D'].includes(normalized);
+      })
       .reduce((acc, m) => acc + (m.pendingAmount || 0), 0);
 
     return {
@@ -112,7 +136,11 @@ export default function CyclesDashboard() {
     if (!selectedCycle || !members) return []
     const groupNames = ['A', 'B', 'C', 'D']
     return groupNames.map(name => {
-      const groupMembers = members.filter(m => m.chitGroup === name && m.status !== 'inactive')
+      const groupMembers = members.filter(m => {
+        const normalized = normalizeGroupName(m.chitGroup);
+        return normalized === name && m.status !== 'inactive';
+      });
+      
       const groupPayments = filteredPayments.filter(p => groupMembers.some(m => m.id === p.memberId))
       const totalInCycle = groupPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
       const paidInGroupCount = new Set(groupPayments.map(p => p.memberId)).size;
@@ -131,7 +159,7 @@ export default function CyclesDashboard() {
     if (!filteredPayments) return 0;
     return filteredPayments
       .filter(p => {
-        const pDate = p.targetDate || (p.paymentDate ? format(parseISO(p.paymentDate), 'yyyy-MM-dd') : null)
+        const pDate = p.targetDate || (p.paymentDate ? format(p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate), 'yyyy-MM-dd') : null)
         return pDate === auditDate
       })
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
@@ -417,7 +445,7 @@ export default function CyclesDashboard() {
               </div>
             </div>
             <Badge variant="outline" className="font-bold text-[10px] border-primary/20 text-primary py-1 px-3">
-              {members?.filter(m => m.chitGroup === selectedGroup && m.status !== 'inactive').length} Participants
+              {members?.filter(m => normalizeGroupName(m.chitGroup) === selectedGroup && m.status !== 'inactive').length} Participants
             </Badge>
           </CardHeader>
           <div className="overflow-x-auto">
@@ -432,64 +460,72 @@ export default function CyclesDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {members?.filter(m => m.chitGroup === selectedGroup && m.status !== 'inactive').map(m => {
-                  const memberTotalInCycle = filteredPayments
-                    .filter(p => p.memberId === m.id)
-                    .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
-                  
-                  const todayStr = format(new Date(), 'yyyy-MM-dd');
-                  const isPaidToday = payments?.some(p => 
-                    p.memberId === m.id && 
-                    (p.status === 'success' || p.status === 'paid') &&
-                    (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
-                  );
+                {members?.filter(m => normalizeGroupName(m.chitGroup) === selectedGroup && m.status !== 'inactive').length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-40 text-center text-muted-foreground italic text-sm">
+                      No participants found in this group for this cycle.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  members?.filter(m => normalizeGroupName(m.chitGroup) === selectedGroup && m.status !== 'inactive').map(m => {
+                    const memberTotalInCycle = filteredPayments
+                      .filter(p => p.memberId === m.id)
+                      .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+                    
+                    const todayStr = format(new Date(), 'yyyy-MM-dd');
+                    const isPaidToday = payments?.some(p => 
+                      p.memberId === m.id && 
+                      (p.status === 'success' || p.status === 'paid') &&
+                      (p.targetDate === todayStr || (p.paymentDate && format(p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
+                    );
 
-                  return (
-                    <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
-                      <TableCell className="pl-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold tracking-tight">{m.name}</span>
-                          <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{m.phone}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm font-black text-emerald-600 tabular-nums">₹{memberTotalInCycle.toLocaleString()}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-destructive tabular-nums">₹{(m.pendingAmount || 0).toLocaleString()}</span>
-                          <span className="text-[9px] font-bold text-muted-foreground uppercase">{m.pendingDays || 0} Days</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={isPaidToday ? "default" : "secondary"} className={cn(
-                          "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none",
-                          isPaidToday ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
-                        )}>
-                          {isPaidToday ? "SUCCESS" : "UNPAID"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-6">
-                        {selectedCycle.status === 'active' ? (
-                          <Button 
-                            size="sm" 
-                            className="h-8 gap-2 font-bold px-4 rounded-lg shadow-sm"
-                            onClick={() => {
-                              const scheme = rounds?.find(r => r.name === m.chitGroup)
-                              setTargetMemberForPayment(m)
-                              setPaymentAmount(scheme?.monthlyAmount || 800)
-                              setIsPaymentDialogOpen(true)
-                            }}
-                          >
-                            <IndianRupee className="size-3.5" /> Pay
-                          </Button>
-                        ) : (
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase italic opacity-50">Locked</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
+                    return (
+                      <TableRow key={m.id} className="hover:bg-muted/5 transition-colors">
+                        <TableCell className="pl-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold tracking-tight">{m.name}</span>
+                            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{m.phone}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm font-black text-emerald-600 tabular-nums">₹{memberTotalInCycle.toLocaleString()}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-destructive tabular-nums">₹{(m.pendingAmount || 0).toLocaleString()}</span>
+                            <span className="text-[9px] font-bold text-muted-foreground uppercase">{m.pendingDays || 0} Days</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={isPaidToday ? "default" : "secondary"} className={cn(
+                            "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none",
+                            isPaidToday ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
+                          )}>
+                            {isPaidToday ? "SUCCESS" : "UNPAID"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          {selectedCycle.status === 'active' ? (
+                            <Button 
+                              size="sm" 
+                              className="h-8 gap-2 font-bold px-4 rounded-lg shadow-sm"
+                              onClick={() => {
+                                const scheme = rounds?.find(r => normalizeGroupName(r.name) === normalizeGroupName(m.chitGroup))
+                                setTargetMemberForPayment(m)
+                                setPaymentAmount(scheme?.monthlyAmount || 800)
+                                setIsPaymentDialogOpen(true)
+                              }}
+                            >
+                              <IndianRupee className="size-3.5" /> Pay
+                            </Button>
+                          ) : (
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase italic opacity-50">Locked</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
               </TableBody>
             </Table>
           </div>
