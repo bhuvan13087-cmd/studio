@@ -234,6 +234,20 @@
         "lockedBy": { "type": "string" }
       },
       "required": ["id", "year", "monthName", "lockedAt", "lockedBy"]
+    },
+    "Cycle": {
+      "title": "Cycle",
+      "type": "object",
+      "description": "Represents a custom date range for monitoring chit fund activity.",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["active", "past"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "startDate", "endDate", "status"]
     }
   },
   "auth": {
@@ -303,8 +317,18 @@
           },
           "description": "Stores locked months information."
         }
+      },
+      {
+        "path": "/cycles/{cycleId}",
+        "definition": {
+          "entityName": "Cycle",
+          "schema": {
+            "$ref": "#/backend/entities/Cycle"
+          },
+          "description": "Stores custom activity monitoring cycles."
+        }
       }
     ],
-    "reasoning": "The application manages members, payments, chit rounds, collection targets, audit logs, and period locks."
+    "reasoning": "The application manages members, payments, chit rounds, collection targets, audit logs, period locks, and custom cycles."
   }
 }
