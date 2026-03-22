@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -264,6 +263,7 @@ export default function RoundsPage() {
       
       let currentPendingAmount = selectedMemberForPayment.pendingAmount || 0;
 
+      // STRICT PRIORITY: Clear past pending first
       if (isDaily && currentPendingAmount > 0) {
         currentPendingAmount = Math.max(0, currentPendingAmount - paymentAmount);
       }
@@ -1091,8 +1091,6 @@ export default function RoundsPage() {
       <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
         <DialogContent 
           className="sm:max-w-[340px] p-0 overflow-hidden rounded-xl border-none shadow-2xl"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           {selectedPendingMember && (
             <>
