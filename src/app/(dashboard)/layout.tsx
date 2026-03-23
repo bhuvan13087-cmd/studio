@@ -1,13 +1,13 @@
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { useRouter } from "next/navigation"
-import { format, parseISO } from "date-fns"
+import { format, parseISO, isValid } from "date-fns"
 import { Clock } from "lucide-react"
 import { collection, query, writeBatch, doc } from "firebase/firestore"
 
@@ -20,6 +20,7 @@ export default function DashboardLayout({
   const router = useRouter()
   const db = useFirestore()
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
+  const isProcessing = useRef(false)
 
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
   const { data: members } = useCollection(membersQuery);
@@ -45,13 +46,12 @@ export default function DashboardLayout({
   /**
    * PRODUCTION 10 PM AUTOMATED CALCULATION
    * Executes daily at 10 PM (Hour 22).
-   * Formula: newPendingAmount = Math.max(0, (yesterdayPending + schemeAmount) - todayPaymentSum)
-   * Formula: newPendingDays = Math.ceil(newPendingAmount / schemeAmount)
    * 
    * CRITICAL: Applies ONLY to DAILY members.
+   * Logic: If not paid today by 10 PM, increment pending debt by 1 scheme unit.
    */
   useEffect(() => {
-    if (!user || !members || !payments || !currentTime || !chitRounds) return;
+    if (!user || !members || !payments || !currentTime || !chitRounds || isProcessing.current) return;
 
     const runProductionBatch = async () => {
       const todayStr = format(currentTime, 'yyyy-MM-dd');
@@ -72,25 +72,32 @@ export default function DashboardLayout({
       
       if (dailyMembers.length === 0) return;
 
+      isProcessing.current = true;
       const batch = writeBatch(db);
       let updatedCount = 0;
 
       dailyMembers.forEach(member => {
         const schemeAmount = member.monthlyAmount || 800;
-        const yesterdayPending = member.pendingAmount || 0;
+        const yesterdayPendingAmount = member.pendingAmount || 0;
         
-        // Sum today's payments for this member
-        const todayPayments = payments.filter(p => 
-          p.memberId === member.id && 
-          (p.status === 'success' || p.status === 'paid') &&
-          (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
-        );
+        // Robust detection of today's payments
+        const todayPayments = payments.filter(p => {
+          if (p.memberId !== member.id) return false;
+          if (p.status !== 'success' && p.status !== 'paid') return false;
+          
+          if (p.targetDate === todayStr) return true;
+          
+          const pDate = p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? parseISO(p.paymentDate) : null);
+          return pDate && isValid(pDate) && format(pDate, 'yyyy-MM-dd') === todayStr;
+        });
+
         const todayPaymentSum = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
 
-        // PRODUCTION CALCULATION: FIFO Arrears Aging
-        const newPendingAmount = Math.max(0, (yesterdayPending + schemeAmount) - todayPaymentSum);
+        // CALCULATION: Add 1 full installment to current debt, subtract whatever was paid today.
+        // If they paid >= schemeAmount today, debt remains same. If they paid 0, debt increments by 1 unit.
+        const newPendingAmount = Math.max(0, (yesterdayPendingAmount + schemeAmount) - todayPaymentSum);
         
-        // Derive days from amount: any fractional part of an installment counts as a pending day
+        // Re-derive days for display
         const newPendingDays = Math.ceil(newPendingAmount / schemeAmount);
 
         const memberRef = doc(db, 'members', member.id);
@@ -103,8 +110,13 @@ export default function DashboardLayout({
       });
 
       if (updatedCount > 0) {
-        await batch.commit();
+        try {
+          await batch.commit();
+        } catch (error) {
+          console.error("Batch commitment failed:", error);
+        }
       }
+      isProcessing.current = false;
     };
 
     runProductionBatch();
