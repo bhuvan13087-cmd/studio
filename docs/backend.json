@@ -185,6 +185,16 @@
           "type": "number",
           "description": "The maximum number of members allowed in this scheme."
         },
+        "startDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The explicit start date of this scheme group."
+        },
+        "endDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The explicit end date of this scheme group."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -193,7 +203,9 @@
       "required": [
         "id",
         "name",
-        "collectionType"
+        "collectionType",
+        "startDate",
+        "endDate"
       ]
     },
     "MonthlyTarget": {

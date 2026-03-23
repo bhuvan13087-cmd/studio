@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -59,14 +60,15 @@ const INITIAL_CHIT_STATE = {
   name: "", 
   monthlyAmount: 0, 
   totalMembers: 0, 
-  startDate: new Date().toISOString().split('T')[0], 
+  startDate: format(new Date(), 'yyyy-MM-dd'), 
+  endDate: format(new Date(), 'yyyy-MM-dd'),
   collectionType: "Daily" 
 }
 
 const INITIAL_MEMBER_STATE = {
   name: "",
   phone: "",
-  joinDate: new Date().toISOString().split('T')[0],
+  joinDate: format(new Date(), 'yyyy-MM-dd'),
   paymentType: ""
 }
 
@@ -263,7 +265,6 @@ export default function RoundsPage() {
       
       let currentPendingAmount = selectedMemberForPayment.pendingAmount || 0;
 
-      // STRICT PRIORITY: Clear past pending first
       if (isDaily && currentPendingAmount > 0) {
         currentPendingAmount = Math.max(0, currentPendingAmount - paymentAmount);
       }
@@ -352,7 +353,9 @@ export default function RoundsPage() {
         name: chitToEdit.name,
         monthlyAmount: Number(chitToEdit.monthlyAmount),
         totalMembers: Number(chitToEdit.totalMembers),
-        collectionType: chitToEdit.collectionType
+        collectionType: chitToEdit.collectionType,
+        startDate: chitToEdit.startDate,
+        endDate: chitToEdit.endDate
       }));
       await createAuditLog(db, user, `Updated scheme: ${chitToEdit.name}`);
       setIsEditChitDialogOpen(false);
@@ -468,7 +471,23 @@ export default function RoundsPage() {
             
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
-                <div className="absolute top-3 right-3">
+                <div className="absolute top-3 right-3 flex items-center gap-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => { setChitToEdit(group); setIsEditChitDialogOpen(true); }}>
+                        <Pencil className="size-4 mr-2" /> Edit Scheme
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive" onClick={() => { setChitToDelete(group); setIsDeleteChitDialogOpen(true); }}>
+                        <Trash2 className="size-4 mr-2" /> Delete Scheme
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button 
                     variant="ghost" 
                     size="icon" 
@@ -629,6 +648,16 @@ export default function RoundsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
+                    <Input type="date" value={newChit.startDate} onChange={e => setNewChit({...newChit, startDate: e.target.value})} required className="h-11 rounded-xl" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
+                    <Input type="date" value={newChit.endDate} onChange={e => setNewChit({...newChit, endDate: e.target.value})} required className="h-11 rounded-xl" />
+                  </div>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold text-base shadow-lg active:scale-[0.98] transition-all">
@@ -670,6 +699,16 @@ export default function RoundsPage() {
                         <SelectItem value="Monthly">Monthly</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
+                      <Input type="date" value={chitToEdit.startDate} onChange={e => setChitToEdit({...chitToEdit, startDate: e.target.value})} required className="h-11 rounded-xl" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
+                      <Input type="date" value={chitToEdit.endDate} onChange={e => setChitToEdit({...chitToEdit, endDate: e.target.value})} required className="h-11 rounded-xl" />
+                    </div>
                   </div>
                 </div>
                 <DialogFooter>

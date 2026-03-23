@@ -7,7 +7,7 @@ import {
   Users, IndianRupee, History, FolderKanban, 
   Loader2, CheckCircle2, AlertCircle, CalendarRange, 
   Trash2, Play, Pause, CreditCard, Search, CalendarDays,
-  Wallet, TrendingUp, User
+  Wallet, TrendingUp, User, LayoutDashboard, Database
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
@@ -34,23 +34,15 @@ import { createAuditLog } from "@/firebase/logging"
 import { useToast } from "@/hooks/use-toast"
 
 export default function CyclesDashboard() {
-  // Navigation State: 'list' -> 'groups' -> 'members'
   const [view, setView] = useState<'list' | 'groups' | 'members'>('list')
   const [selectedCycle, setSelectedCycle] = useState<any>(null)
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<any>(null)
 
-  // Dialog States
   const [isAddCycleOpen, setIsAddCycleOpen] = useState(false)
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [isDailyAuditOpen, setIsDailyAuditOpen] = useState(false)
   
-  // Data States
-  const [targetMemberForPayment, setTargetMemberForPayment] = useState<any>(null)
-  const [paymentAmount, setPaymentAmount] = useState<number>(0)
-  const [paymentMethod, setPaymentMethod] = useState("Cash")
   const [auditDate, setAuditDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
-  // Form State
   const [newCycle, setNewCycle] = useState({
     name: "",
     startDate: format(new Date(), 'yyyy-MM-dd'),
@@ -63,7 +55,6 @@ export default function CyclesDashboard() {
   const db = useFirestore()
   const { user } = useUser()
 
-  // Data Fetching
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db])
   const { data: cycles, isLoading: cyclesLoading } = useCollection(cyclesQuery)
 
@@ -73,173 +64,81 @@ export default function CyclesDashboard() {
   const paymentsQuery = useMemoFirebase(() => collection(db, 'payments'), [db])
   const { data: payments } = useCollection(paymentsQuery)
 
-  const roundsQuery = useMemoFirebase(() => collection(db, 'chitRounds'), [db])
+  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db])
   const { data: rounds } = useCollection(roundsQuery)
 
-  // Helper to normalize group names for matching (e.g. "Group A" -> "A")
-  const normalizeGroupName = (name: string) => {
-    if (!name) return "";
-    return name.replace(/Group/gi, '').trim().toUpperCase();
-  };
+  const matchedRounds = useMemo(() => {
+    if (!selectedCycle || !rounds) return []
+    return rounds.filter(r => 
+      r.startDate && r.endDate && 
+      r.startDate >= selectedCycle.startDate && 
+      r.endDate <= selectedCycle.endDate
+    )
+  }, [selectedCycle, rounds])
 
-  /**
-   * ISOLATED CYCLE FILTERING LOGIC
-   * Filters payments strictly within the selected cycle's range.
-   */
   const filteredPayments = useMemo(() => {
     if (!selectedCycle || !payments) return []
     const start = selectedCycle.startDate
     const end = selectedCycle.endDate
     
     return payments.filter(p => {
-      // We only care about successful payments
       if (p.status !== 'success' && p.status !== 'paid') return false
-      
-      // Get the date string (YYYY-MM-DD)
       let pDateStr = p.targetDate; 
-      
       if (!pDateStr && p.paymentDate) {
         try {
           const dateObj = p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate);
           if (isValid(dateObj)) {
             pDateStr = format(dateObj, 'yyyy-MM-dd');
           }
-        } catch (e) {
-          return false;
-        }
+        } catch (e) { return false; }
       }
-
-      if (!pDateStr) return false;
-      
-      // Comparison: cycleStartDate <= paymentDate <= cycleEndDate
-      return pDateStr >= start && pDateStr <= end;
+      return pDateStr && pDateStr >= start && pDateStr <= end;
     })
   }, [selectedCycle, payments])
 
   const cycleSummary = useMemo(() => {
     if (!selectedCycle || !members || !filteredPayments) return null;
-    
     const totalCollection = filteredPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     const uniquePaidMemberIds = new Set(filteredPayments.map(p => p.memberId));
-    
-    // Sum total arrears for members currently in this cycle's scope
     const totalPendingAmount = members
-      .filter(m => {
-        if (m.status === 'inactive') return false;
-        const normalized = normalizeGroupName(m.chitGroup);
-        return ['A', 'B', 'C', 'D'].includes(normalized);
-      })
+      .filter(m => m.status !== 'inactive')
       .reduce((acc, m) => acc + (m.pendingAmount || 0), 0);
 
-    return {
-      totalCollection,
-      totalPendingAmount,
-      paidMembersCount: uniquePaidMemberIds.size
-    };
+    return { totalCollection, totalPendingAmount, paidMembersCount: uniquePaidMemberIds.size };
   }, [selectedCycle, members, filteredPayments]);
 
   const groupStats = useMemo(() => {
-    if (!selectedCycle || !members) return []
-    const groupNames = ['A', 'B', 'C', 'D']
-    return groupNames.map(name => {
-      const groupMembers = members.filter(m => {
-        const normalized = normalizeGroupName(m.chitGroup);
-        return normalized === name && m.status !== 'inactive';
-      });
-      
+    if (!selectedCycle || !members || !matchedRounds) return []
+    return matchedRounds.map(round => {
+      const groupMembers = members.filter(m => m.chitGroup === round.name && m.status !== 'inactive');
       const groupPayments = filteredPayments.filter(p => groupMembers.some(m => m.id === p.memberId))
       const totalInCycle = groupPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
       const paidInGroupCount = new Set(groupPayments.map(p => p.memberId)).size;
       
       return { 
-        name, 
+        id: round.id,
+        name: round.name, 
         collection: totalInCycle, 
         membersCount: groupMembers.length,
         paidCount: paidInGroupCount,
         pendingCount: Math.max(0, groupMembers.length - paidInGroupCount)
       }
     })
-  }, [selectedCycle, members, filteredPayments])
+  }, [selectedCycle, members, filteredPayments, matchedRounds])
 
-  const auditTotal = useMemo(() => {
-    if (!filteredPayments) return 0;
-    return filteredPayments
-      .filter(p => {
-        const pDate = p.targetDate || (p.paymentDate ? format(p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate), 'yyyy-MM-dd') : null)
-        return pDate === auditDate
-      })
-      .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
-  }, [filteredPayments, auditDate])
-
-  // Actions
   const handleAddCycle = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!db || isActionPending) return
     setIsActionPending(true)
     try {
-      await addDoc(collection(db, 'cycles'), {
-        ...newCycle,
-        createdAt: serverTimestamp()
-      })
+      await addDoc(collection(db, 'cycles'), { ...newCycle, createdAt: serverTimestamp() })
       await createAuditLog(db, user, `Created new cycle: ${newCycle.name}`)
       setIsAddCycleOpen(false)
-      setNewCycle({
-        name: "",
-        startDate: format(new Date(), 'yyyy-MM-dd'),
-        endDate: format(new Date(), 'yyyy-MM-dd'),
-        status: "active"
-      })
+      setNewCycle({ name: "", startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(new Date(), 'yyyy-MM-dd'), status: "active" })
       toast({ title: "Cycle Initialized" })
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message })
-    } finally {
-      setIsActionPending(false)
-    }
-  }
-
-  const handleProcessPayment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!db || !targetMemberForPayment || isActionPending) return
-    setIsActionPending(true)
-    try {
-      const batch = writeBatch(db)
-      const paymentRef = doc(collection(db, 'payments'))
-      const amount = Number(paymentAmount)
-      const schemeAmount = targetMemberForPayment.monthlyAmount || 800
-      
-      batch.set(paymentRef, {
-        id: paymentRef.id,
-        memberId: targetMemberForPayment.id,
-        memberName: targetMemberForPayment.name,
-        month: format(new Date(), 'MMMM yyyy'),
-        targetDate: format(new Date(), 'yyyy-MM-dd'),
-        amountPaid: amount,
-        paymentDate: new Date().toISOString(),
-        status: "success",
-        method: paymentMethod,
-        createdAt: serverTimestamp()
-      })
-
-      const memberRef = doc(db, 'members', targetMemberForPayment.id)
-      const currentPendingAmount = targetMemberForPayment.pendingAmount || 0
-      const newPendingAmount = Math.max(0, currentPendingAmount - amount)
-      const newPendingDays = Math.ceil(newPendingAmount / schemeAmount)
-
-      batch.update(memberRef, {
-        totalPaid: (targetMemberForPayment.totalPaid || 0) + amount,
-        pendingAmount: newPendingAmount,
-        pendingDays: newPendingDays
-      })
-
-      await batch.commit()
-      await createAuditLog(db, user, `Cycle Payment: ₹${amount} for ${targetMemberForPayment.name}`)
-      setIsPaymentDialogOpen(false)
-      toast({ title: "Payment Recorded" })
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message })
-    } finally {
-      setIsActionPending(false)
-    }
+    } finally { setIsActionPending(false) }
   }
 
   const toggleCycleStatus = async (cycle: any) => {
@@ -252,16 +151,13 @@ export default function CyclesDashboard() {
       toast({ title: "Cycle Updated" })
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message })
-    } finally {
-      setIsActionPending(false)
-    }
+    } finally { setIsActionPending(false) }
   }
 
   if (cyclesLoading) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
-      {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           {view !== 'list' && (
@@ -282,7 +178,7 @@ export default function CyclesDashboard() {
             </h2>
             <p className="text-sm text-muted-foreground font-medium">
               {view === 'list' 
-                ? 'Isolated period monitoring and auditing.' 
+                ? 'Isolated historical monitoring and auditing.' 
                 : `${format(parseISO(selectedCycle.startDate), 'MMM dd')} → ${format(parseISO(selectedCycle.endDate), 'MMM dd, yyyy')}`}
             </p>
           </div>
@@ -293,9 +189,9 @@ export default function CyclesDashboard() {
           </Button>
         ) : (
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="font-bold gap-2 h-11" onClick={() => setIsDailyAuditOpen(true)}>
-              <Wallet className="size-4" /> Daily Audit
-            </Button>
+            <Badge variant="outline" className="h-11 px-4 text-[10px] font-black uppercase tracking-widest border-primary/20 text-primary">
+              <History className="size-3.5 mr-2" /> History Mode
+            </Badge>
             <Badge variant={selectedCycle.status === 'active' ? 'default' : 'secondary'} className="h-11 px-4 text-xs font-black uppercase tracking-widest border-none shadow-sm">
               {selectedCycle.status}
             </Badge>
@@ -303,7 +199,6 @@ export default function CyclesDashboard() {
         )}
       </div>
 
-      {/* VIEW: CYCLE LIST */}
       {view === 'list' && (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {cycles?.map(cycle => (
@@ -321,9 +216,7 @@ export default function CyclesDashboard() {
                     Created {cycle.createdAt ? format(cycle.createdAt.toDate(), 'dd MMM') : '-'}
                   </span>
                 </div>
-                <CardTitle className="text-xl font-black uppercase tracking-tight mt-3">
-                  {cycle.name}
-                </CardTitle>
+                <CardTitle className="text-xl font-black uppercase tracking-tight mt-3">{cycle.name}</CardTitle>
               </CardHeader>
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
@@ -345,7 +238,6 @@ export default function CyclesDashboard() {
         </div>
       )}
 
-      {/* VIEW: GROUPS IN CYCLE */}
       {view === 'groups' && cycleSummary && (
         <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
           <div className="grid gap-4 sm:grid-cols-3">
@@ -381,12 +273,12 @@ export default function CyclesDashboard() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {groupStats.map(group => (
               <Card 
-                key={group.name} 
+                key={group.id} 
                 className="group cursor-pointer hover:border-primary transition-all border-border/60 shadow-sm rounded-2xl bg-card"
-                onClick={() => { setSelectedGroup(group.name); setView('members'); }}
+                onClick={() => { setSelectedGroup(group); setView('members'); }}
               >
                 <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Group {group.name}</CardTitle>
+                  <CardTitle className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{group.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
                   <div className="flex justify-between items-end">
@@ -402,12 +294,18 @@ export default function CyclesDashboard() {
                 </CardContent>
               </Card>
             ))}
+            {groupStats.length === 0 && (
+              <div className="col-span-full h-32 flex flex-col items-center justify-center border-2 border-dashed rounded-2xl bg-muted/5 text-muted-foreground">
+                <Database className="size-8 mb-2 opacity-20" />
+                <p className="text-xs font-bold uppercase tracking-widest">No groups matched this cycle date range</p>
+              </div>
+            )}
           </div>
 
           <Card className="border-border/60 rounded-2xl bg-card overflow-hidden">
             <CardHeader className="bg-muted/10 border-b p-6">
-              <CardTitle className="text-lg font-black uppercase">Cycle Administration</CardTitle>
-              <CardDescription>Toggle status to enable or disable new payments for this period.</CardDescription>
+              <CardTitle className="text-lg font-black uppercase">Cycle Configuration</CardTitle>
+              <CardDescription>Archive or manage visibility for this historical period.</CardDescription>
             </CardHeader>
             <CardContent className="p-6 flex flex-col sm:flex-row gap-4">
               <Button 
@@ -417,13 +315,13 @@ export default function CyclesDashboard() {
                 disabled={isActionPending}
               >
                 {selectedCycle.status === 'active' ? <Pause className="size-4" /> : <Play className="size-4" />}
-                {selectedCycle.status === 'active' ? 'Mark as Past (Lock Payments)' : 'Re-activate Cycle'}
+                {selectedCycle.status === 'active' ? 'Mark as Past (Lock Period)' : 'Re-activate Cycle'}
               </Button>
               <Button 
                 variant="destructive" 
                 className="flex-1 font-bold gap-2 h-12 rounded-xl"
                 onClick={async () => {
-                  if(confirm('Delete this cycle record? Payment history remains.')) {
+                  if(confirm('Delete this cycle record? This will not affect scheme or payment data.')) {
                     await deleteDoc(doc(db, 'cycles', selectedCycle.id))
                     setView('list')
                   }
@@ -437,7 +335,6 @@ export default function CyclesDashboard() {
         </div>
       )}
 
-      {/* VIEW: MEMBERS IN GROUP */}
       {view === 'members' && (
         <Card className="rounded-2xl border-border/60 overflow-hidden shadow-sm animate-in slide-in-from-right-4 duration-300 bg-card">
           <CardHeader className="bg-muted/20 p-6 flex flex-row items-center justify-between border-b">
@@ -446,13 +343,15 @@ export default function CyclesDashboard() {
                 <Users className="size-6" />
               </div>
               <div>
-                <CardTitle className="text-xl font-black uppercase">Group {selectedGroup} Registry</CardTitle>
-                <CardDescription>Cycle Specific Ledger: {selectedCycle.name}</CardDescription>
+                <CardTitle className="text-xl font-black uppercase">{selectedGroup?.name} Registry</CardTitle>
+                <CardDescription>Cycle Historical Ledger: {selectedCycle.name}</CardDescription>
               </div>
             </div>
-            <Badge variant="outline" className="font-bold text-[10px] border-primary/20 text-primary py-1 px-3">
-              {members?.filter(m => normalizeGroupName(m.chitGroup) === selectedGroup && m.status !== 'inactive').length} Participants
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="font-bold text-[10px] border-amber-200 text-amber-700 py-1 px-3 bg-amber-50">
+                Read Only Mode
+              </Badge>
+            </div>
           </CardHeader>
           <div className="overflow-x-auto">
             <Table>
@@ -461,19 +360,18 @@ export default function CyclesDashboard() {
                   <TableHead className="text-[10px] font-black uppercase tracking-widest h-12 pl-6">Participant</TableHead>
                   <TableHead className="text-[10px] font-black uppercase tracking-widest h-12">Cycle Total</TableHead>
                   <TableHead className="text-[10px] font-black uppercase tracking-widest h-12">Total Arrears</TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest h-12">Today Status</TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest h-12 text-right pr-6">Action</TableHead>
+                  <TableHead className="text-[10px] font-black uppercase tracking-widest h-12 pr-6 text-right">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {members?.filter(m => normalizeGroupName(m.chitGroup) === selectedGroup && m.status !== 'inactive').length === 0 ? (
+                {members?.filter(m => m.chitGroup === selectedGroup?.name && m.status !== 'inactive').length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-40 text-center text-muted-foreground italic text-sm">
+                    <TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic text-sm">
                       No participants found in this group for this cycle.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  members?.filter(m => normalizeGroupName(m.chitGroup) === selectedGroup && m.status !== 'inactive').map(m => {
+                  members?.filter(m => m.chitGroup === selectedGroup?.name && m.status !== 'inactive').map(m => {
                     const memberTotalInCycle = filteredPayments
                       .filter(p => p.memberId === m.id)
                       .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
@@ -502,31 +400,13 @@ export default function CyclesDashboard() {
                             <span className="text-[9px] font-bold text-muted-foreground uppercase">{m.pendingDays || 0} Days</span>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-right pr-6">
                           <Badge variant={isPaidToday ? "default" : "secondary"} className={cn(
                             "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none",
                             isPaidToday ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
                           )}>
-                            {isPaidToday ? "SUCCESS" : "UNPAID"}
+                            {isPaidToday ? "PAID TODAY" : "UNPAID"}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-right pr-6">
-                          {selectedCycle.status === 'active' ? (
-                            <Button 
-                              size="sm" 
-                              className="h-8 gap-2 font-bold px-4 rounded-lg shadow-sm"
-                              onClick={() => {
-                                const scheme = rounds?.find(r => normalizeGroupName(r.name) === normalizeGroupName(m.chitGroup))
-                                setTargetMemberForPayment(m)
-                                setPaymentAmount(scheme?.monthlyAmount || 800)
-                                setIsPaymentDialogOpen(true)
-                              }}
-                            >
-                              <IndianRupee className="size-3.5" /> Pay
-                            </Button>
-                          ) : (
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase italic opacity-50">Locked</span>
-                          )}
                         </TableCell>
                       </TableRow>
                     )
@@ -538,7 +418,6 @@ export default function CyclesDashboard() {
         </Card>
       )}
 
-      {/* DIALOGS */}
       <Dialog open={isAddCycleOpen} onOpenChange={setIsAddCycleOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <form onSubmit={handleAddCycle}>
@@ -549,34 +428,16 @@ export default function CyclesDashboard() {
             <div className="grid gap-5 py-6">
               <div className="grid gap-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Cycle Name</Label>
-                <Input 
-                  value={newCycle.name} 
-                  onChange={e => setNewCycle({...newCycle, name: e.target.value})} 
-                  placeholder="e.g. Mar 22 - Apr 22 Audit"
-                  required 
-                  className="h-11 rounded-xl"
-                />
+                <Input value={newCycle.name} onChange={e => setNewCycle({...newCycle, name: e.target.value})} placeholder="e.g. Mar 22 - Apr 22 Audit" required className="h-11 rounded-xl" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
-                  <Input 
-                    type="date" 
-                    value={newCycle.startDate} 
-                    onChange={e => setNewCycle({...newCycle, startDate: e.target.value})} 
-                    required 
-                    className="h-11 rounded-xl"
-                  />
+                  <Input type="date" value={newCycle.startDate} onChange={e => setNewCycle({...newCycle, startDate: e.target.value})} required className="h-11 rounded-xl" />
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
-                  <Input 
-                    type="date" 
-                    value={newCycle.endDate} 
-                    onChange={e => setNewCycle({...newCycle, endDate: e.target.value})} 
-                    required 
-                    className="h-11 rounded-xl"
-                  />
+                  <Input type="date" value={newCycle.endDate} onChange={e => setNewCycle({...newCycle, endDate: e.target.value})} required className="h-11 rounded-xl" />
                 </div>
               </div>
             </div>
@@ -587,95 +448,6 @@ export default function CyclesDashboard() {
               </Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          {targetMemberForPayment && (
-            <form onSubmit={handleProcessPayment}>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <CreditCard className="size-5 text-primary" />
-                  Cycle Payment
-                </DialogTitle>
-                <DialogDescription>Recording payment for <span className="font-bold text-primary">{targetMemberForPayment.name}</span> within active cycle.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-5 py-6">
-                <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Amount (₹)</Label>
-                  <Input 
-                    type="number" 
-                    value={paymentAmount} 
-                    onChange={e => setPaymentAmount(Number(e.target.value))} 
-                    required 
-                    className="h-12 text-lg font-black text-primary rounded-xl"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Method</Label>
-                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Cash">Cash</SelectItem>
-                      <SelectItem value="UPI">UPI</SelectItem>
-                      <SelectItem value="Transfer">Bank Transfer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={isActionPending} className="w-full font-black uppercase tracking-[0.2em] h-12 bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-lg transition-all active:scale-[0.98]">
-                  {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}
-                  Confirm Cycle Payment
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isDailyAuditOpen} onOpenChange={setIsDailyAuditOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Wallet className="size-5 text-primary" />
-              Cycle Reconciliation
-            </DialogTitle>
-            <DialogDescription>Inspect intake for a specific date within this period.</DialogDescription>
-          </DialogHeader>
-          <div className="py-6 space-y-6">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Audit Target Date</Label>
-              <Input 
-                type="date" 
-                value={auditDate} 
-                min={selectedCycle?.startDate}
-                max={selectedCycle?.endDate}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  // Restrict to cycle range manually if browser doesn't respect min/max
-                  if (selectedCycle) {
-                    if (val < selectedCycle.startDate || val > selectedCycle.endDate) {
-                      return;
-                    }
-                  }
-                  setAuditDate(val);
-                }} 
-                className="h-11 font-bold rounded-xl"
-              />
-              <p className="text-[9px] text-muted-foreground italic px-1">Restricted to: {selectedCycle?.startDate} to {selectedCycle?.endDate}</p>
-            </div>
-            <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-3xl border border-dashed border-emerald-200 text-center">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Verified Intake</p>
-              <div className="text-5xl font-black text-emerald-600 tabular-nums tracking-tighter">
-                ₹{auditTotal.toLocaleString()}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-bold h-11 rounded-xl">Close Audit</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
