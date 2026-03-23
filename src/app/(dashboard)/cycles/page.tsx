@@ -82,17 +82,21 @@ export default function CyclesDashboard() {
     return name.replace(/Group/gi, '').trim().toUpperCase();
   };
 
-  // Filtered Data for selected cycle - ISOLATED LOGIC
+  /**
+   * ISOLATED CYCLE FILTERING LOGIC
+   * Filters payments strictly within the selected cycle's range.
+   */
   const filteredPayments = useMemo(() => {
     if (!selectedCycle || !payments) return []
     const start = selectedCycle.startDate
     const end = selectedCycle.endDate
     
     return payments.filter(p => {
+      // We only care about successful payments
       if (p.status !== 'success' && p.status !== 'paid') return false
       
-      // Extract date robustly
-      let pDateStr = p.targetDate; // Expected YYYY-MM-DD
+      // Get the date string (YYYY-MM-DD)
+      let pDateStr = p.targetDate; 
       
       if (!pDateStr && p.paymentDate) {
         try {
@@ -106,6 +110,8 @@ export default function CyclesDashboard() {
       }
 
       if (!pDateStr) return false;
+      
+      // Comparison: cycleStartDate <= paymentDate <= cycleEndDate
       return pDateStr >= start && pDateStr <= end;
     })
   }, [selectedCycle, payments])
@@ -116,7 +122,7 @@ export default function CyclesDashboard() {
     const totalCollection = filteredPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
     const uniquePaidMemberIds = new Set(filteredPayments.map(p => p.memberId));
     
-    // Sum total arrears for members currently in this cycle's groups (A, B, C, D)
+    // Sum total arrears for members currently in this cycle's scope
     const totalPendingAmount = members
       .filter(m => {
         if (m.status === 'inactive') return false;
@@ -150,7 +156,7 @@ export default function CyclesDashboard() {
         collection: totalInCycle, 
         membersCount: groupMembers.length,
         paidCount: paidInGroupCount,
-        pendingCount: groupMembers.length - paidInGroupCount
+        pendingCount: Math.max(0, groupMembers.length - paidInGroupCount)
       }
     })
   }, [selectedCycle, members, filteredPayments])
