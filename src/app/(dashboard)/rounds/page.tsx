@@ -628,7 +628,7 @@ export default function RoundsPage() {
               <div className="grid gap-5 py-6">
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Scheme Name</Label>
-                  <Input value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required className="h-11 rounded-xl" placeholder="e.g. Group A" />
+                  <Input value={newChit.name ?? ""} onChange={e => setNewChit({...newChit, name: e.target.value})} required className="h-11 rounded-xl" placeholder="e.g. Group A" />
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label>
@@ -640,7 +640,7 @@ export default function RoundsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
-                  <Select value={newChit.collectionType} onValueChange={(v) => setNewChit({...newChit, collectionType: v})}>
+                  <Select value={newChit.collectionType ?? "Daily"} onValueChange={(v) => setNewChit({...newChit, collectionType: v})}>
                     <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select frequency" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Daily">Daily</SelectItem>
@@ -651,11 +651,11 @@ export default function RoundsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
-                    <Input type="date" value={newChit.startDate} onChange={e => setNewChit({...newChit, startDate: e.target.value})} required className="h-11 rounded-xl" />
+                    <Input type="date" value={newChit.startDate ?? ""} onChange={e => setNewChit({...newChit, startDate: e.target.value})} required className="h-11 rounded-xl" />
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
-                    <Input type="date" value={newChit.endDate} onChange={e => setNewChit({...newChit, endDate: e.target.value})} required className="h-11 rounded-xl" />
+                    <Input type="date" value={newChit.endDate ?? ""} onChange={e => setNewChit({...newChit, endDate: e.target.value})} required className="h-11 rounded-xl" />
                   </div>
                 </div>
               </div>
@@ -680,7 +680,7 @@ export default function RoundsPage() {
                 <div className="grid gap-5 py-6">
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Scheme Name</Label>
-                    <Input value={chitToEdit.name} onChange={e => setChitToEdit({...chitToEdit, name: e.target.value})} required className="h-11 rounded-xl" />
+                    <Input value={chitToEdit.name ?? ""} onChange={e => setChitToEdit({...chitToEdit, name: e.target.value})} required className="h-11 rounded-xl" />
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label>
@@ -692,7 +692,7 @@ export default function RoundsPage() {
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
-                    <Select value={chitToEdit.collectionType} onValueChange={(v) => setChitToEdit({...chitToEdit, collectionType: v})}>
+                    <Select value={chitToEdit.collectionType ?? "Daily"} onValueChange={(v) => setChitToEdit({...chitToEdit, collectionType: v})}>
                       <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select frequency" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Daily">Daily</SelectItem>
@@ -703,11 +703,11 @@ export default function RoundsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
-                      <Input type="date" value={chitToEdit.startDate} onChange={e => setChitToEdit({...chitToEdit, startDate: e.target.value})} required className="h-11 rounded-xl" />
+                      <Input type="date" value={chitToEdit.startDate ?? ""} onChange={e => setChitToEdit({...chitToEdit, startDate: e.target.value})} required className="h-11 rounded-xl" />
                     </div>
                     <div className="grid gap-2">
                       <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
-                      <Input type="date" value={chitToEdit.endDate} onChange={e => setChitToEdit({...chitToEdit, endDate: e.target.value})} required className="h-11 rounded-xl" />
+                      <Input type="date" value={chitToEdit.endDate ?? ""} onChange={e => setChitToEdit({...chitToEdit, endDate: e.target.value})} required className="h-11 rounded-xl" />
                     </div>
                   </div>
                 </div>
@@ -942,7 +942,7 @@ export default function RoundsPage() {
                     <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
                     <Input 
                       type="date" 
-                      value={auditDate} 
+                      value={auditDate ?? ""} 
                       onChange={e => setAuditDate(e.target.value)} 
                       className="pl-10 h-11 font-bold text-sm"
                     />
@@ -1076,20 +1076,20 @@ export default function RoundsPage() {
               <div className="grid gap-5 py-6">
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label>
-                  <Input 
-                    value={memberProfileToEdit.name} 
+                  <input
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                    value={memberProfileToEdit.name ?? ""} 
                     onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} 
                     required 
-                    className="h-11 rounded-xl" 
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
-                  <Input 
-                    value={memberProfileToEdit.phone} 
+                  <input
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                    value={memberProfileToEdit.phone ?? ""} 
                     onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} 
                     required 
-                    className="h-11 rounded-xl" 
                   />
                 </div>
                 <div className="grid gap-2">
@@ -1106,12 +1106,12 @@ export default function RoundsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label>
-                  <Input 
-                    type="date" 
-                    value={memberProfileToEdit.joinDate} 
+                  <input
+                    type="date"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                    value={memberProfileToEdit.joinDate ?? ""} 
                     onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} 
                     required 
-                    className="h-11 rounded-xl" 
                   />
                 </div>
               </div>
@@ -1155,11 +1155,11 @@ export default function RoundsPage() {
 
                 <div className="flex flex-col gap-1">
                   <span className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest ml-1">Missed Installments (Days)</span>
-                  <Input 
+                  <input 
                     type="number" 
-                    value={manualPendingValue} 
+                    value={manualPendingValue ?? ""} 
                     onChange={e => setManualPendingValue(e.target.value === "" ? "" : Number(e.target.value))}
-                    className="h-10 font-bold text-sm rounded-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     placeholder="Enter pending days"
                   />
                 </div>
@@ -1199,18 +1199,18 @@ export default function RoundsPage() {
               <div className="grid gap-6 py-4">
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Amount (₹)</Label>
-                  <Input 
+                  <input 
                     type="number" 
-                    value={paymentData.amount} 
+                    value={paymentData.amount ?? ""} 
                     onChange={e => setPaymentData({...paymentData, amount: Number(e.target.value)})} 
                     required 
-                    className="h-11 rounded-xl text-lg font-black text-primary" 
+                    className="flex h-12 w-full rounded-xl border border-input bg-background px-3 py-2 text-lg font-black text-primary ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" 
                     placeholder="Enter amount"
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Method</Label>
-                  <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v})}>
+                  <Select value={paymentData.method ?? "Cash"} onValueChange={(v) => setPaymentData({...paymentData, method: v})}>
                     <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Cash">Cash (Primary)</SelectItem>
@@ -1241,11 +1241,21 @@ export default function RoundsPage() {
             <div className="grid gap-5 py-6">
               <div className="grid gap-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label>
-                <Input value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required className="h-11 rounded-xl" />
+                <input
+                  className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={newMember.name ?? ""} 
+                  onChange={e => setNewMember({...newMember, name: e.target.value})} 
+                  required 
+                />
               </div>
               <div className="grid gap-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
-                <Input value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required className="h-11 rounded-xl" />
+                <input
+                  className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={newMember.phone ?? ""} 
+                  onChange={e => setNewMember({...newMember, phone: e.target.value})} 
+                  required 
+                />
               </div>
               <div className="grid gap-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
@@ -1262,7 +1272,13 @@ export default function RoundsPage() {
               </div>
               <div className="grid gap-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label>
-                <Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required className="h-11 rounded-xl" />
+                <input
+                  type="date"
+                  className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={newMember.joinDate ?? ""} 
+                  onChange={e => setNewMember({...newMember, joinDate: e.target.value})} 
+                  required 
+                />
               </div>
             </div>
             <DialogFooter>
