@@ -2,11 +2,12 @@
 "use client"
 
 import * as React from "react"
-import { LayoutDashboard, Users, CreditCard, History, BarChart3, LogOut, CalendarClock } from "lucide-react"
+import { LayoutDashboard, Users, CreditCard, History, BarChart3, LogOut, CalendarClock, FastForward, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/firebase"
 import { useRole } from "@/hooks/use-role"
+import { useToast } from "@/hooks/use-toast"
 
 import {
   Sidebar,
@@ -37,6 +38,8 @@ export function AppSidebar() {
   const router = useRouter()
   const { role } = useRole()
   const { isMobile, setOpenMobile } = useSidebar()
+  const { toast } = useToast()
+  const [isShifting, setIsShifting] = React.useState(false)
 
   const handleLinkClick = () => {
     if (isMobile) {
@@ -50,6 +53,26 @@ export function AppSidebar() {
     }
     await auth.signOut()
     router.push("/login")
+  }
+
+  const handleDateShift = async () => {
+    if (isShifting) return;
+    if (!confirm("Are you sure you want to manually shift the system date to the next day? This is a one-time administrative action.")) return;
+    
+    setIsShifting(true);
+    try {
+      const res = await fetch('/api/system/shift-date');
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: "System Shifted", description: data.message });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Shift Failed", description: error.message });
+    } finally {
+      setIsShifting(false);
+    }
   }
 
   const filteredNavItems = navItems.filter(item => item.roles.includes(role))
@@ -93,6 +116,22 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/50 py-4">
         <SidebarMenu>
+          {role === 'admin' && (
+            <SidebarMenuItem>
+              <SidebarMenuButton 
+                onClick={handleDateShift}
+                tooltip="Manual Day Shift" 
+                size="lg"
+                className="hover:bg-primary/10 h-14"
+                disabled={isShifting}
+              >
+                {isShifting ? <Loader2 className="size-6 animate-spin text-primary" /> : <FastForward className="size-6 text-primary" />}
+                <span className="font-bold text-lg group-data-[collapsible=icon]:hidden">
+                  Shift Day
+                </span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton 
               onClick={handleLogout}
