@@ -204,27 +204,53 @@ export default function CyclesDashboard() {
           {cycles?.map(cycle => (
             <Card 
               key={cycle.id} 
-              className="group cursor-pointer hover:shadow-xl transition-all border-border/60 overflow-hidden relative shadow-sm rounded-2xl bg-card"
+              className="group cursor-pointer hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 border-border/50 overflow-hidden relative shadow-sm rounded-2xl bg-card"
               onClick={() => { setSelectedCycle(cycle); setView('groups'); }}
             >
-              <CardHeader className="p-5 pb-2 bg-muted/10 border-b border-border/40">
-                <div className="flex justify-between items-center">
-                  <Badge variant={cycle.status === 'active' ? 'default' : 'secondary'} className="uppercase text-[9px] font-black tracking-widest">
+              <div className={cn(
+                "absolute left-0 top-0 bottom-0 w-1.5 transition-colors",
+                cycle.status === 'active' ? "bg-primary" : "bg-muted-foreground/30"
+              )} />
+              
+              <CardHeader className="p-6 pb-4 bg-muted/5">
+                <div className="flex justify-between items-start">
+                  <Badge 
+                    variant={cycle.status === 'active' ? 'default' : 'outline'} 
+                    className={cn(
+                      "uppercase text-[10px] font-black tracking-[0.1em] px-2 py-0.5 border-none shadow-none",
+                      cycle.status === 'active' ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                    )}
+                  >
                     {cycle.status}
                   </Badge>
-                  <span className="text-[10px] text-muted-foreground font-bold tabular-nums">
-                    Created {cycle.createdAt ? format(cycle.createdAt.toDate(), 'dd MMM') : '-'}
-                  </span>
-                </div>
-                <CardTitle className="text-xl font-black uppercase tracking-tight mt-3">{cycle.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-widest mb-1">Range Captured</span>
-                    <span className="text-xs font-bold">{format(parseISO(cycle.startDate), 'MMM dd')} - {format(parseISO(cycle.endDate), 'MMM dd, yyyy')}</span>
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold tabular-nums">
+                    <History className="size-3" />
+                    {cycle.createdAt ? format(cycle.createdAt.toDate(), 'dd MMM yyyy') : '-'}
                   </div>
-                  <ChevronRight className="size-5 text-primary opacity-30 group-hover:opacity-100 transition-all" />
+                </div>
+                <CardTitle className="text-xl font-black uppercase tracking-tight mt-4 text-primary group-hover:text-accent transition-colors">
+                  {cycle.name}
+                </CardTitle>
+              </CardHeader>
+              
+              <CardContent className="p-6 pt-0">
+                <div className="flex items-end justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg bg-primary/5 text-primary">
+                        <CalendarRange className="size-4" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-widest">Audit Window</span>
+                        <span className="text-sm font-bold tracking-tight">
+                          {format(parseISO(cycle.startDate), 'MMM dd')} - {format(parseISO(cycle.endDate), 'MMM dd, yyyy')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-primary/5 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
+                    <ChevronRight className="size-5" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
