@@ -55,5 +55,11 @@ service cloud.firestore {
       allow get, list: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
+
+    match /systemMetadata/{docId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow write: if false; // System metadata is strictly updated via server/admin
+    }
   }
 }
