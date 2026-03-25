@@ -275,7 +275,8 @@ export default function RoundsPage() {
       batch.update(memberRef, {
         totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
         pendingAmount: newPendingAmount,
-        pendingDays: newPendingDays
+        pendingDays: newPendingDays,
+        lastPaymentDate: todayStr
       });
 
       await withTimeout(batch.commit());
@@ -388,6 +389,7 @@ export default function RoundsPage() {
     e.preventDefault();
     if (!db || !currentRound || isActionPending) return;
     setIsActionPending(true);
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     try {
       const memberRef = doc(collection(db, 'members'));
       const memberData = {
@@ -400,7 +402,8 @@ export default function RoundsPage() {
         totalPaid: 0,
         pendingDays: 0,
         pendingAmount: 0,
-        lastPendingUpdateDate: format(new Date(), 'yyyy-MM-dd'),
+        lastPaymentDate: todayStr,
+        lastIncrementDate: todayStr,
         createdAt: serverTimestamp(),
       };
       const batch = writeBatch(db);

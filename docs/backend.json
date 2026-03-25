@@ -61,15 +61,20 @@
           "description": "The exact currency deficit for this member.",
           "default": 0
         },
+        "lastPaymentDate": {
+          "type": "string",
+          "description": "The date (YYYY-MM-DD) of the last successful installment payment.",
+          "format": "date"
+        },
+        "lastIncrementDate": {
+          "type": "string",
+          "description": "The last date (YYYY-MM-DD) when the auto-increment logic was applied to this member.",
+          "format": "date"
+        },
         "yesterdayPending": {
           "type": "number",
           "description": "Flag indicating if the member was pending yesterday (1 for yes, 0 for no).",
           "default": 0
-        },
-        "lastPendingUpdateDate": {
-          "type": "string",
-          "description": "The last date (YYYY-MM-DD) when pendingDays was auto-calculated.",
-          "format": "date"
         }
       },
       "required": [

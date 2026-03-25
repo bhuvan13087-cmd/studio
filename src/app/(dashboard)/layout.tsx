@@ -1,15 +1,14 @@
 
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
-import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase"
+import { useUser } from "@/firebase"
 import { useRouter } from "next/navigation"
-import { format, parseISO, isValid } from "date-fns"
+import { format } from "date-fns"
 import { Clock } from "lucide-react"
-import { collection, query, writeBatch, doc } from "firebase/firestore"
 
 export default function DashboardLayout({
   children,
@@ -18,18 +17,7 @@ export default function DashboardLayout({
 }) {
   const { user, isUserLoading } = useUser()
   const router = useRouter()
-  const db = useFirestore()
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
-  const isProcessing = useRef(false)
-
-  const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db]);
-  const { data: members } = useCollection(membersQuery);
-
-  const paymentsQuery = useMemoFirebase(() => collection(db, 'payments'), [db]);
-  const { data: payments } = useCollection(paymentsQuery);
-
-  const roundsQuery = useMemoFirebase(() => collection(db, 'chitRounds'), [db]);
-  const { data: chitRounds } = useCollection(roundsQuery);
 
   useEffect(() => {
     setCurrentTime(new Date())
@@ -42,85 +30,6 @@ export default function DashboardLayout({
       router.push("/login")
     }
   }, [user, isUserLoading, router])
-
-  /**
-   * PRODUCTION 10 PM AUTOMATED CALCULATION
-   * Executes daily at 10 PM (Hour 22).
-   * 
-   * CRITICAL: Applies ONLY to DAILY members.
-   * Logic: If not paid today by 10 PM, increment pending debt by 1 scheme unit.
-   */
-  useEffect(() => {
-    if (!user || !members || !payments || !currentTime || !chitRounds || isProcessing.current) return;
-
-    const runProductionBatch = async () => {
-      const todayStr = format(currentTime, 'yyyy-MM-dd');
-      const scheduledHour = 22; // 10 PM
-      
-      // Only run at 10 PM or later
-      if (currentTime.getHours() < scheduledHour) return;
-
-      const dailyMembers = members.filter(m => {
-        if (m.status !== 'active' || m.lastPendingUpdateDate === todayStr) return false;
-        
-        // Resolve type: Member specific OR Group default
-        const scheme = chitRounds?.find(r => r.name === m.chitGroup);
-        const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
-        
-        return resolvedType === 'daily';
-      });
-      
-      if (dailyMembers.length === 0) return;
-
-      isProcessing.current = true;
-      const batch = writeBatch(db);
-      let updatedCount = 0;
-
-      dailyMembers.forEach(member => {
-        const schemeAmount = member.monthlyAmount || 800;
-        const yesterdayPendingAmount = member.pendingAmount || 0;
-        
-        // Robust detection of today's payments
-        const todayPayments = payments.filter(p => {
-          if (p.memberId !== member.id) return false;
-          if (p.status !== 'success' && p.status !== 'paid') return false;
-          
-          if (p.targetDate === todayStr) return true;
-          
-          const pDate = p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? parseISO(p.paymentDate) : null);
-          return pDate && isValid(pDate) && format(pDate, 'yyyy-MM-dd') === todayStr;
-        });
-
-        const todayPaymentSum = todayPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-
-        // CALCULATION: Add 1 full installment to current debt, subtract whatever was paid today.
-        // If they paid >= schemeAmount today, debt remains same. If they paid 0, debt increments by 1 unit.
-        const newPendingAmount = Math.max(0, (yesterdayPendingAmount + schemeAmount) - todayPaymentSum);
-        
-        // Re-derive days for display
-        const newPendingDays = Math.ceil(newPendingAmount / schemeAmount);
-
-        const memberRef = doc(db, 'members', member.id);
-        batch.update(memberRef, {
-          pendingAmount: newPendingAmount,
-          pendingDays: newPendingDays,
-          lastPendingUpdateDate: todayStr
-        });
-        updatedCount++;
-      });
-
-      if (updatedCount > 0) {
-        try {
-          await batch.commit();
-        } catch (error) {
-          console.error("Batch commitment failed:", error);
-        }
-      }
-      isProcessing.current = false;
-    };
-
-    runProductionBatch();
-  }, [user, members, payments, currentTime, db, chitRounds]);
 
   if (isUserLoading) {
     return (
@@ -143,7 +52,7 @@ export default function DashboardLayout({
                   Admin Panel
                 </h1>
                 <div className="hidden xs:flex items-center gap-1 text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-                  <Clock className="size-2.5" /> 10:00 PM Production Sync
+                  <Clock className="size-2.5" /> Backend Automated Sync
                 </div>
               </div>
             </div>
