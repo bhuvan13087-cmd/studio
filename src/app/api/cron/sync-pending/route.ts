@@ -8,27 +8,10 @@ import { format, differenceInDays, parseISO, isValid } from 'date-fns';
  * 
  * Target: Daily at 10:00 PM IST (Asia/Kolkata)
  * Purpose: Automatically increment pendingDays for active daily members 
- * who have not paid by the daily threshold.
- * 
- * Logic:
- * 1. Fetch all active members.
- * 2. For each member, identify the gap between today and the last increment date.
- * 3. If a gap exists, check if the member is still in debt (lastPaymentDate < today).
- * 4. Apply multi-day catch-up if the system missed previous runs.
+ * who have not fulfilled their daily installment requirement.
  */
 
 export async function GET(request: Request) {
-  // Security: In a production environment, you should verify a secret token
-  // passed in the header (e.g., x-cron-auth) to prevent unauthorized triggers.
-  
-  const authHeader = request.headers.get('x-cron-auth');
-  const cronSecret = process.env.CRON_SECRET;
-  
-  // Optional security check
-  if (cronSecret && authHeader !== cronSecret) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-
   const db = getAdminDb();
   
   // Calculate today's date in IST
@@ -49,27 +32,23 @@ export async function GET(request: Request) {
 
     membersSnapshot.forEach(doc => {
       const data = doc.data();
-      const memberId = doc.id;
       
-      // We only auto-increment for DAILY members (resolved via paymentType or scheme default)
-      // Since API route doesn't have easy access to ChitRound collection per member without extra query,
-      // we rely on the member's stored paymentType.
+      // We only auto-increment for DAILY members
       if (data.paymentType?.toLowerCase() !== 'daily') return;
 
       const lastIncrementStr = data.lastIncrementDate || data.joinDate?.split('T')[0] || todayStr;
-      const lastPaymentStr = data.lastPaymentDate || data.joinDate?.split('T')[0] || '1970-01-01';
+      const lastPaymentStr = data.lastPaymentDate || '1970-01-01';
       
-      if (!isValid(parseISO(lastIncrementStr))) return;
-
       const daysSinceLastSync = differenceInDays(parseISO(todayStr), parseISO(lastIncrementStr));
       
-      // If we already ran today, skip
+      // Safety: Do not run twice in the same calendar day
       if (daysSinceLastSync <= 0) return;
 
-      // Logic: If last payment was BEFORE today, they are potentially in debt for the missed interval.
-      // daysMissed calculation handles catch-up.
+      // INCREMENT LOGIC (STRICT)
+      // Condition: lastPaymentDate != TODAY
       if (lastPaymentStr < todayStr) {
-        const incrementAmount = daysSinceLastSync; // Catch-up logic
+        // Increment pendingDays based on the gap (supports multi-day catch-up)
+        const incrementAmount = daysSinceLastSync;
         const currentPendingDays = data.pendingDays || 0;
         const schemeAmount = data.monthlyAmount || 800;
         
@@ -83,7 +62,7 @@ export async function GET(request: Request) {
         });
         updatedCount++;
       } else {
-        // Even if they paid, we must mark today as synced to avoid redundant checks
+        // If they already paid today, just mark the increment marker as up-to-date
         batch.update(doc.ref, {
           lastIncrementDate: todayStr
         });

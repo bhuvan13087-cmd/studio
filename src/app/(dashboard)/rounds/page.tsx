@@ -261,23 +261,40 @@ export default function RoundsPage() {
         createdAt: serverTimestamp()
       });
 
-      const memberRef = doc(db, 'members', selectedMemberForPayment.id);
+      // DECREMENT LOGIC (STRICT 3-CASE HANDLING)
+      let currentPendingDays = selectedMemberForPayment.pendingDays || 0;
+      let daysPaid = Math.floor(paymentAmount / schemeAmount);
       
-      let currentPendingAmount = selectedMemberForPayment.pendingAmount || 0;
+      if (daysPaid > 0) {
+        // STEP 2: CLEAR OLD PENDING FIRST
+        if (currentPendingDays > 0) {
+          if (daysPaid >= currentPendingDays) {
+            daysPaid -= currentPendingDays;
+            currentPendingDays = 0;
+          } else {
+            currentPendingDays -= daysPaid;
+            daysPaid = 0;
+          }
+        }
 
-      if (isDaily && currentPendingAmount > 0) {
-        currentPendingAmount = Math.max(0, currentPendingAmount - paymentAmount);
+        // STEP 3: HANDLE TODAY
+        // If daysPaid >= 1, it means at least one full installment was left over to cover "today"
+        const newLastPaymentDate = daysPaid >= 1 ? todayStr : (selectedMemberForPayment.lastPaymentDate || "");
+
+        const memberRef = doc(db, 'members', selectedMemberForPayment.id);
+        batch.update(memberRef, {
+          totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
+          pendingDays: currentPendingDays,
+          pendingAmount: currentPendingDays * schemeAmount,
+          lastPaymentDate: newLastPaymentDate
+        });
+      } else {
+        // Even if daysPaid is 0, we still update totalPaid
+        const memberRef = doc(db, 'members', selectedMemberForPayment.id);
+        batch.update(memberRef, {
+          totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount
+        });
       }
-
-      const newPendingAmount = currentPendingAmount;
-      const newPendingDays = Math.ceil(newPendingAmount / schemeAmount);
-
-      batch.update(memberRef, {
-        totalPaid: (selectedMemberForPayment.totalPaid || 0) + paymentAmount,
-        pendingAmount: newPendingAmount,
-        pendingDays: newPendingDays,
-        lastPaymentDate: todayStr
-      });
 
       await withTimeout(batch.commit());
       await createAuditLog(db, user, `Processed Payment ₹${paymentAmount} for ${selectedMemberForPayment.name}`);
