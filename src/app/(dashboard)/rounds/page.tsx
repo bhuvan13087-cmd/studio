@@ -74,7 +74,8 @@ const INITIAL_MEMBER_STATE = {
 
 const INITIAL_PAYMENT_STATE = {
   method: "Cash",
-  amount: 0
+  amount: 0,
+  date: format(new Date(), 'yyyy-MM-dd')
 }
 
 const MONTHS = [
@@ -248,14 +249,17 @@ export default function RoundsPage() {
       const batch = writeBatch(db);
       const paymentRef = doc(collection(db, 'payments'));
       
+      // Use the manually selected payment date if provided, otherwise today
+      const selectedDateISO = paymentData.date ? new Date(paymentData.date).toISOString() : new Date().toISOString();
+
       batch.set(paymentRef, {
         id: paymentRef.id,
         memberId: selectedMemberForPayment.id,
         memberName: selectedMemberForPayment.name,
         month: format(new Date(), 'MMMM yyyy'),
-        targetDate: todayStr,
+        targetDate: todayStr, // Keep targetDate as today for system logic
         amountPaid: paymentAmount,
-        paymentDate: new Date().toISOString(),
+        paymentDate: selectedDateISO, // Record history with manual date
         status: "success",
         method: paymentData.method,
         createdAt: serverTimestamp()
@@ -915,7 +919,8 @@ export default function RoundsPage() {
                               setSelectedMemberForPayment(m); 
                               setPaymentData({
                                   ...INITIAL_PAYMENT_STATE,
-                                  amount: currentRound?.monthlyAmount || 0
+                                  amount: currentRound?.monthlyAmount || 0,
+                                  date: format(new Date(), 'yyyy-MM-dd')
                               });
                               setIsQuickPaymentDialogOpen(true); 
                             }
@@ -1226,6 +1231,16 @@ export default function RoundsPage() {
                     required 
                     className="flex h-12 w-full rounded-xl border border-input bg-background px-3 py-2 text-lg font-black text-primary ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" 
                     placeholder="Enter amount"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Date</Label>
+                  <input 
+                    type="date" 
+                    value={paymentData.date ?? ""} 
+                    onChange={e => setPaymentData({...paymentData, date: e.target.value})} 
+                    required 
+                    className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" 
                   />
                 </div>
                 <div className="grid gap-2">
