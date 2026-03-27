@@ -31,8 +31,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO, startOfDay, eachDayOfInterval } from "date-fns"
+import { format, isSameMonth, parseISO, startOfDay, eachDayOfInterval, isBefore, max } from "date-fns"
 import { cn } from "@/lib/utils"
+
+// STRICT SYSTEM START DATE
+const CALCULATION_START_DATE = parseISO('2026-04-01');
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
@@ -92,24 +95,38 @@ export default function DashboardPage() {
 
     const membersWithCalculatedStats = (members || []).filter(m => m.status !== 'inactive').map(m => {
       const mPayments = (payments || []).filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
-      const paidDates = new Set(mPayments.map(p => p.targetDate));
       
       let pendingDaysCount = 0;
       if (m.joinDate) {
         try {
-          const joinDate = startOfDay(parseISO(m.joinDate));
-          const interval = eachDayOfInterval({ start: joinDate, end: today });
-          interval.forEach(day => {
-            if (!paidDates.has(format(day, 'yyyy-MM-dd'))) pendingDaysCount++;
-          });
+          const rawJoinDate = parseISO(m.joinDate);
+          const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
+          
+          if (isBefore(effectiveStart, today.getTime() + 86400000)) {
+            const interval = eachDayOfInterval({ start: effectiveStart, end: today });
+            interval.forEach(day => {
+              const dStr = format(day, 'yyyy-MM-dd');
+              const dayPaymentSum = mPayments
+                .filter(p => p.targetDate === dStr)
+                .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+              
+              if (dayPaymentSum < (m.monthlyAmount || 800)) {
+                pendingDaysCount++;
+              }
+            });
+          }
         } catch {}
       }
+
+      const isPaidToday = mPayments
+        .filter(p => p.targetDate === todayStr)
+        .reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800);
 
       return {
         ...m,
         calculatedPendingDays: pendingDaysCount,
         calculatedPendingAmount: pendingDaysCount * (m.monthlyAmount || 800),
-        isPaidToday: paidDates.has(todayStr)
+        isPaidToday: isPaidToday
       };
     });
 
@@ -169,7 +186,7 @@ export default function DashboardPage() {
             <ShieldCheck className="size-4 text-primary" /> Real-time monitoring for Groups A, B, C, and D.
           </p>
         </div>
-        <Button variant="outline" className="font-bold gap-2 h-11 px-6 shadow-sm border-border/60 hover:bg-muted/50 transition-all active:scale-95">
+        <Button variant="outline" className="font-bold gap-2 h-11 px-6 shadow-sm border-border/60 hover:bg-muted/50 transition-all active:scale-95" onClick={() => window.location.reload()}>
           <RefreshCcw className="size-4 text-primary" /> Sync Status
         </Button>
       </div>
@@ -426,7 +443,7 @@ export default function DashboardPage() {
                       <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest mb-1.5">Audit Mode</p>
                       <div className="flex items-center gap-2">
                         <ShieldCheck className="size-4 text-primary opacity-60" />
-                        <p className="text-sm font-bold tracking-tight uppercase">Live Date Tracking</p>
+                        <p className="text-sm font-bold tracking-tight uppercase">Date-Wise Tracking</p>
                       </div>
                    </div>
                 </div>
@@ -434,7 +451,7 @@ export default function DashboardPage() {
                 <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-4">
                   <Info className="size-5 text-primary shrink-0 mt-0.5" />
                   <p className="text-[11px] text-muted-foreground leading-relaxed italic font-medium">
-                    Arrears are calculated dynamically by comparing verified transaction records against the required daily installments since the enrollment date.
+                    Arrears are calculated strictly from April 1, 2026, by comparing verified transaction records against daily installment requirements.
                   </p>
                 </div>
               </div>

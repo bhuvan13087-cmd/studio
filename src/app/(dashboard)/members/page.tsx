@@ -51,9 +51,12 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, doc, serverTimestamp, query, orderBy, updateDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, startOfDay, eachDayOfInterval } from "date-fns"
+import { format, parseISO, startOfDay, eachDayOfInterval, isBefore, max } from "date-fns"
 import { createAuditLog } from "@/firebase/logging"
 import { withTimeout } from "@/lib/utils"
+
+// STRICT SYSTEM START DATE
+const CALCULATION_START_DATE = parseISO('2026-04-01');
 
 const PAGE_SIZE = 50
 
@@ -91,22 +94,36 @@ export default function MembersPage() {
 
     return members.map(m => {
       const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
-      const paidDates = new Set(mPayments.map(p => p.targetDate));
       
       let pendingDaysCount = 0;
       if (m.joinDate && m.status !== 'inactive') {
         try {
-          const joinDate = startOfDay(parseISO(m.joinDate));
-          const interval = eachDayOfInterval({ start: joinDate, end: today });
-          interval.forEach(day => {
-            if (!paidDates.has(format(day, 'yyyy-MM-dd'))) pendingDaysCount++;
-          });
+          const rawJoinDate = parseISO(m.joinDate);
+          const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
+          
+          if (isBefore(effectiveStart, today.getTime() + 86400000)) {
+            const interval = eachDayOfInterval({ start: effectiveStart, end: today });
+            interval.forEach(day => {
+              const dStr = format(day, 'yyyy-MM-dd');
+              const dayPaymentSum = mPayments
+                .filter(p => p.targetDate === dStr)
+                .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+              
+              if (dayPaymentSum < (m.monthlyAmount || 800)) {
+                pendingDaysCount++;
+              }
+            });
+          }
         } catch {}
       }
 
+      const isPaidToday = mPayments
+        .filter(p => p.targetDate === todayStr)
+        .reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800);
+
       return {
         ...m,
-        isPaidToday: paidDates.has(todayStr),
+        isPaidToday: isPaidToday,
         totalPaidSum: mPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
       };
     });

@@ -40,8 +40,6 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
@@ -53,9 +51,12 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc, addDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth, eachDayOfInterval, isBefore, isAfter, startOfDay, endOfDay, differenceInDays, addDays } from "date-fns"
+import { format, parseISO, isSameMonth, eachDayOfInterval, isBefore, isAfter, startOfDay, endOfDay, differenceInDays, addDays, max } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
+
+// STRICT SYSTEM START DATE
+const CALCULATION_START_DATE = parseISO('2026-04-01');
 
 const INITIAL_CHIT_STATE = { 
   name: "", 
@@ -134,7 +135,7 @@ export default function RoundsPage() {
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: allPayments } = useCollection(paymentsQuery);
 
-  // NEW DYNAMIC CALCULATIONS
+  // NEW STRICT DATE-WISE DYNAMIC CALCULATIONS
   const membersWithCalculatedStats = useMemo(() => {
     if (!members || !allPayments) return [];
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -142,31 +143,42 @@ export default function RoundsPage() {
 
     return members.map(m => {
       const mPayments = allPayments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
-      const paidDates = new Set(mPayments.map(p => p.targetDate));
       
-      // Calculate pending days: Count dates from joinDate to today where no payment record exists
+      // Calculate pending days: ONLY from max(joinDate, CALCULATION_START_DATE) to today
       let pendingDaysCount = 0;
       if (m.joinDate && m.status !== 'inactive') {
         try {
-          const joinDate = startOfDay(parseISO(m.joinDate));
-          const interval = eachDayOfInterval({ start: joinDate, end: today });
+          const rawJoinDate = parseISO(m.joinDate);
+          const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
           
-          interval.forEach(day => {
-            const dStr = format(day, 'yyyy-MM-dd');
-            if (!paidDates.has(dStr)) {
-              pendingDaysCount++;
-            }
-          });
+          if (isBefore(effectiveStart, addDays(today, 1))) {
+            const interval = eachDayOfInterval({ start: effectiveStart, end: today });
+            
+            interval.forEach(day => {
+              const dStr = format(day, 'yyyy-MM-dd');
+              const dayPaymentSum = mPayments
+                .filter(p => p.targetDate === dStr)
+                .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+              
+              if (dayPaymentSum < (m.monthlyAmount || 800)) {
+                pendingDaysCount++;
+              }
+            });
+          }
         } catch (e) {
           console.error("Date calculation error for member", m.name, e);
         }
       }
 
+      const isPaidToday = mPayments
+        .filter(p => p.targetDate === todayStr)
+        .reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800);
+
       return {
         ...m,
         calculatedPendingDays: pendingDaysCount,
         calculatedPendingAmount: pendingDaysCount * (m.monthlyAmount || 800),
-        isPaidToday: paidDates.has(todayStr)
+        isPaidToday: isPaidToday
       };
     });
   }, [members, allPayments]);
@@ -231,7 +243,7 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
 
     const paymentAmount = Number(paymentData.amount);
-    const targetDateStr = paymentData.date; // The date user selected to pay FOR
+    const targetDateStr = paymentData.date; 
     
     setIsActionPending(true);
 
@@ -243,15 +255,14 @@ export default function RoundsPage() {
         memberId: selectedMemberForPayment.id,
         memberName: selectedMemberForPayment.name,
         month: format(parseISO(targetDateStr), 'MMMM yyyy'),
-        targetDate: targetDateStr, // Record specifically for this date
+        targetDate: targetDateStr, 
         amountPaid: paymentAmount,
-        paymentDate: new Date().toISOString(), // Actual time of transaction
+        paymentDate: new Date().toISOString(), 
         status: "success",
         method: paymentData.method,
         createdAt: serverTimestamp()
       };
 
-      // Just add the record. Frontend calculates everything dynamically.
       await addDoc(collection(db, 'payments'), paymentRecord);
       await createAuditLog(db, user, `Processed Payment ₹${paymentAmount} for ${selectedMemberForPayment.name} targeted for ${targetDateStr}`);
 
@@ -383,21 +394,30 @@ export default function RoundsPage() {
     }
   }
 
-  // GET LOG OF ALL DATES FOR PENDING POPUP
+  // GET LOG OF ALL DATES FOR PENDING POPUP (STRICT WINDOW)
   const memberDateLog = useMemo(() => {
     if (!selectedPendingMember || !allPayments) return [];
     try {
-      const joinDate = startOfDay(parseISO(selectedPendingMember.joinDate));
+      const rawJoinDate = parseISO(selectedPendingMember.joinDate);
+      const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
       const today = startOfDay(new Date());
+      
+      if (isAfter(effectiveStart, today)) return [];
+
       const mPayments = allPayments.filter(p => p.memberId === selectedPendingMember.id && (p.status === 'success' || p.status === 'paid'));
       
-      return eachDayOfInterval({ start: joinDate, end: today }).map(day => {
+      return eachDayOfInterval({ start: effectiveStart, end: today }).map(day => {
         const dStr = format(day, 'yyyy-MM-dd');
-        const payment = mPayments.find(p => p.targetDate === dStr);
+        const dayPaymentSum = mPayments
+          .filter(p => p.targetDate === dStr)
+          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+        
+        const isPaid = dayPaymentSum >= (selectedPendingMember.monthlyAmount || 800);
+
         return {
           date: dStr,
-          status: payment ? 'Paid' : 'Not Paid',
-          amount: payment?.amountPaid || 0,
+          status: isPaid ? 'Paid' : 'Not Paid',
+          amount: dayPaymentSum,
           label: format(day, 'dd MMM yyyy')
         };
       }).reverse(); // Newest first
@@ -948,7 +968,7 @@ export default function RoundsPage() {
                 </Table>
               </div>
               <DialogFooter>
-                <Button variant="outline" className="gap-2 font-bold" onClick={handlePrintHistory}>
+                <Button variant="outline" className="gap-2 font-bold" onClick={() => window.print()}>
                   <Printer className="size-4" /> Print History
                 </Button>
                 <Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryDialogOpen(false)}>Close</Button>
@@ -1024,7 +1044,7 @@ export default function RoundsPage() {
             <>
               <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b relative">
                 <DialogTitle className="text-xl font-bold tracking-tight text-primary">Member Audit Ledger</DialogTitle>
-                <DialogDescription className="text-xs font-medium text-muted-foreground">Date-wise payment status for {selectedPendingMember.name}</DialogDescription>
+                <DialogDescription className="text-xs font-medium text-muted-foreground">Date-wise payment status for {selectedPendingMember.name} (Post April 2026)</DialogDescription>
                 <Button variant="ghost" size="icon" onClick={() => setIsPendingDetailsOpen(false)} className="absolute right-4 top-4 rounded-full"><X className="size-4" /></Button>
               </DialogHeader>
               

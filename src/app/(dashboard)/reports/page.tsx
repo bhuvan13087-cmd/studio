@@ -43,9 +43,12 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, parseISO, getMonth, getYear, subDays, isValid } from "date-fns"
+import { format, parseISO, getMonth, getYear, subDays, isValid, startOfDay, isBefore, max } from "date-fns"
 import * as XLSX from 'xlsx'
 import { cn } from "@/lib/utils"
+
+// STRICT SYSTEM START DATE
+const CALCULATION_START_DATE = parseISO('2026-04-01');
 
 const MONTHS_MASTER = [
   { value: "0", label: "January" },
@@ -99,7 +102,6 @@ export default function ReportsPage() {
     const yesterday = subDays(focusDate, 1);
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
-    // REUSE GROUP LOGIC FOR MEMBER TYPE CHECK
     const dailyMembers = members.filter(m => {
         if (m.status === 'inactive') return false;
         const scheme = rounds.find(r => r.name === m.chitGroup);
@@ -115,38 +117,27 @@ export default function ReportsPage() {
     });
     const targetIds = new Set(targetMembers.map(m => m.id));
 
-    // REUSE GROUP LOGIC FOR TODAY PENDING
+    // REUSE STRICT LOGIC FOR TODAY PENDING
     const unpaidTodayDaily = dailyMembers.filter(m => {
-      // EXACT Group view payment predicate
-      const hasPaidToday = payments.some(p => 
-        p.memberId === m.id && 
-        (p.status === 'success' || p.status === 'paid') && 
-        (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
-      );
-      return !hasPaidToday;
+      // Ignore calculation before start date
+      if (isBefore(focusDate, CALCULATION_START_DATE)) return false;
+      
+      const dayPaymentSum = payments
+        .filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid') && p.targetDate === focusDateStr)
+        .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+      
+      return dayPaymentSum < (m.monthlyAmount || 800);
     });
 
-    // REUSE GROUP LOGIC FOR YESTERDAY PENDING (With Carry-Forward Settlement)
+    // REUSE STRICT LOGIC FOR YESTERDAY PENDING
     const unpaidYesterdayDaily = dailyMembers.filter(m => {
-      // Check if payment exists specifically for yesterday
-      const hasPaidYesterday = payments.some(p => 
-        p.memberId === m.id && 
-        (p.status === 'success' || p.status === 'paid') && 
-        (p.targetDate === yesterdayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === yesterdayStr))
-      );
+      if (isBefore(yesterday, CALCULATION_START_DATE)) return false;
+
+      const dayPaymentSum = payments
+        .filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid') && p.targetDate === yesterdayStr)
+        .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
       
-      if (hasPaidYesterday) return false;
-
-      // Settlement check: if they paid today enough to cover yesterday, remove from yesterday list
-      const dailyAmount = m.monthlyAmount || 0;
-      const totalPaidToday = payments.filter(p => 
-        p.memberId === m.id && 
-        (p.status === 'success' || p.status === 'paid') && 
-        (p.targetDate === focusDateStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === focusDateStr))
-      ).reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-
-      // If they paid at least one installment's worth today, we consider yesterday cleared for this view
-      return totalPaidToday < dailyAmount;
+      return dayPaymentSum < (m.monthlyAmount || 800);
     });
 
     // COLLECTION TOTALS (Runtime Dynamic)
