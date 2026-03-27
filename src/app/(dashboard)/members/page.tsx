@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon, ChevronDown } from "lucide-react"
+import { Search, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon, ChevronDown, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -50,9 +50,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, doc, serverTimestamp, query, orderBy, updateDoc } from "firebase/firestore"
-import { addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
+import { format, parseISO, startOfDay, eachDayOfInterval } from "date-fns"
 import { createAuditLog } from "@/firebase/logging"
 import { withTimeout } from "@/lib/utils"
 
@@ -85,45 +84,33 @@ export default function MembersPage() {
   const chitRoundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: chitRounds } = useCollection(chitRoundsQuery);
 
-  useEffect(() => {
-    const recoveryInterval = setInterval(() => {
-      if (document.body.style.pointerEvents === 'none') {
-        document.body.style.pointerEvents = 'auto'
-        document.body.style.overflow = 'auto'
-      }
-    }, 1000)
-    return () => clearInterval(recoveryInterval)
-  }, [])
-
-  const totalPaidByMember = useMemo(() => {
-    if (!payments) return new Map<string, number>();
-    const map = new Map<string, number>();
-    payments.forEach(p => {
-      if (p.status === 'paid' || p.status === 'success') {
-        const current = map.get(p.memberId) || 0;
-        map.set(p.memberId, current + (p.amountPaid || 0));
-      }
-    });
-    return map;
-  }, [payments]);
-
-  const paidMemberStatus = useMemo(() => {
-    if (!payments) return new Map<string, any>();
+  const membersWithCalculatedStats = useMemo(() => {
+    if (!members || !payments) return [];
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    
-    const paidMap = new Map<string, any>();
-    payments.forEach(p => {
-      if ((p.status === 'paid' || p.status === 'success') && p.paymentDate) {
+    const today = startOfDay(new Date());
+
+    return members.map(m => {
+      const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+      const paidDates = new Set(mPayments.map(p => p.targetDate));
+      
+      let pendingDaysCount = 0;
+      if (m.joinDate && m.status !== 'inactive') {
         try {
-          const pDateStr = format(parseISO(p.paymentDate), 'yyyy-MM-dd');
-          if (pDateStr === todayStr) {
-            paidMap.set(p.memberId, p);
-          }
-        } catch (e) {}
+          const joinDate = startOfDay(parseISO(m.joinDate));
+          const interval = eachDayOfInterval({ start: joinDate, end: today });
+          interval.forEach(day => {
+            if (!paidDates.has(format(day, 'yyyy-MM-dd'))) pendingDaysCount++;
+          });
+        } catch {}
       }
+
+      return {
+        ...m,
+        isPaidToday: paidDates.has(todayStr),
+        totalPaidSum: mPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+      };
     });
-    return paidMap;
-  }, [payments]);
+  }, [members, payments]);
 
   const handleUpdateMember = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -132,18 +119,15 @@ export default function MembersPage() {
     setIsActionPending(true)
     try {
       const memberRef = doc(db, 'members', memberToEdit.id);
-      // RULE: Do not allow manual override of pendingDays or pendingAmount here.
       await withTimeout(updateDoc(memberRef, {
         name: memberToEdit.name,
         phone: memberToEdit.phone,
-        // monthlyAmount: Number(memberToEdit.monthlyAmount), // Should be fixed by scheme
         joinDate: memberToEdit.joinDate,
         status: memberToEdit.status,
         chitGroup: memberToEdit.chitGroup
       }));
       
       await createAuditLog(db, user, `Updated member details: ${memberToEdit.name}`)
-      
       setIsEditMemberDialogOpen(false)
       setMemberToEdit(null)
       toast({ title: "Member Updated", description: "Details saved." })
@@ -166,7 +150,6 @@ export default function MembersPage() {
       }));
       
       await createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`)
-      
       toast({ title: "Member Deactivated", description: "Member is now inactive." })
       setIsDeactivateMemberDialogOpen(false)
       setMemberToDeactivate(null)
@@ -178,14 +161,13 @@ export default function MembersPage() {
   }
 
   const filteredMembers = useMemo(() => {
-    if (!members) return []
-    return members
+    return membersWithCalculatedStats
       .filter(member => member.status !== "inactive")
       .filter(member => 
         member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.phone.includes(searchTerm)
       )
-  }, [members, searchTerm])
+  }, [membersWithCalculatedStats, searchTerm])
 
   const visibleMembers = useMemo(() => filteredMembers.slice(0, displayLimit), [filteredMembers, displayLimit])
 
@@ -202,7 +184,7 @@ export default function MembersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Member Directory</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage participants and seat reservations.</p>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage participants and dynamic seat status.</p>
         </div>
       </div>
 
@@ -233,13 +215,6 @@ export default function MembersPage() {
                 <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Loading members...</TableCell></TableRow>
               ) : visibleMembers.length > 0 ? (
                 visibleMembers.map((member) => {
-                  const todayPayment = paidMemberStatus.get(member.id);
-                  const isPaidToday = !!todayPayment;
-                  
-                  const memberRound = chitRounds?.find((r: any) => r.name === member.chitGroup);
-                  const resolvedType = (member.paymentType || memberRound?.collectionType || "").toLowerCase();
-                  const isDaily = resolvedType === 'daily';
-                  
                   return (
                     <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
                       <TableCell>
@@ -255,31 +230,19 @@ export default function MembersPage() {
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-xs text-muted-foreground tabular-nums">{member.phone}</TableCell>
                       <TableCell>
-                        {isPaidToday ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-[10px] font-bold border border-emerald-200 uppercase tracking-tight shadow-sm">
-                                <CheckCircle2 className="size-2.5" /> Paid
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-3 shadow-xl text-xs" align="start">
-                               <div className="font-bold text-emerald-600 mb-1">Paid: ₹{todayPayment?.amountPaid?.toLocaleString()}</div>
-                               <div className="text-[10px] text-muted-foreground uppercase font-semibold">Date: {todayPayment.paymentDate ? format(parseISO(todayPayment.paymentDate), 'MMM dd, yyyy') : '-'}</div>
-                            </PopoverContent>
-                          </Popover>
-                        ) : isDaily ? (
-                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 uppercase tracking-tight shadow-sm w-fit">
-                            <Clock className="size-2.5" /> Pending
+                        {member.isPaidToday ? (
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 uppercase tracking-tight shadow-sm w-fit">
+                            <CheckCircle2 className="size-2.5" /> Paid Today
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200 uppercase tracking-tight shadow-sm w-fit">
-                            <Calendar className="size-2.5" /> Due (Month End)
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 uppercase tracking-tight shadow-sm w-fit">
+                            <Clock className="size-2.5" /> Pending
                           </div>
                         )}
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-sm font-bold text-emerald-600">₹{(totalPaidByMember.get(member.id) || 0).toLocaleString()}</span>
+                          <span className="text-sm font-bold text-emerald-600">₹{member.totalPaidSum.toLocaleString()}</span>
                           <span className="text-[10px] font-bold text-muted-foreground uppercase">Total Paid</span>
                         </div>
                       </TableCell>
@@ -332,69 +295,14 @@ export default function MembersPage() {
         )}
       </div>
 
-      <Dialog open={isEditMemberDialogOpen} onOpenChange={(open) => { 
-        if (!isActionPending) {
-          setIsEditMemberDialogOpen(open); 
-          if (!open) setMemberToEdit(null);
-        }
-      }}>
-        <DialogContent className="sm:max-w-[425px]">
-          {isEditMemberDialogOpen && (
-            <form onSubmit={handleUpdateMember}>
-              <DialogHeader><DialogTitle>Edit Member</DialogTitle><DialogDescription>Update details for {memberToEdit?.name}.</DialogDescription></DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2"><Label>Name</Label><Input value={memberToEdit?.name || ""} onChange={e => setMemberToEdit({...memberToEdit, name: e.target.value})} required disabled={isActionPending} /></div>
-                <div className="grid gap-2"><Label>Phone</Label><Input value={memberToEdit?.phone || ""} onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})} required disabled={isActionPending} /></div>
-                <div className="grid gap-2">
-                  <Label>Scheme</Label>
-                  <select 
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={isActionPending} 
-                    value={memberToEdit?.chitGroup || ""} 
-                    onChange={e => {
-                      const v = e.target.value;
-                      const scheme = chitRounds?.find((r: any) => r.name === v);
-                      setMemberToEdit({
-                        ...memberToEdit, 
-                        chitGroup: v,
-                        monthlyAmount: scheme?.monthlyAmount || memberToEdit.monthlyAmount
-                      });
-                    }}
-                  >
-                    <option value="" disabled>Select scheme</option>
-                    {chitRounds?.map((round: any) => (<option key={round.id} value={round.name}>{round.name}</option>))}
-                  </select>
-                </div>
-                <div className="grid gap-2">
-                  <Label>Scheme Amount (₹)</Label>
-                  <Input type="number" value={memberToEdit?.monthlyAmount || ""} readOnly className="bg-muted font-bold" />
-                  <p className="text-[10px] text-muted-foreground italic">Fixed by system logic. Cannot be changed per user.</p>
-                </div>
-              </div>
-              <DialogFooter className="gap-2">
-                <Button type="button" variant="outline" onClick={() => setIsEditMemberDialogOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
-                <Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold">
-                  {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  Save Changes
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { 
-        if (!isActionPending) { 
-          setIsProfileDialogOpen(open); 
-          if (!open) setSelectedMember(null) 
-        } 
-      }}>
+      {/* Profile Dialog */}
+      <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsProfileDialogOpen(open); if (!open) setSelectedMember(null) } }}>
         <DialogContent className="sm:max-w-[450px]">
-          {isProfileDialogOpen && (
+          {selectedMember && (
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                  <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs uppercase">
                     {selectedMember?.name?.split(' ').map((n: string) => n[0]).join('')}
                   </div>
                   Profile View
@@ -404,7 +312,7 @@ export default function MembersPage() {
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Phone</span><span className="font-bold">{selectedMember?.phone}</span></div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Joined</span><span className="font-bold">{selectedMember?.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg text-sm"><span className="text-muted-foreground">Scheme Base</span><span className="font-bold text-primary">₹{selectedMember?.monthlyAmount?.toLocaleString()}</span></div>
-                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg text-sm"><span className="text-emerald-600 font-bold uppercase text-[10px]">Total Paid</span><span className="font-bold text-emerald-600 text-base">₹{(totalPaidByMember.get(selectedMember?.id) || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg text-sm"><span className="text-emerald-600 font-bold uppercase text-[10px]">Total Paid</span><span className="font-bold text-emerald-600 text-base">₹{selectedMember.totalPaidSum.toLocaleString()}</span></div>
               </div>
               <DialogFooter className="flex flex-col sm:flex-row gap-2">
                 <Button 
@@ -438,6 +346,7 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
         <DialogContent className="sm:max-w-[550px]">
           {isHistoryDialogOpen && (
@@ -447,17 +356,17 @@ export default function MembersPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Target Date</TableHead>
                       <TableHead className="text-xs uppercase font-bold text-muted-foreground">Amount</TableHead>
-                      <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead>
+                      <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Recorded On</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {historyMember && (payments || []).filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success')).map((p, i) => (
                       <TableRow key={i}>
-                        <TableCell className="text-sm font-semibold">{p.month}</TableCell>
+                        <TableCell className="text-sm font-semibold">{p.targetDate || '-'}</TableCell>
                         <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{p.paymentDate ? format(parseISO(p.paymentDate), 'MMM dd, yyyy, hh:mm a') : '-'}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{p.paymentDate ? format(p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate), 'dd MMM, hh:mm a') : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -471,7 +380,7 @@ export default function MembersPage() {
 
       <AlertDialog open={isDeactivateMemberDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeactivateMemberDialogOpen(open); if (!open) setMemberToDeactivate(null) } }}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle className="text-destructive">Deactivate Member?</AlertDialogTitle><AlertDialogDescription>This will move <strong>{memberToDeactivate?.name}</strong> to inactive status. They will no longer appear in active lists, but their payment history will be preserved.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle className="text-destructive">Deactivate Member?</AlertDialogTitle><AlertDialogDescription>This will move <strong>{memberToDeactivate?.name}</strong> to inactive status. Date-based tracking will stop for this member.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={confirmDeactivateMember} disabled={isActionPending}>
             {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
             Deactivate

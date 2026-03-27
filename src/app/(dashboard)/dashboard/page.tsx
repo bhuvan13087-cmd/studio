@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO } from "date-fns"
+import { format, isSameMonth, parseISO, startOfDay, eachDayOfInterval } from "date-fns"
 import { cn } from "@/lib/utils"
 
 export default function DashboardPage() {
@@ -70,11 +70,13 @@ export default function DashboardPage() {
 
     const now = new Date()
     const todayStr = format(now, 'yyyy-MM-dd')
+    const today = startOfDay(now);
 
     const currentMonthPayments = (payments || []).filter(p => {
       if (!p.paymentDate) return false;
       try {
-        return isSameMonth(parseISO(p.paymentDate), now);
+        const pDate = p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate);
+        return isSameMonth(pDate, now);
       } catch {
         return false;
       }
@@ -85,40 +87,40 @@ export default function DashboardPage() {
       .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
     
     const collectedToday = (payments || []).filter(p => {
-      if (!p.paymentDate) return false;
-      try {
-        const pDateStr = format(parseISO(p.paymentDate), 'yyyy-MM-dd');
-        return (pDateStr === todayStr || p.targetDate === todayStr) && 
-               (p.status === 'paid' || p.status === 'success');
-      } catch {
-        return false;
-      }
+      return p.targetDate === todayStr && (p.status === 'paid' || p.status === 'success');
     }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
 
-    const pendingMembersList = (members || []).filter(m => {
-        if (m.status === 'inactive') return false;
-        const scheme = (rounds || []).find(r => r.name === m.chitGroup);
-        const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
-        if (resolvedType !== 'daily') return false;
-        
-        const hasPaidToday = (payments || []).some(p => 
-          p.memberId === m.id &&
-          (p.status === 'success' || p.status === 'paid') &&
-          (p.targetDate === todayStr || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr))
-        );
-        return !hasPaidToday;
+    const membersWithCalculatedStats = (members || []).filter(m => m.status !== 'inactive').map(m => {
+      const mPayments = (payments || []).filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+      const paidDates = new Set(mPayments.map(p => p.targetDate));
+      
+      let pendingDaysCount = 0;
+      if (m.joinDate) {
+        try {
+          const joinDate = startOfDay(parseISO(m.joinDate));
+          const interval = eachDayOfInterval({ start: joinDate, end: today });
+          interval.forEach(day => {
+            if (!paidDates.has(format(day, 'yyyy-MM-dd'))) pendingDaysCount++;
+          });
+        } catch {}
+      }
+
+      return {
+        ...m,
+        calculatedPendingDays: pendingDaysCount,
+        calculatedPendingAmount: pendingDaysCount * (m.monthlyAmount || 800),
+        isPaidToday: paidDates.has(todayStr)
+      };
     });
+
+    const pendingMembersList = membersWithCalculatedStats.filter(m => !m.isPaidToday);
 
     const fixedGroupNames = ['A', 'B', 'C', 'D'];
     const schemeSummaries = fixedGroupNames.map(name => {
       const schemeInfo = (rounds || []).find(r => r.name === name) || { name, collectionType: 'Daily', monthlyAmount: 800 };
-      const groupMembers = (members || []).filter(m => m.chitGroup === name && m.status !== 'inactive');
+      const groupMembers = membersWithCalculatedStats.filter(m => m.chitGroup === name);
       
-      const totalPendingDays = groupMembers.reduce((acc, m) => {
-        const resolvedType = (m.paymentType || schemeInfo.collectionType || "").toLowerCase();
-        if (resolvedType !== 'daily') return acc;
-        return acc + (m.pendingDays || 0);
-      }, 0);
+      const totalPendingDays = groupMembers.reduce((acc, m) => acc + m.calculatedPendingDays, 0);
       
       return {
         ...schemeInfo,
@@ -253,7 +255,7 @@ export default function DashboardPage() {
                       {scheme.totalPendingDays}
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1.5">
-                      <Clock className="size-3" /> Pending Days
+                      <Clock className="size-3" /> Cumulative Arrears
                     </p>
                   </div>
                   <div className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-widest">{scheme.memberCount} Seats</div>
@@ -283,7 +285,7 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between mb-3">
                       <Badge className="bg-emerald-100 text-emerald-700 border-none text-[9px] font-black uppercase tracking-widest">Verified</Badge>
                       <span className="text-[10px] text-muted-foreground font-bold tabular-nums">
-                        {payment.paymentDate ? format(parseISO(payment.paymentDate), 'HH:mm a') : '-'}
+                        {payment.targetDate}
                       </span>
                     </div>
                     <span className="font-bold text-base truncate mb-1">{payment.memberName}</span>
@@ -329,17 +331,11 @@ export default function DashboardPage() {
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] pl-8 h-12">Participant</TableHead>
                       <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Cycle Status</TableHead>
-                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] text-center h-12">Pending Days</TableHead>
+                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] text-center h-12">Arrears Count</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedGroup.members.length > 0 ? selectedGroup.members.map((m: any) => {
-                       const isPaidToday = (payments || []).some(p => 
-                        p.memberId === m.id &&
-                        (p.status === 'success' || p.status === 'paid') &&
-                        (p.targetDate === format(new Date(), 'yyyy-MM-dd') || (p.paymentDate && format(parseISO(p.paymentDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')))
-                      );
-
                       return (
                         <TableRow key={m.id} className="hover:bg-muted/10 transition-colors border-b last:border-none">
                           <TableCell className="pl-8 py-5">
@@ -351,22 +347,22 @@ export default function DashboardPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={isPaidToday ? "default" : "secondary"} className={cn(
+                            <Badge variant={m.isPaidToday ? "default" : "secondary"} className={cn(
                               "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
-                              isPaidToday ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
+                              m.isPaidToday ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
                             )}>
-                              {isPaidToday ? "SUCCESS" : "UNPAID"}
+                              {m.isPaidToday ? "SUCCESS" : "UNPAID"}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center pr-8">
                             <button 
                               className={cn(
                                 "inline-flex items-center justify-center px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-90 shadow-sm border",
-                                m.pendingDays > 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                m.calculatedPendingDays > 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
                               )}
                               onClick={() => handleMemberArrearsClick(m)}
                             >
-                              {m.pendingDays || 0}
+                              {m.calculatedPendingDays} Days
                             </button>
                           </TableCell>
                         </TableRow>
@@ -414,10 +410,10 @@ export default function DashboardPage() {
                   <div className="absolute inset-0 bg-destructive/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-destructive/60 mb-3 relative z-10">Current Currency Deficit</p>
                   <div className="text-5xl font-black text-destructive tabular-nums tracking-tighter relative z-10 mb-4">
-                    ₹{(selectedMemberDebt.pendingAmount || 0).toLocaleString()}
+                    ₹{(selectedMemberDebt.calculatedPendingAmount || 0).toLocaleString()}
                   </div>
                   <Badge className="bg-destructive text-destructive-foreground px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-destructive/20 relative z-10">
-                    ⏳ {selectedMemberDebt.pendingDays || 0} Missed Installments
+                    ⏳ {selectedMemberDebt.calculatedPendingDays || 0} Missed Installments
                   </Badge>
                 </div>
 
@@ -427,12 +423,10 @@ export default function DashboardPage() {
                       <p className="text-lg font-black tracking-tight">₹{(selectedMemberDebt.monthlyAmount || 800).toLocaleString()}</p>
                    </div>
                    <div className="p-4 bg-muted/30 rounded-2xl border border-border/40">
-                      <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest mb-1.5">Last Sync</p>
+                      <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest mb-1.5">Audit Mode</p>
                       <div className="flex items-center gap-2">
-                        <CalendarDays className="size-4 text-primary opacity-60" />
-                        <p className="text-sm font-bold tracking-tight">
-                          {selectedMemberDebt.lastPendingUpdateDate ? format(parseISO(selectedMemberDebt.lastPendingUpdateDate), 'dd MMM yyyy') : '-'}
-                        </p>
+                        <ShieldCheck className="size-4 text-primary opacity-60" />
+                        <p className="text-sm font-bold tracking-tight uppercase">Live Date Tracking</p>
                       </div>
                    </div>
                 </div>
@@ -440,7 +434,7 @@ export default function DashboardPage() {
                 <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-4">
                   <Info className="size-5 text-primary shrink-0 mt-0.5" />
                   <p className="text-[11px] text-muted-foreground leading-relaxed italic font-medium">
-                    Debt aging is automated daily at 10 PM. This reflects the precise currency arrears identified during the last reconciliation cycle.
+                    Arrears are calculated dynamically by comparing verified transaction records against the required daily installments since the enrollment date.
                   </p>
                 </div>
               </div>
