@@ -1,11 +1,10 @@
-
 {
   "entities": {
     "Member": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Member",
       "type": "object",
-      "description": "Represents a participant in the Chit Fund, including their personal details and contribution information.",
+      "description": "Represents a member participating in the Chit Fund. Members can have either monthly or daily contribution plans, each with specific details.",
       "properties": {
         "id": {
           "type": "string",
@@ -13,7 +12,7 @@
         },
         "name": {
           "type": "string",
-          "description": "The full name of the chit fund member."
+          "description": "The full name of the member."
         },
         "phone": {
           "type": "string",
@@ -21,60 +20,34 @@
         },
         "joinDate": {
           "type": "string",
-          "description": "The date when the member joined the chit fund.",
+          "description": "The date and time when the member joined the chit fund.",
           "format": "date-time"
         },
-        "monthlyAmount": {
+        "collectionType": {
+          "type": "string",
+          "description": "Specifies the type of collection plan for this member ('monthly' or 'daily').",
+          "items": {
+            "type": "string"
+          }
+        },
+        "monthlyContributionAmount": {
           "type": "number",
-          "description": "The fixed monthly contribution amount required from the member."
+          "description": "The fixed amount the member contributes monthly. Applicable when 'collectionType' is 'monthly'."
+        },
+        "monthlyDueDate": {
+          "type": "number",
+          "description": "The day of the month (1-31) when the monthly contribution is due. Applicable when 'collectionType' is 'monthly'."
+        },
+        "dailyContributionAmount": {
+          "type": "number",
+          "description": "The fixed amount the member contributes daily. Applicable when 'collectionType' is 'daily'."
         },
         "status": {
           "type": "string",
-          "description": "The current status of the member (e.g., 'active', 'inactive').",
-          "enum": ["active", "inactive"]
-        },
-        "deactivatedAt": {
-          "type": "string",
-          "description": "Timestamp when the member was deactivated.",
-          "format": "date-time"
-        },
-        "paymentType": {
-          "type": "string",
-          "description": "The preferred frequency of payment for this specific member (e.g., 'Daily', 'Monthly').",
-          "enum": ["Daily", "Monthly"]
-        },
-        "chitGroup": {
-          "type": "string",
-          "description": "The name of the chit scheme the member belongs to."
-        },
-        "totalPaid": {
-          "type": "number",
-          "description": "Sum of all payments made by the member."
-        },
-        "pendingDays": {
-          "type": "number",
-          "description": "Automatic tracking of missed payment days for Daily users.",
-          "default": 0
-        },
-        "pendingAmount": {
-          "type": "number",
-          "description": "The exact currency deficit for this member.",
-          "default": 0
-        },
-        "lastPaymentDate": {
-          "type": "string",
-          "description": "The date (YYYY-MM-DD) of the last successful installment payment.",
-          "format": "date"
-        },
-        "lastIncrementDate": {
-          "type": "string",
-          "description": "The last date (YYYY-MM-DD) when the auto-increment logic was applied to this member.",
-          "format": "date"
-        },
-        "yesterdayPending": {
-          "type": "number",
-          "description": "Flag indicating if the member was pending yesterday (1 for yes, 0 for no).",
-          "default": 0
+          "description": "The current operational status of the member in the chit fund ('active' or 'inactive').",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
@@ -82,7 +55,7 @@
         "name",
         "phone",
         "joinDate",
-        "monthlyAmount",
+        "collectionType",
         "status"
       ]
     },
@@ -90,7 +63,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Payment",
       "type": "object",
-      "description": "Records a single monthly payment or a pending amount made by a member towards the chit fund.",
+      "description": "Records individual payment transactions made by members towards their contributions.",
       "properties": {
         "id": {
           "type": "string",
@@ -98,173 +71,73 @@
         },
         "memberId": {
           "type": "string",
-          "description": "Reference to the Member who made this payment."
-        },
-        "memberName": {
-          "type": "string",
-          "description": "The name of the member for whom the payment was recorded."
-        },
-        "month": {
-          "type": "string",
-          "description": "The specific month and year for which the payment is made."
-        },
-        "targetDate": {
-          "type": "string",
-          "description": "The specific date for which this payment/pending entry is targeted (YYYY-MM-DD).",
-          "format": "date"
+          "description": "Reference to the Member who made this payment. (Relationship: Member 1:N Payment)"
         },
         "amountPaid": {
           "type": "number",
-          "description": "The actual amount of money paid or recorded as pending."
+          "description": "The actual amount paid in this transaction."
         },
         "paymentDate": {
           "type": "string",
-          "description": "The date when this entry was recorded.",
+          "description": "The date and time when the payment was recorded.",
           "format": "date-time"
         },
-        "status": {
+        "paymentType": {
           "type": "string",
-          "description": "The current status of the entry (e.g., 'success', 'pending', 'paid').",
-          "enum": ["success", "pending", "paid"]
+          "description": "Indicates if this payment is for a 'monthly' or 'daily' collection. This aligns with the member's collectionType.",
+          "items": {
+            "type": "string"
+          }
         },
-        "method": {
+        "periodCovered": {
           "type": "string",
-          "description": "Method used for payment (e.g., 'Cash', 'UPI')."
+          "description": "A string identifying the specific period this payment covers. For 'monthly' payments, it should be in 'YYYY-MM' format (e.g., '2023-10'). For 'daily' payments, it should be in 'YYYY-MM-DD' format (e.g., '2023-10-26'). This is crucial for matching payments to obligations."
         }
       },
       "required": [
         "id",
         "memberId",
-        "memberName",
-        "month",
         "amountPaid",
         "paymentDate",
-        "status"
+        "paymentType",
+        "periodCovered"
       ]
     },
     "ChitRound": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "ChitRound",
       "type": "object",
-      "description": "Details of a completed chit fund round, including the winning member and the amount won.",
+      "description": "Stores information about each completed chit fund round, including the winner and amount.",
       "properties": {
         "id": {
           "type": "string",
           "description": "Unique identifier for the ChitRound entity."
         },
-        "name": {
-          "type": "string",
-          "description": "The name of the chit scheme."
-        },
         "roundNumber": {
           "type": "number",
-          "description": "The sequential number identifying this specific chit round."
+          "description": "The sequential number of the chit round."
         },
         "winnerMemberId": {
           "type": "string",
-          "description": "Reference to the Member who won this chit round."
-        },
-        "winnerName": {
-          "type": "string",
-          "description": "The name of the member who won this chit round."
+          "description": "Reference to the Member who won this chit round. (Relationship: Member 1:N ChitRound)"
         },
         "winningAmount": {
           "type": "number",
-          "description": "The amount of money received by the winner."
+          "description": "The amount won by the member in this round."
         },
-        "date": {
+        "roundDate": {
           "type": "string",
-          "description": "The date when this chit round concluded.",
-          "format": "date-time"
-        },
-        "collectionType": {
-          "type": "string",
-          "enum": ["Daily", "Monthly"],
-          "description": "The frequency of collections for this chit round."
-        },
-        "monthlyAmount": {
-          "type": "number",
-          "description": "The amount collected monthly for this scheme."
-        },
-        "totalMembers": {
-          "type": "number",
-          "description": "The maximum number of members allowed in this scheme."
-        },
-        "startDate": {
-          "type": "string",
-          "format": "date",
-          "description": "The explicit start date of this scheme group."
-        },
-        "endDate": {
-          "type": "string",
-          "format": "date",
-          "description": "The explicit end date of this scheme group."
-        },
-        "createdAt": {
-          "type": "string",
+          "description": "The date and time when this chit round concluded and the winner was declared.",
           "format": "date-time"
         }
       },
       "required": [
         "id",
-        "name",
-        "collectionType",
-        "startDate",
-        "endDate"
+        "roundNumber",
+        "winnerMemberId",
+        "winningAmount",
+        "roundDate"
       ]
-    },
-    "MonthlyTarget": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "MonthlyTarget",
-      "type": "object",
-      "description": "A financial collection goal set by the admin for a specific month and year.",
-      "properties": {
-        "id": { "type": "string", "description": "Format: YYYY-MM" },
-        "year": { "type": "string" },
-        "month": { "type": "string" },
-        "targetAmount": { "type": "number" }
-      },
-      "required": ["id", "year", "month", "targetAmount"]
-    },
-    "AuditLog": {
-      "title": "AuditLog",
-      "type": "object",
-      "description": "History of administrative actions taken in the system.",
-      "properties": {
-        "id": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "adminEmail": { "type": "string" },
-        "adminId": { "type": "string" },
-        "actionDescription": { "type": "string" }
-      },
-      "required": ["timestamp", "adminEmail", "actionDescription"]
-    },
-    "MonthLock": {
-      "title": "MonthLock",
-      "type": "object",
-      "description": "Represents a locked financial period.",
-      "properties": {
-        "id": { "type": "string", "description": "Format: YYYY-MonthName" },
-        "year": { "type": "string" },
-        "monthName": { "type": "string" },
-        "lockedAt": { "type": "string", "format": "date-time" },
-        "lockedBy": { "type": "string" }
-      },
-      "required": ["id", "year", "monthName", "lockedAt", "lockedBy"]
-    },
-    "Cycle": {
-      "title": "Cycle",
-      "type": "object",
-      "description": "Represents a custom date range for monitoring chit fund activity.",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "startDate": { "type": "string", "format": "date" },
-        "endDate": { "type": "string", "format": "date" },
-        "status": { "type": "string", "enum": ["active", "past"] },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["id", "name", "startDate", "endDate", "status"]
     }
   },
   "auth": {
@@ -282,7 +155,13 @@
           "schema": {
             "$ref": "#/backend/entities/Member"
           },
-          "description": "Stores individual member details."
+          "description": "Stores details for each member, including their collection plan type and contribution amounts. This collection will now include the 'monthlyDueDate' field for members with a 'monthly' collectionType. Authorization for this collection is controlled by the 'roles_admin' collection; only authenticated admins can manage members.",
+          "params": [
+            {
+              "name": "memberId",
+              "description": "Unique identifier for a specific member."
+            }
+          ]
         }
       },
       {
@@ -292,7 +171,13 @@
           "schema": {
             "$ref": "#/backend/entities/Payment"
           },
-          "description": "Records monthly contributions."
+          "description": "Records individual payment transactions made by members. Documents contain 'memberId', 'paymentType' (monthly/daily), and 'periodCovered' (YYYY-MM or YYYY-MM-DD), which are crucial for the application to derive payment statuses. Authorization is restricted to authenticated admins, based on the 'roles_admin' collection.",
+          "params": [
+            {
+              "name": "paymentId",
+              "description": "Unique identifier for a specific payment transaction."
+            }
+          ]
         }
       },
       {
@@ -302,50 +187,32 @@
           "schema": {
             "$ref": "#/backend/entities/ChitRound"
           },
-          "description": "Stores details of completed chit rounds."
+          "description": "Stores information about each completed chit fund round, including winner details and amounts. Authorization for this collection is controlled by the 'roles_admin' collection; only authenticated admins can manage chit round records.",
+          "params": [
+            {
+              "name": "roundId",
+              "description": "Unique identifier for a specific chit fund round."
+            }
+          ]
         }
       },
       {
-        "path": "/monthlyTargets/{targetId}",
+        "path": "/roles_admin/{adminUid}",
         "definition": {
-          "entityName": "MonthlyTarget",
+          "entityName": "AdminRole",
           "schema": {
-            "$ref": "#/backend/entities/MonthlyTarget"
+            "$ref": "#/backend/entities/AdminRole"
           },
-          "description": "Stores monthly collection targets."
-        }
-      },
-      {
-        "path": "/auditLogs/{logId}",
-        "definition": {
-          "entityName": "AuditLog",
-          "schema": {
-            "$ref": "#/backend/entities/AuditLog"
-          },
-          "description": "Stores system audit logs."
-        }
-      },
-      {
-        "path": "/monthLocks/{lockId}",
-        "definition": {
-          "entityName": "MonthLock",
-          "schema": {
-            "$ref": "#/backend/entities/MonthLock"
-          },
-          "description": "Stores locked months information."
-        }
-      },
-      {
-        "path": "/cycles/{cycleId}",
-        "definition": {
-          "entityName": "Cycle",
-          "schema": {
-            "$ref": "#/backend/entities/Cycle"
-          },
-          "description": "Stores custom activity monitoring cycles."
+          "description": "This collection implements Database Access Control (DBAC). The existence of a document where the ID matches `request.auth.uid` grants administrator privileges across the application. This ensures Authorization Independence, as security rules can atomically check for admin status without referencing other documents. No specific schema beyond the UID being the document ID is required.",
+          "params": [
+            {
+              "name": "adminUid",
+              "description": "The Firebase Authentication UID of an administrator user. The presence of a document at this path grants admin access."
+            }
+          ]
         }
       }
     ],
-    "reasoning": "The application manages members, payments, chit rounds, collection targets, audit logs, period locks, and custom cycles."
+    "reasoning": "The Firestore data structure is designed to support the enhanced monthly collection logic, strictly adhering to the core design principles and mandates. The primary goal is to add a 'monthlyDueDate' field for monthly members and update the payment status calculation for monthly contributions without affecting the existing daily logic or legacy data. Authorization independence is achieved through a dedicated 'roles_admin' collection, where the mere existence of an admin's UID grants broad access to all application data. This eliminates the need for 'get()' operations in security rules, ensuring atomic authorization checks and robust security. For instance, any request from an authenticated user will first check if their `uid` exists in the `/roles_admin` collection. If it does, they are granted read/write access to relevant collections like `/members`, `/payments`, and `/chitRounds`. This makes authorization highly debuggable and secure.\n\nStructural segregation is maintained by distinguishing members by their 'collectionType' field within the `/members` collection. Although payments for both daily and monthly types reside in a single `/payments` collection, the 'paymentType' and 'periodCovered' fields within each payment document provide sufficient logical segregation for client-side processing. This approach avoids creating separate physical collections for daily and monthly payments, which would introduce redundancy and potential synchronization issues, while still allowing the application logic to treat them distinctly. The new monthly payment status logic ('Waiting', 'Pending', 'Paid') is handled entirely by the client application. This is crucial for Query Authorization Principles (QAPs), as Firestore rules will simply grant authorized admins (via `/roles_admin`) full read access to `/members` and `/payments` collections. The application will then perform the necessary queries, filters (e.g., by 'paymentType', 'periodCovered'), and calculations (based on 'monthlyDueDate' and current date) on the retrieved data to determine and display the correct status. This ensures rules are not used as filters and maintain predictable performance for 'list' operations. The addition of 'monthlyDueDate' to the 'Member' entity is a simple schema extension, and the existing 'periodCovered' field in 'Payment' documents (e.g., 'YYYY-MM' for monthly) naturally supports the new logic for identifying payments within a specific month without requiring schema changes to the 'Payment' entity itself."
   }
 }

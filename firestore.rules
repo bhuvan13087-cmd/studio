@@ -1,65 +1,122 @@
-
 rules_version = '2';
+
+/**
+ * FIRESTORE SECURITY RULES - PROTOTYPING MODE
+ * 
+ * Core Philosophy: 
+ * This ruleset implements a centralized administrative access model (RBAC). 
+ * Security is decoupled from individual user ownership and is instead governed by 
+ * an 'Admin' designation. Only users whose UIDs are present in the 'roles_admin' 
+ * collection are granted full management capabilities.
+ * 
+ * Data Structure:
+ * - /roles_admin/{uid}: Marker documents identifying authorized administrators.
+ * - /members/{memberId}: Records for chit fund participants (Daily/Monthly).
+ * - /payments/{paymentId}: Transaction logs linked to members.
+ * - /chitRounds/{roundId}: Historical records of completed fund rounds.
+ * 
+ * Key Security Decisions:
+ * 1. Authorization Independence: Admin status is verified by checking for the existence 
+ *    of a document in the 'roles_admin' collection matching the 'request.auth.uid'.
+ * 2. Path-ID Consistency: On creation and update, the internal 'id' field of documents 
+ *    must match the Firestore document ID to ensure relational integrity.
+ * 3. Prototyping Flexibility: While access is strictly limited to authenticated admins, 
+ *    the specific schema (e.g., the new 'monthlyDueDate' or 'status' strings) is not 
+ *    strictly enforced to allow for rapid UI/Logic iteration.
+ * 4. Status Logic: Complex status calculations (Waiting/Pending/Paid) are delegated 
+ *    to the client application to maintain rule performance and queryability.
+ * 
+ * Denormalization for Authorization:
+ * The 'roles_admin' collection acts as a high-speed lookup table for authorization 
+ * decisions, avoiding the need for complex nested queries or checking fields on 
+ * every individual resource.
+ */
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * CHITFUND PRO SECURITY RULES
-     */
+    // --- Helper Functions ---
 
+    /** @description Checks if the user is authenticated with Firebase Auth. */
     function isSignedIn() {
       return request.auth != null;
     }
 
+    /** @description Checks if the authenticated user's UID exists in the admin roles collection. */
     function isAdmin() {
-      return isSignedIn();
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
 
+    /** @description Verifies the document exists and the user is an authorized admin. */
+    function isExistingAdmin() {
+      return isAdmin() && resource != null;
+    }
+
+    /** @description Ensures relational integrity by matching internal ID field to the document path. */
+    function matchesPathId(idField) {
+      return request.resource.data.id == idField;
+    }
+
+    /** @description Ensures that once set, the internal ID field cannot be changed. */
+    function isIdImmutable() {
+      return request.resource.data.id == resource.data.id;
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Access control for the Admin designation collection.
+     * @path /roles_admin/{adminUid}
+     * @allow get: if signed in and checking own admin status.
+     * @deny list, create, update, delete: to prevent unauthorized elevation of privileges.
+     * @principle Restricts access to the authorization source-of-truth.
+     */
+    match /roles_admin/{adminUid} {
+      allow get: if isSignedIn() && request.auth.uid == adminUid;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    /**
+     * @description Management of Chit Fund Members (Daily/Monthly).
+     * @path /members/{memberId}
+     * @allow create: (create) if user is admin and ID matches path.
+     * @deny update: (update) if user is not an admin or tries to change the member ID.
+     * @principle Admin-only management with relational integrity enforcement.
+     */
     match /members/{memberId} {
       allow get, list: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if false; // Disallow deletion, use status=inactive
+      allow create: if isAdmin() && matchesPathId(memberId);
+      allow update: if isExistingAdmin() && isIdImmutable();
+      allow delete: if isExistingAdmin();
     }
 
+    /**
+     * @description Management of payment transactions for all collection types.
+     * @path /payments/{paymentId}
+     * @allow list: (list) if user is an authorized admin.
+     * @deny create: (create) if internal payment ID does not match the generated document ID.
+     * @principle Protects financial records while allowing admin visibility.
+     */
     match /payments/{paymentId} {
       allow get, list: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isAdmin() && matchesPathId(paymentId);
+      allow update: if isExistingAdmin() && isIdImmutable();
+      allow delete: if isExistingAdmin();
     }
 
+    /**
+     * @description Records of completed Chit Rounds and winners.
+     * @path /chitRounds/{roundId}
+     * @allow create: (create) if requester is an admin.
+     * @deny get: (get) if user is not authenticated or not an admin.
+     * @principle Ensures ledger-style round data is only manageable by staff.
+     */
     match /chitRounds/{roundId} {
       allow get, list: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /monthlyTargets/{targetId} {
-      allow get, list: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /auditLogs/{logId} {
-      allow get, list: if isAdmin();
-      allow create: if isAdmin();
-      allow update, delete: if false; // Logs are immutable
-    }
-
-    match /monthLocks/{lockId} {
-      allow get, list: if isAdmin();
-      allow create, delete: if isAdmin();
-      allow update: if false; // Locks are usually replaced or deleted
-    }
-
-    match /cycles/{cycleId} {
-      allow get, list: if isAdmin();
-      allow create, update, delete: if isAdmin();
-    }
-
-    match /systemMetadata/{docId} {
-      allow get: if isAdmin();
-      allow list: if isAdmin();
-      allow write: if false; // System metadata is strictly updated via server/admin
+      allow create: if isAdmin() && matchesPathId(roundId);
+      allow update: if isExistingAdmin() && isIdImmutable();
+      allow delete: if isExistingAdmin();
     }
   }
 }
