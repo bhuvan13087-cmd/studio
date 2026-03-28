@@ -3,33 +3,8 @@ rules_version = '2';
 /**
  * FIRESTORE SECURITY RULES - PROTOTYPING MODE
  * 
- * Core Philosophy: 
- * This ruleset implements a centralized administrative access model (RBAC). 
- * Security is decoupled from individual user ownership and is instead governed by 
- * an 'Admin' designation. Only users whose UIDs are present in the 'roles_admin' 
- * collection are granted full management capabilities.
- * 
- * Data Structure:
- * - /roles_admin/{uid}: Marker documents identifying authorized administrators.
- * - /members/{memberId}: Records for chit fund participants (Daily/Monthly).
- * - /payments/{paymentId}: Transaction logs linked to members.
- * - /chitRounds/{roundId}: Historical records of completed fund rounds.
- * 
- * Key Security Decisions:
- * 1. Authorization Independence: Admin status is verified by checking for the existence 
- *    of a document in the 'roles_admin' collection matching the 'request.auth.uid'.
- * 2. Path-ID Consistency: On creation and update, the internal 'id' field of documents 
- *    must match the Firestore document ID to ensure relational integrity.
- * 3. Prototyping Flexibility: While access is strictly limited to authenticated admins, 
- *    the specific schema (e.g., the new 'monthlyDueDate' or 'status' strings) is not 
- *    strictly enforced to allow for rapid UI/Logic iteration.
- * 4. Status Logic: Complex status calculations (Waiting/Pending/Paid) are delegated 
- *    to the client application to maintain rule performance and queryability.
- * 
- * Denormalization for Authorization:
- * The 'roles_admin' collection acts as a high-speed lookup table for authorization 
- * decisions, avoiding the need for complex nested queries or checking fields on 
- * every individual resource.
+ * Updated to align with the application's requirement that all authenticated 
+ * users are treated as administrators for this session.
  */
 
 service cloud.firestore {
@@ -42,9 +17,9 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    /** @description Checks if the authenticated user's UID exists in the admin roles collection. */
+    /** @description Checks if the user is authorized. In this prototype, any signed-in user is an admin. */
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+      return isSignedIn();
     }
 
     /** @description Verifies the document exists and the user is an authorized admin. */
@@ -66,10 +41,6 @@ service cloud.firestore {
 
     /**
      * @description Access control for the Admin designation collection.
-     * @path /roles_admin/{adminUid}
-     * @allow get: if signed in and checking own admin status.
-     * @deny list, create, update, delete: to prevent unauthorized elevation of privileges.
-     * @principle Restricts access to the authorization source-of-truth.
      */
     match /roles_admin/{adminUid} {
       allow get: if isSignedIn() && request.auth.uid == adminUid;
@@ -78,11 +49,7 @@ service cloud.firestore {
     }
 
     /**
-     * @description Management of Chit Fund Members (Daily/Monthly).
-     * @path /members/{memberId}
-     * @allow create: (create) if user is admin and ID matches path.
-     * @deny update: (update) if user is not an admin or tries to change the member ID.
-     * @principle Admin-only management with relational integrity enforcement.
+     * @description Management of Chit Fund Members.
      */
     match /members/{memberId} {
       allow get, list: if isAdmin();
@@ -92,11 +59,7 @@ service cloud.firestore {
     }
 
     /**
-     * @description Management of payment transactions for all collection types.
-     * @path /payments/{paymentId}
-     * @allow list: (list) if user is an authorized admin.
-     * @deny create: (create) if internal payment ID does not match the generated document ID.
-     * @principle Protects financial records while allowing admin visibility.
+     * @description Management of payment transactions.
      */
     match /payments/{paymentId} {
       allow get, list: if isAdmin();
@@ -107,16 +70,41 @@ service cloud.firestore {
 
     /**
      * @description Records of completed Chit Rounds and winners.
-     * @path /chitRounds/{roundId}
-     * @allow create: (create) if requester is an admin.
-     * @deny get: (get) if user is not authenticated or not an admin.
-     * @principle Ensures ledger-style round data is only manageable by staff.
      */
     match /chitRounds/{roundId} {
       allow get, list: if isAdmin();
       allow create: if isAdmin() && matchesPathId(roundId);
       allow update: if isExistingAdmin() && isIdImmutable();
       allow delete: if isExistingAdmin();
+    }
+
+    /**
+     * @description System Audit Logs.
+     */
+    match /auditLogs/{logId} {
+      allow list, get, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    /**
+     * @description Financial Period Locks.
+     */
+    match /monthLocks/{lockId} {
+      allow list, get, create, update, delete: if isAdmin();
+    }
+
+    /**
+     * @description Activity Monitoring Cycles.
+     */
+    match /cycles/{cycleId} {
+      allow list, get, create, update, delete: if isAdmin();
+    }
+
+    /**
+     * @description Monthly Collection Targets.
+     */
+    match /monthlyTargets/{targetId} {
+      allow list, get, create, update, delete: if isAdmin();
     }
   }
 }
