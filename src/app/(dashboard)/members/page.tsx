@@ -91,43 +91,40 @@ export default function MembersPage() {
     if (!members || !payments) return [];
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const today = startOfDay(new Date());
+    const currentMonthStr = format(today, 'MMMM yyyy');
+    const currentDayOfMonth = today.getDate();
 
     return members.map(m => {
       const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+      const scheme = (chitRounds || []).find(r => r.name === m.chitGroup);
+      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
       
-      let pendingDaysCount = 0;
-      if (m.joinDate && m.status !== 'inactive') {
-        try {
-          const rawJoinDate = parseISO(m.joinDate);
-          const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
-          
-          if (isBefore(effectiveStart, today.getTime() + 86400000)) {
-            const interval = eachDayOfInterval({ start: effectiveStart, end: today });
-            interval.forEach(day => {
-              const dStr = format(day, 'yyyy-MM-dd');
-              const dayPaymentSum = mPayments
-                .filter(p => p.targetDate === dStr)
-                .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-              
-              if (dayPaymentSum < (m.monthlyAmount || 800)) {
-                pendingDaysCount++;
-              }
-            });
-          }
-        } catch {}
-      }
+      let memberStatus: 'paid' | 'pending' | 'waiting' = 'pending';
 
-      const isPaidToday = mPayments
-        .filter(p => p.targetDate === todayStr)
-        .reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800);
+      if (resolvedType === 'Daily') {
+        const isPaidToday = mPayments
+          .filter(p => p.targetDate === todayStr)
+          .reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800);
+        memberStatus = isPaidToday ? 'paid' : 'pending';
+      } else {
+        const dueDate = scheme?.dueDate || 5;
+        const hasPaidThisMonth = mPayments.some(p => p.month === currentMonthStr);
+        if (hasPaidThisMonth) {
+          memberStatus = 'paid';
+        } else if (currentDayOfMonth < dueDate) {
+          memberStatus = 'waiting';
+        } else {
+          memberStatus = 'pending';
+        }
+      }
 
       return {
         ...m,
-        isPaidToday: isPaidToday,
+        memberStatus: memberStatus,
         totalPaidSum: mPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
       };
     });
-  }, [members, payments]);
+  }, [members, payments, chitRounds]);
 
   const handleUpdateMember = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -232,6 +229,7 @@ export default function MembersPage() {
                 <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Loading members...</TableCell></TableRow>
               ) : visibleMembers.length > 0 ? (
                 visibleMembers.map((member) => {
+                  const status = member.memberStatus;
                   return (
                     <TableRow key={member.id} className="hover:bg-muted/10 transition-colors">
                       <TableCell>
@@ -247,9 +245,13 @@ export default function MembersPage() {
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-xs text-muted-foreground tabular-nums">{member.phone}</TableCell>
                       <TableCell>
-                        {member.isPaidToday ? (
+                        {status === 'paid' ? (
                           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 uppercase tracking-tight shadow-sm w-fit">
-                            <CheckCircle2 className="size-2.5" /> Paid Today
+                            <CheckCircle2 className="size-2.5" /> Success
+                          </div>
+                        ) : status === 'waiting' ? (
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200 uppercase tracking-tight shadow-sm w-fit">
+                            <Clock className="size-2.5" /> Waiting
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 uppercase tracking-tight shadow-sm w-fit">

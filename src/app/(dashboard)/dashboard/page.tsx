@@ -74,6 +74,8 @@ export default function DashboardPage() {
     const now = new Date()
     const todayStr = format(now, 'yyyy-MM-dd')
     const today = startOfDay(now);
+    const currentMonthStr = format(now, 'MMMM yyyy');
+    const currentDayOfMonth = now.getDate();
 
     const currentMonthPayments = (payments || []).filter(p => {
       if (!p.paymentDate) return false;
@@ -95,48 +97,65 @@ export default function DashboardPage() {
 
     const membersWithCalculatedStats = (members || []).filter(m => m.status !== 'inactive').map(m => {
       const mPayments = (payments || []).filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+      const scheme = (rounds || []).find(r => r.name === m.chitGroup);
+      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
       
       let pendingDaysCount = 0;
-      if (m.joinDate) {
-        try {
-          const rawJoinDate = parseISO(m.joinDate);
-          const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
-          
-          if (isBefore(effectiveStart, today.getTime() + 86400000)) {
-            const interval = eachDayOfInterval({ start: effectiveStart, end: today });
-            interval.forEach(day => {
-              const dStr = format(day, 'yyyy-MM-dd');
-              const dayPaymentSum = mPayments
-                .filter(p => p.targetDate === dStr)
-                .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-              
-              if (dayPaymentSum < (m.monthlyAmount || 800)) {
-                pendingDaysCount++;
-              }
-            });
-          }
-        } catch {}
-      }
+      let memberStatus: 'paid' | 'pending' | 'waiting' = 'pending';
 
-      const isPaidToday = mPayments
-        .filter(p => p.targetDate === todayStr)
-        .reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800);
+      if (resolvedType === 'Daily') {
+        if (m.joinDate) {
+          try {
+            const rawJoinDate = parseISO(m.joinDate);
+            const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
+            
+            if (isBefore(effectiveStart, today.getTime() + 86400000)) {
+              const interval = eachDayOfInterval({ start: effectiveStart, end: today });
+              interval.forEach(day => {
+                const dStr = format(day, 'yyyy-MM-dd');
+                const dayPaymentSum = mPayments
+                  .filter(p => p.targetDate === dStr)
+                  .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+                
+                if (dayPaymentSum < (m.monthlyAmount || 800)) {
+                  pendingDaysCount++;
+                }
+              });
+            }
+          } catch {}
+        }
+        memberStatus = mPayments.filter(p => p.targetDate === todayStr).reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
+      } else {
+        // Monthly logic
+        const dueDate = scheme?.dueDate || 5;
+        const hasPaidThisMonth = mPayments.some(p => p.month === currentMonthStr);
+        
+        if (hasPaidThisMonth) {
+          memberStatus = 'paid';
+          pendingDaysCount = 0;
+        } else if (currentDayOfMonth < dueDate) {
+          memberStatus = 'waiting';
+          pendingDaysCount = 0;
+        } else {
+          memberStatus = 'pending';
+          pendingDaysCount = 1;
+        }
+      }
 
       return {
         ...m,
         calculatedPendingDays: pendingDaysCount,
         calculatedPendingAmount: pendingDaysCount * (m.monthlyAmount || 800),
-        isPaidToday: isPaidToday
+        memberStatus: memberStatus
       };
     });
 
-    const pendingMembersList = membersWithCalculatedStats.filter(m => !m.isPaidToday);
+    const pendingMembersList = membersWithCalculatedStats.filter(m => m.memberStatus === 'pending');
 
     const fixedGroupNames = ['A', 'B', 'C', 'D'];
     const schemeSummaries = fixedGroupNames.map(name => {
-      const schemeInfo = (rounds || []).find(r => r.name === name) || { name, collectionType: 'Daily', monthlyAmount: 800 };
+      const schemeInfo = (rounds || []).find(r => r.name === name) || { name, collectionType: 'Daily', monthlyAmount: 800, dueDate: 5 };
       const groupMembers = membersWithCalculatedStats.filter(m => m.chitGroup === name);
-      
       const totalPendingDays = groupMembers.reduce((acc, m) => acc + m.calculatedPendingDays, 0);
       
       return {
@@ -232,7 +251,7 @@ export default function DashboardPage() {
 
         <Card className="hover:shadow-xl transition-all duration-300 border-border/60 rounded-2xl bg-card shadow-sm group border-l-4 border-l-destructive">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 p-6">
-            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-destructive/70">Today Arrears</CardTitle>
+            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-destructive/70">Arrears Alert</CardTitle>
             <div className="h-10 w-10 rounded-xl bg-destructive/5 flex items-center justify-center text-destructive group-hover:bg-destructive group-hover:text-destructive-foreground transition-all duration-300">
                <Clock className="size-5" />
             </div>
@@ -240,7 +259,7 @@ export default function DashboardPage() {
           <CardContent className="p-6 pt-0">
             <div className="text-4xl font-black tracking-tighter text-destructive tabular-nums mb-1">{pendingMembersList.length}</div>
             <div className="text-[11px] text-muted-foreground font-semibold mt-2 flex items-center gap-1.5 italic">
-               Unpaid Daily Installments
+               Unpaid Installments
             </div>
           </CardContent>
         </Card>
@@ -272,7 +291,7 @@ export default function DashboardPage() {
                       {scheme.totalPendingDays}
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1.5">
-                      <Clock className="size-3" /> Cumulative Arrears
+                      <Clock className="size-3" /> {scheme.collectionType === 'Daily' ? 'Cumulative Arrears' : 'Pending Members'}
                     </p>
                   </div>
                   <div className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-widest">{scheme.memberCount} Seats</div>
@@ -353,6 +372,7 @@ export default function DashboardPage() {
                   </TableHeader>
                   <TableBody>
                     {selectedGroup.members.length > 0 ? selectedGroup.members.map((m: any) => {
+                      const status = m.memberStatus;
                       return (
                         <TableRow key={m.id} className="hover:bg-muted/10 transition-colors border-b last:border-none">
                           <TableCell className="pl-8 py-5">
@@ -364,11 +384,11 @@ export default function DashboardPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={m.isPaidToday ? "default" : "secondary"} className={cn(
+                            <Badge variant={status === 'paid' ? 'default' : 'secondary'} className={cn(
                               "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
-                              m.isPaidToday ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
+                              status === 'paid' ? "bg-emerald-500 hover:bg-emerald-600" : (status === 'waiting' ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700")
                             )}>
-                              {m.isPaidToday ? "SUCCESS" : "UNPAID"}
+                              {status === 'paid' ? 'SUCCESS' : (status === 'waiting' ? 'WAITING' : 'PENDING')}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center pr-8">
@@ -379,7 +399,7 @@ export default function DashboardPage() {
                               )}
                               onClick={() => handleMemberArrearsClick(m)}
                             >
-                              {m.calculatedPendingDays} Days
+                              {m.calculatedPendingDays} {selectedGroup?.collectionType === 'Daily' ? 'Days' : 'Month'}
                             </button>
                           </TableCell>
                         </TableRow>
@@ -430,7 +450,7 @@ export default function DashboardPage() {
                     ₹{(selectedMemberDebt.calculatedPendingAmount || 0).toLocaleString()}
                   </div>
                   <Badge className="bg-destructive text-destructive-foreground px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-destructive/20 relative z-10">
-                    ⏳ {selectedMemberDebt.calculatedPendingDays || 0} Missed Installments
+                    ⏳ {selectedMemberDebt.calculatedPendingDays || 0} {selectedMemberDebt.memberStatus === 'pending' ? 'Missed' : 'Pending'}
                   </Badge>
                 </div>
 
@@ -443,7 +463,7 @@ export default function DashboardPage() {
                       <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest mb-1.5">Audit Mode</p>
                       <div className="flex items-center gap-2">
                         <ShieldCheck className="size-4 text-primary opacity-60" />
-                        <p className="text-sm font-bold tracking-tight uppercase">Date-Wise Tracking</p>
+                        <p className="text-sm font-bold tracking-tight uppercase">Real-Time Tracking</p>
                       </div>
                    </div>
                 </div>
@@ -451,7 +471,7 @@ export default function DashboardPage() {
                 <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-4">
                   <Info className="size-5 text-primary shrink-0 mt-0.5" />
                   <p className="text-[11px] text-muted-foreground leading-relaxed italic font-medium">
-                    Arrears are calculated strictly from April 1, 2026, by comparing verified transaction records against daily installment requirements.
+                    Arrears are calculated based on scheme frequency and due dates. Daily tracking follows the strict April 2026 window.
                   </p>
                 </div>
               </div>

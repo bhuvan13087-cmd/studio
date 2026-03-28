@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -65,7 +66,8 @@ const INITIAL_CHIT_STATE = {
   totalMembers: 0, 
   startDate: format(new Date(), 'yyyy-MM-dd'), 
   endDate: format(new Date(), 'yyyy-MM-dd'),
-  collectionType: "Daily" 
+  collectionType: "Daily",
+  dueDate: 5
 }
 
 const INITIAL_MEMBER_STATE = {
@@ -141,48 +143,65 @@ export default function RoundsPage() {
     if (!members || !allPayments) return [];
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const today = startOfDay(new Date());
+    const currentMonthStr = format(today, 'MMMM yyyy');
+    const currentDayOfMonth = today.getDate();
 
     return members.map(m => {
       const mPayments = allPayments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+      const scheme = chitSchemes.find(r => r.name === m.chitGroup);
+      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
       
-      // Calculate pending days: ONLY from max(joinDate, CALCULATION_START_DATE) to today
       let pendingDaysCount = 0;
-      if (m.joinDate && m.status !== 'inactive') {
-        try {
-          const rawJoinDate = parseISO(m.joinDate);
-          const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
-          
-          if (isBefore(effectiveStart, addDays(today, 1))) {
-            const interval = eachDayOfInterval({ start: effectiveStart, end: today });
+      let memberStatus: 'paid' | 'pending' | 'waiting' = 'pending';
+
+      if (resolvedType === 'Daily') {
+        if (m.joinDate && m.status !== 'inactive') {
+          try {
+            const rawJoinDate = parseISO(m.joinDate);
+            const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
             
-            interval.forEach(day => {
-              const dStr = format(day, 'yyyy-MM-dd');
-              const dayPaymentSum = mPayments
-                .filter(p => p.targetDate === dStr)
-                .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+            if (isBefore(effectiveStart, addDays(today, 1))) {
+              const interval = eachDayOfInterval({ start: effectiveStart, end: today });
               
-              if (dayPaymentSum < (m.monthlyAmount || 800)) {
-                pendingDaysCount++;
-              }
-            });
-          }
-        } catch (e) {
-          console.error("Date calculation error for member", m.name, e);
+              interval.forEach(day => {
+                const dStr = format(day, 'yyyy-MM-dd');
+                const dayPaymentSum = mPayments
+                  .filter(p => p.targetDate === dStr)
+                  .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+                
+                if (dayPaymentSum < (m.monthlyAmount || 800)) {
+                  pendingDaysCount++;
+                }
+              });
+            }
+          } catch (e) {}
+        }
+        memberStatus = mPayments.filter(p => p.targetDate === todayStr).reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
+      } else {
+        // Monthly logic
+        const dueDate = scheme?.dueDate || 5;
+        const hasPaidThisMonth = mPayments.some(p => p.month === currentMonthStr);
+        
+        if (hasPaidThisMonth) {
+          memberStatus = 'paid';
+          pendingDaysCount = 0;
+        } else if (currentDayOfMonth < dueDate) {
+          memberStatus = 'waiting';
+          pendingDaysCount = 0;
+        } else {
+          memberStatus = 'pending';
+          pendingDaysCount = 1;
         }
       }
-
-      const isPaidToday = mPayments
-        .filter(p => p.targetDate === todayStr)
-        .reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800);
 
       return {
         ...m,
         calculatedPendingDays: pendingDaysCount,
         calculatedPendingAmount: pendingDaysCount * (m.monthlyAmount || 800),
-        isPaidToday: isPaidToday
+        memberStatus: memberStatus
       };
     });
-  }, [members, allPayments]);
+  }, [members, allPayments, chitSchemes]);
 
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => membersWithCalculatedStats.filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [membersWithCalculatedStats, currentRound])
@@ -236,7 +255,7 @@ export default function RoundsPage() {
   };
 
   const getGroupPendingCount = (groupName: string) => {
-    return membersWithCalculatedStats.filter(m => m.chitGroup === groupName && m.status !== 'inactive' && !m.isPaidToday).length;
+    return membersWithCalculatedStats.filter(m => m.chitGroup === groupName && m.status !== 'inactive' && m.memberStatus === 'pending').length;
   };
 
   const handleQuickPayment = async (e: React.FormEvent) => {
@@ -288,6 +307,7 @@ export default function RoundsPage() {
         ...newChit,
         monthlyAmount: Number(newChit.monthlyAmount),
         totalMembers: Number(newChit.totalMembers),
+        dueDate: Number(newChit.dueDate || 5),
         createdAt: serverTimestamp()
       };
       await addDoc(collection(db, 'chitRounds'), chitData);
@@ -314,6 +334,7 @@ export default function RoundsPage() {
         monthlyAmount: Number(chitToEdit.monthlyAmount),
         totalMembers: Number(chitToEdit.totalMembers),
         collectionType: chitToEdit.collectionType,
+        dueDate: Number(chitToEdit.dueDate || 5),
         startDate: chitToEdit.startDate,
         endDate: chitToEdit.endDate
       });
@@ -496,6 +517,12 @@ export default function RoundsPage() {
                       <span className="text-muted-foreground font-semibold">Scheme Amount</span>
                       <span className="font-bold text-primary">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
                     </div>
+                    {group.collectionType === 'Monthly' && (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground font-semibold">Due Date</span>
+                        <span className="font-bold">Day {group.dueDate || 5}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-amber-600 font-semibold">Pending Today</span>
                       <span className={cn("font-bold text-sm", groupPendingCount > 0 ? "text-amber-500" : "text-emerald-600")}>
@@ -627,6 +654,12 @@ export default function RoundsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {newChit.collectionType === 'Monthly' && (
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Due Date (Day 1-31)</Label>
+                    <Input type="number" min="1" max="31" value={newChit.dueDate || ""} onChange={e => setNewChit({...newChit, dueDate: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="5" />
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
@@ -679,6 +712,12 @@ export default function RoundsPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {chitToEdit.collectionType === 'Monthly' && (
+                    <div className="grid gap-2">
+                      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Due Date (Day 1-31)</Label>
+                      <Input type="number" min="1" max="31" value={chitToEdit.dueDate || ""} onChange={e => setChitToEdit({...chitToEdit, dueDate: Number(e.target.value)})} required className="h-11 rounded-xl" />
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
@@ -770,7 +809,7 @@ export default function RoundsPage() {
           </CardHeader>
           <CardContent className="p-2.5 pt-0">
             <div className="text-lg font-bold tabular-nums text-amber-600 tracking-tight">
-              {assignedMembers.filter(m => !m.isPaidToday).length}
+              {assignedMembers.filter(m => m.memberStatus === 'pending').length}
             </div>
           </CardContent>
         </Card>
@@ -811,7 +850,7 @@ export default function RoundsPage() {
             </TableHeader>
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
-                const paidToday = m.isPaidToday;
+                const status = m.memberStatus;
                 const pDays = m.calculatedPendingDays;
                 
                 return (
@@ -840,15 +879,15 @@ export default function RoundsPage() {
                           pDays > 0 ? "text-destructive font-bold" : "text-muted-foreground/40"
                         )}
                       >
-                        {pDays} Days
+                        {pDays} {currentRound?.collectionType === 'Daily' ? 'Days' : 'Month'}
                       </button>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={paidToday ? 'default' : 'secondary'} className={cn(
+                      <Badge variant={status === 'paid' ? 'default' : 'secondary'} className={cn(
                         "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
-                        paidToday ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
+                        status === 'paid' ? "bg-emerald-500 hover:bg-emerald-600" : (status === 'waiting' ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700")
                       )}>
-                        {paidToday ? 'SUCCESS' : 'PENDING'}
+                        {status === 'paid' ? 'SUCCESS' : (status === 'waiting' ? 'WAITING' : 'PENDING')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right pr-6">
@@ -858,13 +897,13 @@ export default function RoundsPage() {
                           size="icon" 
                           className={cn(
                             "h-9 w-9 rounded-xl transition-all",
-                            paidToday 
+                            status === 'paid' 
                               ? "text-emerald-500 bg-emerald-50 cursor-default" 
                               : "text-emerald-600 hover:bg-emerald-50 active:scale-90"
                           )}
-                          disabled={paidToday || isActionPending}
+                          disabled={status === 'paid' || isActionPending}
                           onClick={() => { 
-                            if (!paidToday) {
+                            if (status !== 'paid') {
                               setSelectedMemberForPayment(m); 
                               setPaymentData({
                                   ...INITIAL_PAYMENT_STATE,
@@ -875,7 +914,7 @@ export default function RoundsPage() {
                             }
                           }}
                         >
-                          {paidToday ? <CheckCircle2 className="size-4.5" /> : <IndianRupee className="size-4.5" />}
+                          {status === 'paid' ? <CheckCircle2 className="size-4.5" /> : <IndianRupee className="size-4.5" />}
                         </Button>
                         <Button 
                           variant="ghost" 
@@ -1060,42 +1099,48 @@ export default function RoundsPage() {
                   <div className="space-y-1 text-right">
                     <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Unpaid Interval</span>
                     <span className="text-lg font-black text-destructive tabular-nums tracking-tighter">
-                      {selectedPendingMember.calculatedPendingDays} Days
+                      {selectedPendingMember.calculatedPendingDays} {currentRound?.collectionType === 'Daily' ? 'Days' : 'Month'}
                     </span>
                   </div>
                 </div>
 
                 <ScrollArea className="h-[350px]">
-                  <Table>
-                    <TableHeader className="bg-muted/30 sticky top-0 z-10">
-                      <TableRow>
-                        <TableHead className="text-[10px] font-black uppercase tracking-widest pl-6">Collection Date</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Status</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-right pr-6">Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {memberDateLog.map((log, i) => (
-                        <TableRow key={i} className="hover:bg-muted/5 transition-colors border-b">
-                          <TableCell className="pl-6 py-3 font-semibold text-xs text-foreground/80">{log.label}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge 
-                              variant="outline" 
-                              className={cn(
-                                "text-[9px] font-black uppercase tracking-widest px-2 py-0.5",
-                                log.status === 'Paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-destructive/5 text-destructive border-destructive/20"
-                              )}
-                            >
-                              {log.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right pr-6 font-bold text-xs tabular-nums">
-                            {log.amount > 0 ? `₹${log.amount.toLocaleString()}` : '-'}
-                          </TableCell>
+                  {currentRound?.collectionType === 'Daily' ? (
+                    <Table>
+                      <TableHeader className="bg-muted/30 sticky top-0 z-10">
+                        <TableRow>
+                          <TableHead className="text-[10px] font-black uppercase tracking-widest pl-6">Collection Date</TableHead>
+                          <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Status</TableHead>
+                          <TableHead className="text-[10px] font-black uppercase tracking-widest text-right pr-6">Amount</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {memberDateLog.map((log, i) => (
+                          <TableRow key={i} className="hover:bg-muted/5 transition-colors border-b">
+                            <TableCell className="pl-6 py-3 font-semibold text-xs text-foreground/80">{log.label}</TableCell>
+                            <TableCell className="text-center">
+                              <Badge 
+                                variant="outline" 
+                                className={cn(
+                                  "text-[9px] font-black uppercase tracking-widest px-2 py-0.5",
+                                  log.status === 'Paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-destructive/5 text-destructive border-destructive/20"
+                                )}
+                              >
+                                {log.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right pr-6 font-bold text-xs tabular-nums">
+                              {log.amount > 0 ? `₹${log.amount.toLocaleString()}` : '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="p-10 text-center text-muted-foreground italic text-xs">
+                      Date-wise audit ledger is only available for Daily schemes.
+                    </div>
+                  )}
                 </ScrollArea>
               </div>
               

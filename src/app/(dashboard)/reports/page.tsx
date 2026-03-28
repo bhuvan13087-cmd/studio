@@ -99,15 +99,10 @@ export default function ReportsPage() {
     
     const focusDate = isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date();
     const focusDateStr = format(focusDate, 'yyyy-MM-dd');
+    const focusMonthStr = format(focusDate, 'MMMM yyyy');
+    const focusDayOfMonth = focusDate.getDate();
     const yesterday = subDays(focusDate, 1);
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-
-    const dailyMembers = members.filter(m => {
-        if (m.status === 'inactive') return false;
-        const scheme = rounds.find(r => r.name === m.chitGroup);
-        const resolvedType = (m.paymentType || scheme?.collectionType || "").toLowerCase();
-        return resolvedType === 'daily';
-    });
 
     const targetMembers = members.filter(m => {
       if (m.status === 'inactive') return false;
@@ -117,35 +112,52 @@ export default function ReportsPage() {
     });
     const targetIds = new Set(targetMembers.map(m => m.id));
 
-    // REUSE STRICT LOGIC FOR TODAY PENDING
-    const unpaidTodayDaily = dailyMembers.filter(m => {
-      // Ignore calculation before start date
-      if (isBefore(focusDate, CALCULATION_START_DATE)) return false;
-      
-      const dayPaymentSum = payments
-        .filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid') && p.targetDate === focusDateStr)
-        .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-      
-      return dayPaymentSum < (m.monthlyAmount || 800);
+    // PENDING CALCULATION
+    const unpaidToday = targetMembers.filter(m => {
+      const scheme = rounds.find(r => r.name === m.chitGroup);
+      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
+      const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+
+      if (resolvedType === 'Daily') {
+        if (isBefore(focusDate, CALCULATION_START_DATE)) return false;
+        const dayPaymentSum = mPayments
+          .filter(p => p.targetDate === focusDateStr)
+          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+        return dayPaymentSum < (m.monthlyAmount || 800);
+      } else {
+        const dueDate = scheme?.dueDate || 5;
+        const hasPaidThisMonth = mPayments.some(p => p.month === focusMonthStr);
+        return !hasPaidThisMonth && focusDayOfMonth >= dueDate;
+      }
     });
 
-    // REUSE STRICT LOGIC FOR YESTERDAY PENDING
-    const unpaidYesterdayDaily = dailyMembers.filter(m => {
-      if (isBefore(yesterday, CALCULATION_START_DATE)) return false;
+    const unpaidYesterday = targetMembers.filter(m => {
+      const scheme = rounds.find(r => r.name === m.chitGroup);
+      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
+      const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
 
-      const dayPaymentSum = payments
-        .filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid') && p.targetDate === yesterdayStr)
-        .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-      
-      return dayPaymentSum < (m.monthlyAmount || 800);
+      if (resolvedType === 'Daily') {
+        if (isBefore(yesterday, CALCULATION_START_DATE)) return false;
+        const dayPaymentSum = mPayments
+          .filter(p => p.targetDate === yesterdayStr)
+          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+        return dayPaymentSum < (m.monthlyAmount || 800);
+      } else {
+        // For monthly, yesterday logic is usually same as today since it's month-cycle based
+        const dueDate = scheme?.dueDate || 5;
+        const yesterdayMonthStr = format(yesterday, 'MMMM yyyy');
+        const yesterdayDayOfMonth = yesterday.getDate();
+        const hasPaidInYesterdayMonth = mPayments.some(p => p.month === yesterdayMonthStr);
+        return !hasPaidInYesterdayMonth && yesterdayDayOfMonth >= dueDate;
+      }
     });
 
-    // COLLECTION TOTALS (Runtime Dynamic)
+    // COLLECTION TOTALS
     const focusDatePayments = payments.filter(p => {
       if (p.status !== 'paid' && p.status !== 'success') return false;
       if (!p.paymentDate) return false;
       try {
-        const pDateStr = format(parseISO(p.paymentDate), 'yyyy-MM-dd');
+        const pDateStr = format(p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate), 'yyyy-MM-dd');
         return pDateStr === focusDateStr;
       } catch {
         return false;
@@ -158,7 +170,7 @@ export default function ReportsPage() {
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthPayments = payments.filter(p => {
         if (!p.paymentDate) return false;
-        const d = parseISO(p.paymentDate);
+        const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate);
         return (p.status === 'paid' || p.status === 'success') && targetIds.has(p.memberId) && getYear(d).toString() === selectedYear && getMonth(d) === i;
       });
       return {
@@ -173,12 +185,12 @@ export default function ReportsPage() {
     return { 
       collectionData: collectionDataByMonth, 
       targetMembers,
-      unpaidTodayDaily,
-      unpaidYesterdayDaily,
+      unpaidToday,
+      unpaidYesterday,
       focusStats: {
         collection: totalCollection,
         txCount: totalTransactions,
-        pendingCount: unpaidTodayDaily.length, 
+        pendingCount: unpaidToday.length, 
         dateLabel: format(focusDate, 'EEEE, dd MMMM yyyy'),
         dateShort: format(focusDate, 'dd-MM-yyyy')
       }
@@ -206,8 +218,8 @@ export default function ReportsPage() {
 
     switch (activeTab) {
       case "collections": exportData = filteredData.collectionData.map(d => ({ Period: d.month, Amount: d.amount })); break;
-      case "yesterday-pending": exportData = filteredData.unpaidYesterdayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, Status: "Unpaid" })); break;
-      case "today-pending": exportData = filteredData.unpaidTodayDaily.map(m => ({ Member: m.name, Group: m.chitGroup, Status: "Unpaid" })); break;
+      case "yesterday-pending": exportData = filteredData.unpaidYesterday.map(m => ({ Member: m.name, Group: m.chitGroup, Status: "Unpaid" })); break;
+      case "today-pending": exportData = filteredData.unpaidToday.map(m => ({ Member: m.name, Group: m.chitGroup, Status: "Unpaid" })); break;
     }
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -400,10 +412,10 @@ export default function ReportsPage() {
           <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-amber-50/50 flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2 text-amber-700">
-                <History className="size-4" /> Unpaid Previous Day (Daily)
+                <History className="size-4" /> Unpaid Previous Day
               </h3>
               <Badge variant="outline" className="text-[10px] font-bold border-amber-200 text-amber-700">
-                {filteredData!.unpaidYesterdayDaily.length} Members
+                {filteredData!.unpaidYesterday.length} Members
               </Badge>
             </div>
             <div className="overflow-x-auto">
@@ -416,7 +428,7 @@ export default function ReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredData!.unpaidYesterdayDaily.length > 0 ? filteredData!.unpaidYesterdayDaily.map((m, i) => (
+                  {filteredData!.unpaidYesterday.length > 0 ? filteredData!.unpaidYesterday.map((m, i) => (
                     <TableRow key={i} className="hover:bg-muted/5 transition-colors">
                       <TableCell className="pl-6 py-4">
                         <span className="font-bold text-sm">{m.name}</span>
@@ -437,10 +449,10 @@ export default function ReportsPage() {
           <Card className="border-border/50 overflow-hidden shadow-sm">
             <div className="p-4 border-b bg-blue-50/50 flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2 text-blue-700">
-                <Clock className="size-4" /> Unpaid Selected Date (Daily)
+                <Clock className="size-4" /> Unpaid Selected Date
               </h3>
               <Badge variant="outline" className="text-[10px] font-bold border-blue-200 text-blue-700">
-                {filteredData!.unpaidTodayDaily.length} Members
+                {filteredData!.unpaidToday.length} Members
               </Badge>
             </div>
             <div className="overflow-x-auto">
@@ -453,7 +465,7 @@ export default function ReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredData!.unpaidTodayDaily.length > 0 ? filteredData!.unpaidTodayDaily.map((m, i) => (
+                  {filteredData!.unpaidToday.length > 0 ? filteredData!.unpaidToday.map((m, i) => (
                     <TableRow key={i} className="hover:bg-muted/5 transition-colors">
                       <TableCell className="pl-6 py-4">
                         <span className="font-bold text-sm">{m.name}</span>
