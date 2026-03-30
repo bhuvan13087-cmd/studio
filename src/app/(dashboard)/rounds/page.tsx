@@ -19,6 +19,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   Select,
@@ -97,11 +98,12 @@ const getInitials = (name: string) => {
 };
 
 /**
- * Cycle Control UI Component for each Group Card
+ * Cycle Control UI Component for each Group Card (Icon Popup version)
  */
 function GroupCycleControl({ group }: { group: any }) {
   const [startDate, setStartDate] = useState(group.startDate || "")
   const [endDate, setEndDate] = useState(group.endDate || "")
+  const [isOpen, setIsOpen] = useState(false)
 
   const handleSave = () => {
     if (!startDate || !endDate) {
@@ -119,42 +121,67 @@ function GroupCycleControl({ group }: { group: any }) {
       startDate,
       endDate
     });
+    setIsOpen(false);
   };
 
   return (
-    <div className="pt-4 mt-4 border-t border-dashed border-border/60 space-y-3">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70">Cycle Control</span>
-        <Badge variant="outline" className="text-[8px] font-bold h-4 bg-muted/50 border-none px-1.5 uppercase">Local Mode</Badge>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label className="text-[9px] font-bold uppercase text-muted-foreground ml-0.5">Start</Label>
-          <Input 
-            type="date" 
-            value={startDate} 
-            onChange={(e) => setStartDate(e.target.value)}
-            className="h-8 text-[10px] px-2 rounded-lg bg-muted/30 border-transparent focus:border-primary/30"
-          />
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-8 w-8 rounded-full hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors"
+          title="Cycle Control"
+        >
+          <CalendarDays className="size-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarDays className="size-5 text-primary" />
+            Cycle Management
+          </DialogTitle>
+          <DialogDescription>
+            Configure the operational date range for {group.name}.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-6">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70">Local Configuration</span>
+            <Badge variant="outline" className="text-[8px] font-bold h-4 bg-muted/50 border-none px-1.5 uppercase">Draft Mode</Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-0.5">Start Date</Label>
+              <Input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-10 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-0.5">End Date</Label>
+              <Input 
+                type="date" 
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-10 rounded-xl"
+              />
+            </div>
+          </div>
         </div>
-        <div className="space-y-1">
-          <Label className="text-[9px] font-bold uppercase text-muted-foreground ml-0.5">End</Label>
-          <Input 
-            type="date" 
-            value={endDate} 
-            onChange={(e) => setEndDate(e.target.value)}
-            className="h-8 text-[10px] px-2 rounded-lg bg-muted/30 border-transparent focus:border-primary/30"
-          />
-        </div>
-      </div>
-      <Button 
-        onClick={handleSave}
-        className="w-full h-8 text-[10px] font-black uppercase tracking-widest gap-2 rounded-lg shadow-sm active:scale-95 transition-all"
-        variant="secondary"
-      >
-        <Save className="size-3" /> Save Cycle
-      </Button>
-    </div>
+        <DialogFooter>
+          <Button 
+            onClick={handleSave}
+            className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all shadow-lg"
+          >
+            <Save className="size-4 mr-2" /> Save Cycle
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -569,6 +596,8 @@ export default function RoundsPage() {
                   >
                     <Wallet className="size-4" />
                   </Button>
+                  {/* Cycle Management Icon Trigger */}
+                  <GroupCycleControl group={group} />
                 </div>
 
                 <CardHeader className="p-5 pb-3 space-y-3 border-b border-border/40">
@@ -612,8 +641,12 @@ export default function RoundsPage() {
                        </div>
                     </div>
 
-                    {/* NEW: Cycle Date Controls */}
-                    <GroupCycleControl group={group} />
+                    <div className="pt-3 flex items-center gap-2 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+                      <Calendar className="size-3" />
+                      {group.startDate && group.endDate 
+                        ? `${format(parseISO(group.startDate), 'MMM dd')} → ${format(parseISO(group.endDate), 'MMM dd')}`
+                        : "No Cycle Set"}
+                    </div>
                   </div>
                 </CardContent>
 
