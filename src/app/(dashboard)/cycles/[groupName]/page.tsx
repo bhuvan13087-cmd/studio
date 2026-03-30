@@ -2,20 +2,17 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, CalendarDays, ChevronLeft, History, Database, ArrowRight } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Loader2, ChevronLeft, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, parseISO } from "date-fns"
 import { useRouter } from "next/navigation"
-import { cn } from "@/lib/utils"
 
 /**
- * @fileOverview Group-Specific Cycle Audit Page
+ * @fileOverview Strictly controlled Group-Specific Cycle Audit Page.
  * 
- * Displays the historical date ranges for a specific group safely.
+ * Displays ONLY the group name and a chronological list of cycle date ranges.
+ * Explicitly sanitizes data to prevent rendering of unauthorized fields.
  */
 export default function GroupCyclesPage({ params }: { params: Promise<{ groupName: string }> }) {
   const router = useRouter()
@@ -31,16 +28,21 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('startDate', 'desc')), [db])
   const { data: allCycles, isLoading } = useCollection(cyclesQuery)
 
-  // Safe Data Fetch & Filter
-  const cycles = React.useMemo(() => {
+  // TASK 1: Data Sanitization - Map to ONLY specific fields
+  const safeCycles = React.useMemo(() => {
     if (!Array.isArray(allCycles)) return []
-    return allCycles.filter((c) => String(c?.name || "").trim() === groupName)
+    return allCycles
+      .filter((c) => String(c?.name || "").trim() === groupName)
+      .map((c) => ({
+        startDate: String(c?.startDate || "-"),
+        endDate: String(c?.endDate || "-")
+      }))
   }, [allCycles, groupName])
 
   if (!groupName) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
-        <p className="text-sm font-bold text-destructive uppercase tracking-widest">Invalid Group Identifier</p>
+        <p className="text-sm font-black text-destructive uppercase tracking-widest">Invalid Group Identifier</p>
         <Button variant="outline" onClick={() => router.push('/cycles')}>Return to Registry</Button>
       </div>
     )
@@ -54,80 +56,53 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
     )
   }
 
+  // TASK 2 & 3: Strict Render - Only show groupName and sanitized list
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => router.push('/cycles')}
-            className="rounded-full h-10 w-10 hover:bg-primary/10 text-primary transition-all active:scale-90"
-          >
-            <ChevronLeft className="size-6" />
-          </Button>
-          <div className="space-y-1">
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-primary font-headline uppercase">
-              {groupName} Audit
-            </h2>
-            <p className="text-sm text-muted-foreground font-medium flex items-center gap-2">
-              <History className="size-4" /> Operational Period History
-            </p>
-          </div>
-        </div>
+    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
+      <div className="flex items-center gap-4">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => router.push('/cycles')}
+          className="rounded-full h-10 w-10 hover:bg-primary/10 text-primary transition-all active:scale-90"
+        >
+          <ChevronLeft className="size-6" />
+        </Button>
+        <h2 className="text-2xl font-black tracking-tight text-primary font-headline uppercase">
+          {groupName} Audit
+        </h2>
       </div>
 
-      <div className="max-w-3xl space-y-4">
+      <div className="space-y-4">
         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70 px-1">
           Chronological Period Log
         </h3>
         
-        {cycles.length > 0 ? (
+        {safeCycles.length > 0 ? (
           <div className="grid gap-3">
-            {cycles.map((cycle, i) => (
-              <Card key={cycle?.id || i} className="border-border/60 hover:shadow-md transition-all rounded-2xl overflow-hidden group">
-                <CardContent className="p-0">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                        <CalendarDays className="size-5" />
-                      </div>
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm tracking-tight tabular-nums">
-                            {cycle?.startDate ? format(parseISO(cycle.startDate), 'MMM dd, yyyy') : 'No date'}
-                          </span>
-                          <ArrowRight className="size-3 text-muted-foreground/40" />
-                          <span className="font-bold text-sm tracking-tight text-primary tabular-nums">
-                            {cycle?.endDate ? format(parseISO(cycle.endDate), 'MMM dd, yyyy') : 'No date'}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
-                          <Database className="size-3" />
-                          Record ID: {String(cycle?.id || "N/A").slice(0, 8)}
-                        </div>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className={cn(
-                      "text-[9px] font-black uppercase tracking-widest h-6 px-3 border-none",
-                      cycle?.status === 'active' ? "bg-emerald-50 text-emerald-700 shadow-sm" : "bg-muted text-muted-foreground"
-                    )}>
-                      {cycle?.status || 'Archived'}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
+            {safeCycles.map((cycle, i) => (
+              <div 
+                key={i} 
+                className="flex items-center justify-between p-6 rounded-2xl border border-border/60 bg-card shadow-sm hover:shadow-md transition-all"
+              >
+                <div className="flex items-center gap-4">
+                  <span className="font-bold text-sm tracking-tight tabular-nums">
+                    {cycle.startDate}
+                  </span>
+                  <ArrowRight className="size-3 text-muted-foreground/40" />
+                  <span className="font-bold text-sm tracking-tight text-primary tabular-nums">
+                    {cycle.endDate}
+                  </span>
+                </div>
+              </div>
             ))}
           </div>
         ) : (
-          <Card className="border-2 border-dashed rounded-3xl bg-muted/5 shadow-none">
-            <CardContent className="h-[200px] flex flex-col items-center justify-center space-y-3">
-              <Database className="size-8 text-muted-foreground/30" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 italic">
-                No cycle records located for this group
-              </p>
-            </CardContent>
-          </Card>
+          <div className="p-20 text-center border-2 border-dashed rounded-3xl bg-muted/5 text-muted-foreground/60">
+            <p className="text-[10px] font-black uppercase tracking-widest italic">
+              No cycles found
+            </p>
+          </div>
         )}
       </div>
     </div>
