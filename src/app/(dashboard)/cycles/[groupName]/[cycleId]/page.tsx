@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
 import { useRouter } from "next/navigation"
-import { format, parseISO, isWithinInterval, startOfDay, endOfDay } from "date-fns"
+import { format, parseISO, isWithinInterval, startOfDay, endOfDay, isValid } from "date-fns"
 import { cn } from "@/lib/utils"
 
 /**
@@ -64,19 +64,24 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
     // Filter members belonging to this group
     const groupMembers = (Array.isArray(membersData) ? membersData : [])
-      .filter(m => String(m?.chitGroup || "").trim() === groupName)
+      .filter(m => String(m?.chitGroup || "").trim().toLowerCase() === groupName.toLowerCase() || 
+                   String(m?.chitGroup || "").replace(/Group/gi, '').trim().toLowerCase() === groupName.replace(/Group/gi, '').trim().toLowerCase())
 
     const memberIds = new Set(groupMembers.map(m => m.id))
 
-    // Helper to extract date from record resiliently
+    // RESILIENT DATE EXTRACTION
     const getPDateStr = (p: any) => {
-      if (p.targetDate) return p.targetDate;
-      const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? new Date(p.paymentDate) : null);
-      if (d && !isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      if (p.targetDate && typeof p.targetDate === 'string') return p.targetDate;
+      const raw = p.paymentDate || p.createdAt || p.date || p.paidDate;
+      if (!raw) return null;
+      try {
+        const d = raw.toDate ? raw.toDate() : new Date(raw);
+        if (isValid(d)) return format(d, 'yyyy-MM-dd');
+      } catch (e) {}
       return null;
     }
 
-    // Helper to extract amount resiliently
+    // RESILIENT AMOUNT EXTRACTION
     const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
 
     // Filter payments within this cycle range for these members
@@ -84,8 +89,8 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
       .filter(p => {
         if (!memberIds.has(p.memberId)) return false
         
-        // Status check: success, paid, or empty status (legacy) are included
-        if (p.status && p.status !== 'success' && p.status !== 'paid') return false
+        // Permissive Status Check
+        if (p.status && !['success', 'paid', 'verified', 'Success', 'Paid'].includes(p.status)) return false
         
         const recordDate = getPDateStr(p);
         if (!recordDate || !startDate || !endDate) return false
@@ -97,7 +102,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
     // TASK 6 & 7: Daily Filtering & Collection
     const filteredPayments = cyclePayments.filter(p => 
-      !selectedDate || String(getPDateStr(p) || "") === selectedDate
+      !selectedDate || getPDateStr(p) === selectedDate
     )
 
     const dailyCollection = filteredPayments.reduce((sum, p) => sum + getPAmount(p), 0)

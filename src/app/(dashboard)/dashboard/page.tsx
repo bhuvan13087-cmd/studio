@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO, startOfDay, eachDayOfInterval, isBefore, max } from "date-fns"
+import { format, isSameMonth, parseISO, startOfDay, eachDayOfInterval, isBefore, max, isValid } from "date-fns"
 import { cn } from "@/lib/utils"
 
 // STRICT SYSTEM START DATE
@@ -81,16 +81,21 @@ export default function DashboardPage() {
     const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
     // Helper to extract date from record resiliently
     const getPDateStr = (p: any) => {
-      if (p.targetDate) return p.targetDate;
-      const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? new Date(p.paymentDate) : null);
-      if (d && !isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      if (p.targetDate && typeof p.targetDate === 'string') return p.targetDate;
+      const raw = p.paymentDate || p.createdAt || p.date || p.paidDate;
+      if (!raw) return null;
+      try {
+        const d = raw.toDate ? raw.toDate() : new Date(raw);
+        if (isValid(d)) return format(d, 'yyyy-MM-dd');
+      } catch (e) {}
       return null;
     }
 
     const currentMonthPayments = (payments || []).filter(p => {
-      if (!p.paymentDate && !p.createdAt) return false;
+      const recordDateStr = getPDateStr(p);
+      if (!recordDateStr) return false;
       try {
-        const pDate = p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? parseISO(p.paymentDate) : parseISO(p.createdAt));
+        const pDate = parseISO(recordDateStr);
         return isSameMonth(pDate, now) && (p.status === 'paid' || p.status === 'success' || !p.status);
       } catch {
         return false;

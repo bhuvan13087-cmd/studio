@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -93,6 +94,19 @@ export default function ReportsPage() {
 
   useEffect(() => { setMounted(true) }, [])
 
+  // RESILIENT HELPERS
+  const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
+  const getPDateStr = (p: any) => {
+    if (p.targetDate && typeof p.targetDate === 'string') return p.targetDate;
+    const raw = p.paymentDate || p.createdAt || p.date || p.paidDate;
+    if (!raw) return null;
+    try {
+      const d = raw.toDate ? raw.toDate() : new Date(raw);
+      if (isValid(d)) return format(d, 'yyyy-MM-dd');
+    } catch (e) {}
+    return null;
+  }
+
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds) return null;
     
@@ -115,13 +129,13 @@ export default function ReportsPage() {
     const unpaidToday = targetMembers.filter(m => {
       const scheme = rounds.find(r => r.name === m.chitGroup);
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
-      const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+      const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid' || !p.status));
 
       if (resolvedType === 'Daily') {
         if (isBefore(focusDate, CALCULATION_START_DATE)) return false;
         const dayPaymentSum = mPayments
-          .filter(p => p.targetDate === focusDateStr)
-          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+          .filter(p => getPDateStr(p) === focusDateStr)
+          .reduce((acc, p) => acc + getPAmount(p), 0);
         return dayPaymentSum < (m.monthlyAmount || 800);
       } else {
         const dueDate = scheme?.dueDate || 5;
@@ -133,16 +147,15 @@ export default function ReportsPage() {
     const unpaidYesterday = targetMembers.filter(m => {
       const scheme = rounds.find(r => r.name === m.chitGroup);
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
-      const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+      const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid' || !p.status));
 
       if (resolvedType === 'Daily') {
         if (isBefore(yesterday, CALCULATION_START_DATE)) return false;
         const dayPaymentSum = mPayments
-          .filter(p => p.targetDate === yesterdayStr)
-          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+          .filter(p => getPDateStr(p) === yesterdayStr)
+          .reduce((acc, p) => acc + getPAmount(p), 0);
         return dayPaymentSum < (m.monthlyAmount || 800);
       } else {
-        // For monthly, yesterday logic is usually same as today since it's month-cycle based
         const dueDate = scheme?.dueDate || 5;
         const yesterdayMonthStr = format(yesterday, 'MMMM yyyy');
         const yesterdayDayOfMonth = yesterday.getDate();
@@ -153,32 +166,29 @@ export default function ReportsPage() {
 
     // COLLECTION TOTALS
     const focusDatePayments = payments.filter(p => {
-      if (p.status !== 'paid' && p.status !== 'success') return false;
-      if (!p.paymentDate) return false;
-      try {
-        const pDateStr = format(p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate), 'yyyy-MM-dd');
-        return pDateStr === focusDateStr;
-      } catch {
-        return false;
-      }
+      if (p.status && p.status !== 'paid' && p.status !== 'success') return false;
+      const recordDate = getPDateStr(p);
+      return recordDate === focusDateStr;
     });
 
-    const totalCollection = focusDatePayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+    const totalCollection = focusDatePayments.reduce((acc, p) => acc + getPAmount(p), 0);
     const totalTransactions = focusDatePayments.length;
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
+      const monthLabel = MONTHS_MASTER.find(m => m.value === i.toString())?.label || "";
       const monthPayments = payments.filter(p => {
-        if (!p.paymentDate) return false;
-        const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate);
-        return (p.status === 'paid' || p.status === 'success') && targetIds.has(p.memberId) && getYear(d).toString() === selectedYear && getMonth(d) === i;
+        const recordDateStr = getPDateStr(p);
+        if (!recordDateStr) return false;
+        const d = parseISO(recordDateStr);
+        return (p.status === 'paid' || p.status === 'success' || !p.status) && targetIds.has(p.memberId) && getYear(d).toString() === selectedYear && getMonth(d) === i;
       });
       return {
-        month: format(new Date(Number(selectedYear), i), 'MMMM yyyy'),
-        amount: monthPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+        month: `${monthLabel} ${selectedYear}`,
+        amount: monthPayments.reduce((acc, p) => acc + getPAmount(p), 0)
       };
     }).filter(row => {
-      const monthLabel = MONTHS_MASTER.find(m => m.value === selectedMonth)?.label || "";
-      return row.month.startsWith(monthLabel);
+      const activeMonthLabel = MONTHS_MASTER.find(m => m.value === selectedMonth)?.label || "";
+      return row.month.startsWith(activeMonthLabel);
     });
 
     return { 
