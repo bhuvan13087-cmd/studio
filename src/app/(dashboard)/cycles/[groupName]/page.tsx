@@ -170,10 +170,18 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
         {safeCycles.length > 0 ? (
           <div className="grid gap-2">
             {safeCycles.map((cycle, i) => (
-              <button 
+              <div 
                 key={i} 
                 onClick={() => handleCycleClick(cycle)}
-                className="group relative flex items-center justify-between w-full p-4 rounded-xl border border-border/50 bg-card hover:border-primary/30 hover:shadow-sm transition-all duration-200 text-left active:scale-[0.99] overflow-hidden"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleCycleClick(cycle)
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                className="group relative flex items-center justify-between w-full p-4 rounded-xl border border-border/50 bg-card hover:border-primary/30 hover:shadow-sm transition-all duration-200 text-left active:scale-[0.99] overflow-hidden cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {/* Subtle Left Accent */}
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary/10 group-hover:bg-primary transition-colors" />
@@ -212,7 +220,7 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
                   </span>
                   <ChevronRight className="size-4 text-muted-foreground/20 group-hover:text-primary transition-colors" />
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         ) : (
