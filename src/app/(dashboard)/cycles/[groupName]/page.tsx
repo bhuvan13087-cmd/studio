@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
 /**
  * @fileOverview Refined Group-Specific Cycle Audit Page.
  * 
- * Displays a chronological list of cycle date ranges with improved visual hierarchy.
+ * Displays a chronological list of cycle date ranges with a compact, professional UI.
  */
 export default function GroupCyclesPage({ params }: { params: Promise<{ groupName: string }> }) {
   const router = useRouter()
@@ -79,113 +79,93 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-10 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
+    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
       {/* Header Section */}
-      <div className="flex items-center gap-5">
+      <div className="flex items-center gap-4">
         <Button 
           variant="ghost" 
           size="icon" 
           onClick={() => router.push('/cycles')}
-          className="rounded-full h-12 w-12 hover:bg-primary/10 text-primary transition-all active:scale-90 bg-white shadow-sm border border-border/40"
+          className="rounded-full h-10 w-10 hover:bg-primary/10 text-primary transition-all active:scale-90"
         >
           <ChevronLeft className="size-6" />
         </Button>
-        <div className="space-y-1">
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-primary font-headline uppercase">
-            {groupName} Registry
+        <div className="space-y-0.5">
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-primary font-headline uppercase">
+            {groupName}
           </h2>
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
-            <History className="size-3" /> Audit History Logs
+          <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1.5">
+            <History className="size-2.5" /> Registry History
           </p>
         </div>
       </div>
 
       {/* Cycle List Section */}
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-muted-foreground/80">
-            Chronological Periods
+          <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground/80">
+            Audit Periods
           </h3>
-          <span className="text-[10px] font-bold text-primary/40 uppercase tracking-widest">
-            {safeCycles.length} Records Found
+          <span className="text-[9px] font-bold text-primary/40 uppercase tracking-widest">
+            {safeCycles.length} Records
           </span>
         </div>
         
         {safeCycles.length > 0 ? (
-          <div className="grid gap-4">
+          <div className="grid gap-2">
             {safeCycles.map((cycle, i) => (
               <button 
                 key={i} 
                 onClick={() => handleCycleClick(cycle)}
-                className="group relative flex items-center justify-between w-full p-6 rounded-3xl border border-border/60 bg-card hover:border-primary/40 hover:bg-muted/30 shadow-sm hover:shadow-xl transition-all duration-300 text-left active:scale-[0.99] overflow-hidden"
+                className="group relative flex items-center justify-between w-full p-4 rounded-xl border border-border/50 bg-card hover:border-primary/30 hover:shadow-sm transition-all duration-200 text-left active:scale-[0.99] overflow-hidden"
               >
-                {/* Decorative Accent */}
-                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-primary/10 group-hover:bg-primary transition-colors" />
+                {/* Subtle Left Accent */}
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary/10 group-hover:bg-primary transition-colors" />
                 
-                <div className="flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-12 pl-2">
-                  {/* Start Date Block */}
-                  <div className="space-y-1.5">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/50 flex items-center gap-1.5">
-                      <Clock className="size-2.5" /> Start Date
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl bg-primary/5 flex items-center justify-center text-primary/60 group-hover:text-primary transition-colors">
-                        <Calendar className="size-4" />
-                      </div>
-                      <span className="font-black text-base tracking-tight tabular-nums text-foreground/80">
+                <div className="flex items-center gap-6 pl-2">
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col">
+                      <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">Start</span>
+                      <span className="text-xs font-bold tabular-nums text-foreground/80 group-hover:text-foreground transition-colors">
                         {formatDateLabel(cycle.startDate)}
                       </span>
                     </div>
-                  </div>
 
-                  <div className="hidden sm:flex items-center text-primary/20">
-                    <ArrowRight className="size-5" />
-                  </div>
+                    <div className="h-px w-4 bg-border/60" />
 
-                  {/* End Date Block */}
-                  <div className="space-y-1.5">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/50 flex items-center gap-1.5">
-                      <History className="size-2.5" /> End Date
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl bg-primary/5 flex items-center justify-center text-primary/60 group-hover:text-primary transition-colors">
-                        <Calendar className="size-4" />
-                      </div>
-                      <span className="font-black text-base tracking-tight tabular-nums text-primary">
+                    <div className="flex flex-col">
+                      <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">End</span>
+                      <span className="text-xs font-bold tabular-nums text-primary">
                         {formatDateLabel(cycle.endDate)}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <span className="hidden sm:inline text-[9px] font-black uppercase tracking-widest text-primary/0 group-hover:text-primary/60 transition-all">
-                    View Audit
+                <div className="flex items-center gap-2">
+                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-primary/0 group-hover:text-primary/60 transition-all">
+                    View
                   </span>
-                  <div className="h-10 w-10 rounded-full border border-border/40 flex items-center justify-center bg-white group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
-                    <ChevronRight className="size-5" />
-                  </div>
+                  <ChevronRight className="size-4 text-muted-foreground/20 group-hover:text-primary transition-colors" />
                 </div>
               </button>
             ))}
           </div>
         ) : (
-          <div className="p-24 text-center border-2 border-dashed rounded-[3rem] bg-muted/5 text-muted-foreground/40 space-y-4">
-            <History className="size-12 mx-auto opacity-20" />
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] italic">
-              No historical cycles located
+          <div className="p-16 text-center border-2 border-dashed rounded-3xl bg-muted/5 text-muted-foreground/40 space-y-3">
+            <History className="size-8 mx-auto opacity-20" />
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] italic">
+              No historical records
             </p>
           </div>
         )}
       </div>
 
-      {/* Safety Note */}
-      <div className="p-6 rounded-[2rem] bg-primary/5 border border-primary/10 flex items-start gap-4">
-        <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
-          <Clock className="size-4" />
-        </div>
-        <p className="text-[10px] text-muted-foreground font-medium leading-relaxed italic">
-          These records represent isolated operational windows verified by the administration. Clicking a period will open the granular collection board.
+      {/* Safety Footer */}
+      <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-3">
+        <Clock className="size-4 text-primary/40 shrink-0 mt-0.5" />
+        <p className="text-[9px] text-muted-foreground font-medium leading-relaxed italic">
+          These records represent verified operational windows. Select a period to view the granular audit breakdown.
         </p>
       </div>
     </div>
