@@ -54,7 +54,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc, addDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth, eachDayOfInterval, isBefore, isAfter, startOfDay, endOfDay, differenceInDays, addDays, max } from "date-fns"
+import { format, parseISO, isSameMonth, eachDayOfInterval, isBefore, isAfter, startOfDay, endOfDay, differenceInDays, addDays, max, isValid } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -290,6 +290,19 @@ export default function RoundsPage() {
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db]);
   const { data: allCycles } = useCollection(cyclesQuery);
 
+  // Helper to safely get payment amount
+  const getPaymentAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
+
+  // Helper to safely format a display date from a record
+  const getRecordDate = (p: any) => {
+    if (p.targetDate) return p.targetDate;
+    if (p.paymentDate) {
+      const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate);
+      if (isValid(d)) return format(d, 'yyyy-MM-dd');
+    }
+    return null;
+  };
+
   // NEW STRICT DATE-WISE DYNAMIC CALCULATIONS
   const membersWithCalculatedStats = useMemo(() => {
     if (!members || !allPayments) return [];
@@ -318,8 +331,8 @@ export default function RoundsPage() {
               interval.forEach(day => {
                 const dStr = format(day, 'yyyy-MM-dd');
                 const dayPaymentSum = mPayments
-                  .filter(p => p.targetDate === dStr)
-                  .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+                  .filter(p => getRecordDate(p) === dStr)
+                  .reduce((acc, p) => acc + getPaymentAmount(p), 0);
                 
                 if (dayPaymentSum < (m.monthlyAmount || 800)) {
                   pendingDaysCount++;
@@ -328,7 +341,7 @@ export default function RoundsPage() {
             }
           } catch (e) {}
         }
-        memberStatus = mPayments.filter(p => p.targetDate === todayStr).reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
+        memberStatus = mPayments.filter(p => getRecordDate(p) === todayStr).reduce((acc, p) => acc + getPaymentAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
       } else {
         // Monthly logic
         const dueDate = scheme?.dueDate || 5;
@@ -361,9 +374,12 @@ export default function RoundsPage() {
   const totalPaidByMember = useMemo(() => {
     const map = new Map<string, number>();
     (allPayments || []).forEach(p => {
-      if ((p.status === 'paid' || p.status === 'success') && (p.amountPaid || 0) > 0) {
-        const current = map.get(p.memberId) || 0;
-        map.set(p.memberId, current + (p.amountPaid || 0));
+      if ((p.status === 'paid' || p.status === 'success')) {
+        const amt = getPaymentAmount(p);
+        if (amt > 0) {
+          const current = map.get(p.memberId) || 0;
+          map.set(p.memberId, current + amt);
+        }
       }
     });
     return map;
@@ -382,10 +398,10 @@ export default function RoundsPage() {
       .filter(p => 
         groupMemberIds.has(p.memberId) && 
         (p.status === 'success' || p.status === 'paid') &&
-        (p.amountPaid || 0) > 0 &&
-        p.targetDate === dateStr
+        getPaymentAmount(p) > 0 &&
+        getRecordDate(p) === dateStr
       )
-      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+      .reduce((acc, p) => acc + getPaymentAmount(p), 0);
   };
 
   const getGroupTodayCollection = (groupName: string) => {
@@ -400,10 +416,10 @@ export default function RoundsPage() {
       .filter(p => 
         groupMemberIds.has(p.memberId) && 
         (p.status === 'success' || p.status === 'paid') &&
-        (p.amountPaid || 0) > 0 &&
+        getPaymentAmount(p) > 0 &&
         p.month === targetMonth
       )
-      .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+      .reduce((acc, p) => acc + getPaymentAmount(p), 0);
   };
 
   const getGroupPendingCount = (groupName: string) => {
@@ -583,8 +599,8 @@ export default function RoundsPage() {
       return eachDayOfInterval({ start: effectiveStart, end: today }).map(day => {
         const dStr = format(day, 'yyyy-MM-dd');
         const dayPaymentSum = mPayments
-          .filter(p => p.targetDate === dStr)
-          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+          .filter(p => getRecordDate(p) === dStr)
+          .reduce((acc, p) => acc + getPaymentAmount(p), 0);
         
         const isPaid = dayPaymentSum >= (selectedPendingMember.monthlyAmount || 800);
 
@@ -1161,8 +1177,8 @@ export default function RoundsPage() {
                         .map((p, i) => (
                         <TableRow key={i}>
                           <TableCell className="text-sm font-semibold">{p.month}</TableCell>
-                          <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground font-medium">{p.targetDate || '-'}</TableCell>
+                          <TableCell className="text-sm font-bold text-emerald-600">₹{(getPaymentAmount(p)).toLocaleString()}</TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground font-medium">{getRecordDate(p) || '-'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
