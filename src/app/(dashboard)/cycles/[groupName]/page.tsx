@@ -2,28 +2,48 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, ArrowRight, ChevronRight, Calendar, History, Clock } from "lucide-react"
+import { Loader2, ChevronLeft, ArrowRight, ChevronRight, Calendar, History, Clock, Pencil, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, orderBy } from "firebase/firestore"
+import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
+import { collection, query, orderBy, doc, updateDoc } from "firebase/firestore"
 import { useRouter } from "next/navigation"
 import { format, parseISO, isValid } from "date-fns"
-import { cn } from "@/lib/utils"
+import { cn, withTimeout } from "@/lib/utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
+import { createAuditLog } from "@/firebase/logging"
 
 /**
  * @fileOverview Refined Group-Specific Cycle Audit Page.
  * 
  * Displays a chronological list of cycle date ranges with a compact, professional UI.
+ * Now includes the ability to edit start and end dates for historical precision.
  */
 export default function GroupCyclesPage({ params }: { params: Promise<{ groupName: string }> }) {
   const router = useRouter()
   const resolvedParams = React.use(params)
+  const { toast } = useToast()
+  const { user } = useUser()
   
   // Safe Param Handling
   const rawGroupName = resolvedParams?.groupName || ""
   const groupName = decodeURIComponent(rawGroupName).trim()
 
   const db = useFirestore()
+
+  // Edit State
+  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
+  const [isActionPending, setIsActionPending] = React.useState(false)
+  const [editingCycle, setEditingCycle] = React.useState<{id: string, startDate: string, endDate: string} | null>(null)
 
   // Fetch all cycles safely
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('startDate', 'desc')), [db])
@@ -65,6 +85,42 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
     if (!safeGroupName || !safeCycleId) return
 
     router.push(`/cycles/${encodeURIComponent(safeGroupName)}/${encodeURIComponent(safeCycleId)}`)
+  }
+
+  const handleEditClick = (e: React.MouseEvent, cycle: any) => {
+    e.stopPropagation()
+    setEditingCycle({ ...cycle })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdateCycle = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!db || !editingCycle || isActionPending) return
+
+    if (!editingCycle.startDate || !editingCycle.endDate) {
+      toast({ variant: "destructive", title: "Validation Error", description: "Both dates are required." })
+      return
+    }
+
+    setIsActionPending(true)
+    try {
+      const cycleRef = doc(db, 'cycles', editingCycle.id)
+      await withTimeout(updateDoc(cycleRef, {
+        startDate: editingCycle.startDate,
+        endDate: editingCycle.endDate,
+        updatedAt: new Date().toISOString()
+      }))
+
+      await createAuditLog(db, user, `Updated cycle dates for ${groupName}: ${editingCycle.startDate} to ${editingCycle.endDate}`)
+      
+      toast({ title: "Cycle Updated", description: "The period dates have been corrected." })
+      setIsEditDialogOpen(false)
+      setEditingCycle(null)
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update cycle." })
+    } finally {
+      setIsActionPending(false)
+    }
   }
 
   const formatDateLabel = (dateStr: string) => {
@@ -143,6 +199,14 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10 text-primary"
+                    onClick={(e) => handleEditClick(e, cycle)}
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
                   <span className="text-[8px] font-black uppercase tracking-[0.2em] text-primary/0 group-hover:text-primary/60 transition-all">
                     View
                   </span>
@@ -160,6 +224,61 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
           </div>
         )}
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          {editingCycle && (
+            <form onSubmit={handleUpdateCycle} className="space-y-6">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Pencil className="size-5 text-primary" />
+                  Edit Audit Period
+                </DialogTitle>
+                <DialogDescription>
+                  Modify the operational start and end dates for this cycle in {groupName}.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
+                  <Input 
+                    type="date" 
+                    value={editingCycle.startDate} 
+                    onChange={e => setEditingCycle({...editingCycle, startDate: e.target.value})}
+                    className="h-11 rounded-xl font-bold"
+                    required
+                    disabled={isActionPending}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
+                  <Input 
+                    type="date" 
+                    value={editingCycle.endDate} 
+                    onChange={e => setEditingCycle({...editingCycle, endDate: e.target.value})}
+                    className="h-11 rounded-xl font-bold"
+                    required
+                    disabled={isActionPending}
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button 
+                  type="submit" 
+                  disabled={isActionPending}
+                  className="w-full h-12 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all"
+                >
+                  {isActionPending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />}
+                  Save Period Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
