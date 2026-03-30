@@ -160,14 +160,6 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
           </div>
         )}
       </div>
-
-      {/* Safety Footer */}
-      <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-3">
-        <Clock className="size-4 text-primary/40 shrink-0 mt-0.5" />
-        <p className="text-[9px] text-muted-foreground font-medium leading-relaxed italic">
-          These records represent verified operational windows. Select a period to view the granular audit breakdown.
-        </p>
-      </div>
     </div>
   )
 }
