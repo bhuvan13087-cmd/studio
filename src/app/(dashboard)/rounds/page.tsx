@@ -1145,27 +1145,29 @@ export default function RoundsPage() {
           {isHistoryDialogOpen && (
             <>
               <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
-              <div className="py-4 overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead>
-                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Amount</TableHead>
-                      <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Target Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {historyMember && (allPayments || [])
-                      .filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid'))
-                      .map((p, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="text-sm font-semibold">{p.month}</TableCell>
-                        <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{p.targetDate || '-'}</TableCell>
+              <div className="py-4">
+                <ScrollArea className="h-[400px] pr-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead>
+                        <TableHead className="text-xs uppercase font-bold text-muted-foreground">Amount</TableHead>
+                        <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Target Date</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {historyMember && (allPayments || [])
+                        .filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid'))
+                        .map((p, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-sm font-semibold">{p.month}</TableCell>
+                          <TableCell className="text-sm font-bold text-emerald-600">₹{p.amountPaid?.toLocaleString()}</TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground font-medium">{p.targetDate || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
               </div>
               <DialogFooter>
                 <Button variant="outline" className="gap-2 font-bold" onClick={() => window.print()}>
