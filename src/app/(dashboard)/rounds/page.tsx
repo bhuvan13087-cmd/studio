@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet, CalendarDays, Edit3, Printer, X } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet, CalendarDays, Edit3, Printer, X, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -87,6 +87,76 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December"
 ];
 const YEARS = ["2024", "2025", "2026", "2027", "2028"];
+
+/**
+ * Safe initials helper
+ */
+const getInitials = (name: string) => {
+  if (!name) return "??";
+  return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase();
+};
+
+/**
+ * Cycle Control UI Component for each Group Card
+ */
+function GroupCycleControl({ group }: { group: any }) {
+  const [startDate, setStartDate] = useState(group.startDate || "")
+  const [endDate, setEndDate] = useState(group.endDate || "")
+
+  const handleSave = () => {
+    if (!startDate || !endDate) {
+      console.warn(`[Cycle Control] ${group.name}: Both dates are required.`);
+      return;
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+      console.warn(`[Cycle Control] ${group.name}: Start Date cannot be after End Date.`);
+      return;
+    }
+
+    console.log(`[Cycle Control] Saved Data:`, {
+      groupName: group.name,
+      startDate,
+      endDate
+    });
+  };
+
+  return (
+    <div className="pt-4 mt-4 border-t border-dashed border-border/60 space-y-3">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70">Cycle Control</span>
+        <Badge variant="outline" className="text-[8px] font-bold h-4 bg-muted/50 border-none px-1.5 uppercase">Local Mode</Badge>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label className="text-[9px] font-bold uppercase text-muted-foreground ml-0.5">Start</Label>
+          <Input 
+            type="date" 
+            value={startDate} 
+            onChange={(e) => setStartDate(e.target.value)}
+            className="h-8 text-[10px] px-2 rounded-lg bg-muted/30 border-transparent focus:border-primary/30"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[9px] font-bold uppercase text-muted-foreground ml-0.5">End</Label>
+          <Input 
+            type="date" 
+            value={endDate} 
+            onChange={(e) => setEndDate(e.target.value)}
+            className="h-8 text-[10px] px-2 rounded-lg bg-muted/30 border-transparent focus:border-primary/30"
+          />
+        </div>
+      </div>
+      <Button 
+        onClick={handleSave}
+        className="w-full h-8 text-[10px] font-black uppercase tracking-widest gap-2 rounded-lg shadow-sm active:scale-95 transition-all"
+        variant="secondary"
+      >
+        <Save className="size-3" /> Save Cycle
+      </Button>
+    </div>
+  )
+}
 
 export default function RoundsPage() {
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
@@ -541,6 +611,9 @@ export default function RoundsPage() {
                           <span className="font-black text-emerald-600 text-base tabular-nums">₹{monthlyCollection.toLocaleString()}</span>
                        </div>
                     </div>
+
+                    {/* NEW: Cycle Date Controls */}
+                    <GroupCycleControl group={group} />
                   </div>
                 </CardContent>
 
@@ -723,7 +796,7 @@ export default function RoundsPage() {
                       <Input type="date" value={chitToEdit.startDate ?? ""} onChange={e => setChitToEdit({...chitToEdit, startDate: e.target.value})} required className="h-11 rounded-xl" />
                     </div>
                     <div className="grid gap-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
+                      <Label className="text-[10px) font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
                       <Input type="date" value={chitToEdit.endDate ?? ""} onChange={e => setChitToEdit({...chitToEdit, endDate: e.target.value})} required className="h-11 rounded-xl" />
                     </div>
                   </div>
@@ -857,7 +930,7 @@ export default function RoundsPage() {
                     <TableCell className="pl-6 py-4">
                       <div className="flex items-center gap-4 cursor-pointer" onClick={() => { setSelectedProfileMember(m); setIsMemberProfileDialogOpen(true); }}>
                         <div className="h-10 w-10 rounded-xl bg-secondary text-primary flex items-center justify-center font-black text-xs group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300 shadow-sm uppercase">
-                          {m.name.split(' ').map((n: string) => n[0]).join('')}
+                          {getInitials(m.name)}
                         </div>
                         <div className="flex flex-col min-w-0">
                           <span className="text-sm font-bold truncate group-hover:text-primary transition-colors tracking-tight">{m.name}</span>
@@ -995,7 +1068,7 @@ export default function RoundsPage() {
                   </TableHeader>
                   <TableBody>
                     {historyMember && (allPayments || [])
-                      .filter(p => p.memberId === historyMember.id && (p.status === 'paid' || p.status === 'success'))
+                      .filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid'))
                       .map((p, i) => (
                       <TableRow key={i}>
                         <TableCell className="text-sm font-semibold">{p.month}</TableCell>
@@ -1267,6 +1340,49 @@ export default function RoundsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditMemberProfileOpen} onOpenChange={setIsEditMemberProfileOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          {memberProfileToEdit && (
+            <form onSubmit={handleUpdateMemberProfile}>
+              <DialogHeader>
+                <DialogTitle>Edit Member Profile</DialogTitle>
+                <DialogDescription>Modify personal details and scheme settings for this member.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-5 py-6">
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Full Name</Label>
+                  <Input value={memberProfileToEdit.name} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} required />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
+                  <Input value={memberProfileToEdit.phone} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} required />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
+                  <Select value={memberProfileToEdit.paymentType} onValueChange={(v) => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Daily">Daily</SelectItem>
+                      <SelectItem value="Monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Join Date</Label>
+                  <Input type="date" value={memberProfileToEdit.joinDate} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} required />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={isActionPending} className="w-full font-bold">
+                  {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>
