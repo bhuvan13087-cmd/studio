@@ -2,19 +2,23 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, CalendarDays, IndianRupee, History } from "lucide-react"
+import { Loader2, ChevronLeft, CalendarDays, IndianRupee, History, Search, Filter, CheckCircle2, Clock, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
 import { useRouter } from "next/navigation"
+import { format, parseISO, isWithinInterval, startOfDay, endOfDay } from "date-fns"
 import { cn } from "@/lib/utils"
 
 /**
  * @fileOverview Specialized Cycle Audit Details Page.
  * 
- * Provides a granular view of a specific historical period.
- * Implements FULL crash protection and strict data rendering.
+ * Provides a granular, real-time view of a specific historical period.
+ * Connects to existing database data for members and payments safely.
  */
 export default function CycleDetailsPage({ params }: { params: Promise<{ groupName: string, cycleId: string }> }) {
   const router = useRouter()
@@ -27,21 +31,86 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
   const groupName = decodeURIComponent(rawGroup).trim()
   const cycleId = decodeURIComponent(rawCycle).trim()
 
+  const [selectedDate, setSelectedDate] = React.useState("")
+
   const db = useFirestore()
 
-  // Fetch all cycles to find the specific one (Safe memory lookup for prototype)
+  // TASK 1: Safe Base Data Fetching
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('startDate', 'desc')), [db])
-  const { data: allCycles, isLoading } = useCollection(cyclesQuery)
+  const { data: cyclesData, isLoading: cyclesLoading } = useCollection(cyclesQuery)
+  
+  const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
+  const { data: membersData, isLoading: membersLoading } = useCollection(membersQuery)
 
-  // TASK 4 & 5: Safe Data Fetch and Lookup
+  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db])
+  const { data: paymentsData, isLoading: paymentsLoading } = useCollection(paymentsQuery)
+
+  // TASK 2: Find Exact Cycle
   const selectedCycle = React.useMemo(() => {
-    const list = Array.isArray(allCycles) ? allCycles : []
-    return list.find(
+    const allCycles = Array.isArray(cyclesData) ? cyclesData : []
+    return allCycles.find(
       (c) =>
         String(c?.name || "").trim() === groupName &&
         (String(c?.id || "") === cycleId || String(c?.startDate || "") === cycleId)
     )
-  }, [allCycles, groupName, cycleId])
+  }, [cyclesData, groupName, cycleId])
+
+  // TASK 3 & 4: Safe Members + Payments + Total Calculation
+  const auditData = React.useMemo(() => {
+    if (!selectedCycle) return null
+
+    const startDate = selectedCycle.startDate || ""
+    const endDate = selectedCycle.endDate || ""
+
+    // Filter members belonging to this group
+    const groupMembers = (Array.isArray(membersData) ? membersData : [])
+      .filter(m => String(m?.chitGroup || "").trim() === groupName)
+
+    const memberIds = new Set(groupMembers.map(m => m.id))
+
+    // Filter payments within this cycle range for these members
+    const cyclePayments = (Array.isArray(paymentsData) ? paymentsData : [])
+      .filter(p => {
+        if (!memberIds.has(p.memberId)) return false
+        if (p.status !== 'success' && p.status !== 'paid') return false
+        
+        const targetDate = p.targetDate || ""
+        if (!targetDate || !startDate || !endDate) return false
+        
+        return targetDate >= startDate && targetDate <= endDate
+      })
+
+    const totalCollection = cyclePayments.reduce((sum, p) => sum + (p?.amountPaid || 0), 0)
+
+    // TASK 6 & 7: Daily Filtering & Collection
+    const filteredPayments = cyclePayments.filter(p => 
+      !selectedDate || String(p?.targetDate || "") === selectedDate
+    )
+
+    const dailyCollection = filteredPayments.reduce((sum, p) => sum + (p?.amountPaid || 0), 0)
+
+    // TASK 8: Members List Status
+    const membersWithStatus = groupMembers.map(m => {
+      const dayPayment = filteredPayments.find(p => String(p?.memberId || "") === String(m?.id || ""))
+      return {
+        id: m.id,
+        name: m?.name || "Anonymous Participant",
+        phone: m?.phone || "-",
+        paid: !!dayPayment,
+        amount: dayPayment?.amountPaid || 0
+      }
+    })
+
+    return {
+      groupMembers,
+      cyclePayments,
+      totalCollection,
+      dailyCollection,
+      membersWithStatus,
+      startDate,
+      endDate
+    }
+  }, [selectedCycle, membersData, paymentsData, groupName, selectedDate])
 
   if (!groupName || !cycleId) {
     return (
@@ -52,7 +121,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
     )
   }
 
-  if (isLoading) {
+  if (cyclesLoading || membersLoading || paymentsLoading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
         <Loader2 className="size-8 animate-spin text-primary" />
@@ -60,8 +129,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
     )
   }
 
-  // TASK 6: No Crash UI
-  if (!selectedCycle) {
+  if (!selectedCycle || !auditData) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
         <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
@@ -69,7 +137,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
         </div>
         <div className="text-center space-y-1">
           <p className="text-sm font-black uppercase tracking-widest text-foreground">No Cycle Data Located</p>
-          <p className="text-xs text-muted-foreground italic">The requested audit period could not be verified.</p>
+          <p className="text-xs text-muted-foreground italic">The requested audit period could not be verified in history.</p>
         </div>
         <Button 
           variant="outline" 
@@ -82,9 +150,9 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
     )
   }
 
-  // TASK 7: Safe Render (ONLY REQUIRED DATA)
   return (
-    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
+      {/* Header Navigation */}
       <div className="flex items-center gap-4">
         <Button 
           variant="ghost" 
@@ -96,59 +164,145 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
         </Button>
         <div className="space-y-0.5">
           <h2 className="text-2xl font-black tracking-tight text-primary font-headline uppercase">
-            Audit Detail
+            Audit Board
           </h2>
           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-            {groupName} Registry
+            {groupName} Registry Detail
           </p>
         </div>
       </div>
 
-      <div className="grid gap-6">
-        {/* Core Cycle Stats */}
-        <Card className="border-border/60 shadow-lg rounded-3xl overflow-hidden bg-card">
-          <CardHeader className="bg-muted/10 border-b border-border/40 p-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-inner">
-                  <CalendarDays className="size-7" />
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Statistics Summary */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="border-border/60 shadow-lg rounded-3xl overflow-hidden bg-card">
+            <CardHeader className="bg-muted/10 border-b border-border/40 p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-inner">
+                    <CalendarDays className="size-6" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-black uppercase tracking-tight">Period Summary</CardTitle>
+                    <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-primary/70">
+                      {auditData.startDate} → {auditData.endDate}
+                    </CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-xl font-black uppercase tracking-tight">Period Registry</CardTitle>
-                  <CardDescription className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/70">
-                    Operational Date Range
-                  </CardDescription>
+                <div className="bg-emerald-50 px-4 py-2 rounded-2xl border border-emerald-100 self-start sm:self-auto">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600/70 mb-0.5">Cycle Collection</p>
+                  <p className="text-xl font-black text-emerald-600 tabular-nums">₹{auditData.totalCollection.toLocaleString()}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border shadow-sm self-start sm:self-auto">
-                <span className="text-sm font-black tabular-nums">{selectedCycle?.startDate || "N/A"}</span>
-                <span className="text-muted-foreground/30 font-bold">→</span>
-                <span className="text-sm font-black tabular-nums text-primary">{selectedCycle?.endDate || "N/A"}</span>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="p-6 border-b bg-muted/5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1.5 flex-1 max-w-xs">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Select Audit Date</label>
+                    <div className="relative">
+                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-primary/50 pointer-events-none" />
+                      <Input 
+                        type="date" 
+                        value={selectedDate} 
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        min={auditData.startDate}
+                        max={auditData.endDate}
+                        className="h-10 pl-9 rounded-xl font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">Daily Intake</p>
+                    <p className="text-3xl font-black text-primary tabular-nums tracking-tighter">₹{auditData.dailyCollection.toLocaleString()}</p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-8">
-            <div className="flex flex-col items-center justify-center p-10 bg-primary/[0.02] rounded-3xl border border-dashed border-primary/10 text-center">
-              <div className="flex items-center gap-2 mb-3">
-                <IndianRupee className="size-4 text-emerald-600" />
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/60">Total Collection Logged</p>
-              </div>
-              <div className="text-6xl font-black text-primary tabular-nums tracking-tighter">
-                ₹{(selectedCycle?.total || 0).toLocaleString()}
-              </div>
-              <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-emerald-600/70 italic">
-                Verified Cycle Amount
-              </p>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Audit Disclaimer */}
-        <div className="p-6 rounded-2xl bg-muted/20 border border-border/40 flex items-start gap-4">
-          <History className="size-5 text-muted-foreground/40 shrink-0 mt-0.5" />
-          <p className="text-[11px] text-muted-foreground leading-relaxed italic font-medium">
-            This detailed registry shows the historical snapshots for the specified period. Total collection is calculated based on payments verified within this operational window.
-          </p>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-muted/30">
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="text-[9px] uppercase font-black tracking-widest pl-8 h-10">Participant</TableHead>
+                      <TableHead className="text-[9px] uppercase font-black tracking-widest h-10 text-center">Status</TableHead>
+                      <TableHead className="text-[9px] uppercase font-black tracking-widest h-10 text-right pr-8">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {auditData.membersWithStatus.length > 0 ? (
+                      auditData.membersWithStatus.map((m, i) => (
+                        <TableRow key={m.id} className="hover:bg-muted/5 transition-colors border-b last:border-none">
+                          <TableCell className="pl-8 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-8 rounded-full bg-secondary text-primary flex items-center justify-center font-black text-[10px] uppercase">
+                                {m.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-bold tracking-tight">{m.name}</span>
+                                <span className="text-[9px] font-bold text-muted-foreground tabular-nums">{m.phone}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={m.paid ? "default" : "secondary"} className={cn(
+                              "text-[8px] font-black uppercase tracking-tighter border-none px-2 py-0.5",
+                              m.paid ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
+                            )}>
+                              {m.paid ? "PAID" : "PENDING"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right pr-8 font-black text-xs tabular-nums text-foreground/80">
+                            {m.amount > 0 ? `₹${m.amount.toLocaleString()}` : "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={3} className="h-32 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 italic">
+                          No group participants located
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Audit Instructions & Sidebar */}
+        <div className="space-y-6">
+          <Card className="border-border/60 shadow-sm rounded-3xl bg-muted/10 border-dashed">
+            <CardHeader className="p-6 pb-2">
+              <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                <History className="size-4 text-primary/60" />
+                Audit Logs
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-2 space-y-4">
+              <div className="space-y-3">
+                <div className="p-4 rounded-2xl bg-white border border-border/40 shadow-sm">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">Operational Mode</p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed font-medium">
+                    This registry shows verified collection snapshots. Use the date selector to verify daily installments.
+                  </p>
+                </div>
+                <div className="p-4 rounded-2xl bg-white border border-border/40 shadow-sm">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">Collection Scope</p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed font-medium">
+                    Includes all success/paid transactions verified within the specified start and end dates.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="p-6 rounded-3xl bg-primary/5 border border-primary/10 flex items-start gap-4">
+            <Clock className="size-5 text-primary/40 shrink-0 mt-0.5" />
+            <p className="text-[10px] text-muted-foreground font-medium italic leading-relaxed">
+              Calculations are performed in real-time based on your isolated ledger entries for this group.
+            </p>
+          </div>
         </div>
       </div>
     </div>
