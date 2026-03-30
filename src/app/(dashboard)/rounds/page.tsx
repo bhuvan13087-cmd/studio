@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -99,7 +100,6 @@ const getInitials = (name: string) => {
 
 /**
  * Cycle Control UI Component for each Group Card
- * UPDATED: Now supports pre-filling latest cycle and updating it or creating new.
  */
 function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: any }) {
   const [startDate, setStartDate] = useState("")
@@ -138,7 +138,6 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
     setIsSaving(true);
     try {
       if (latestCycle) {
-        // Update ONLY the latest cycle
         const cycleRef = doc(db, 'cycles', latestCycle.id);
         await withTimeout(updateDoc(cycleRef, {
           startDate,
@@ -148,7 +147,6 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
         await createAuditLog(db, user, `Updated cycle dates for ${group.name}: ${startDate} to ${endDate}`);
         toast({ title: "Cycle Updated", description: "The active cycle has been modified." });
       } else {
-        // Create NEW cycle
         const cycleRef = collection(db, 'cycles');
         await withTimeout(addDoc(cycleRef, {
           name: group.name,
@@ -622,8 +620,6 @@ export default function RoundsPage() {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
             const groupPendingCount = getGroupPendingCount(group.name);
             const monthlyCollection = getGroupMonthlyCollection(group.name, format(new Date(), 'MMMM yyyy'));
-            
-            // Find latest cycle for this specific group
             const latestGroupCycle = (allCycles || []).find(c => c.name === group.name);
             
             return (
@@ -657,25 +653,22 @@ export default function RoundsPage() {
                   >
                     <Wallet className="size-4" />
                   </Button>
-                  {/* Cycle Management Icon Trigger */}
                   <GroupCycleControl group={group} latestCycle={latestGroupCycle} />
                 </div>
 
-                <CardHeader className="p-5 pb-3 space-y-3 border-b border-border/40">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">
-                      {group.collectionType}
-                    </Badge>
-                    <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
-                      <Calendar className="size-3" />
-                      {latestGroupCycle 
-                        ? `${format(parseISO(latestGroupCycle.startDate), 'MMM dd')} → ${format(parseISO(latestGroupCycle.endDate), 'MMM dd')}`
-                        : "No Cycle Set"}
-                    </div>
-                  </div>
-                  <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">
+                <CardHeader className="p-5 pb-3 space-y-1.5 border-b border-border/40">
+                  <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">
+                    {group.collectionType}
+                  </Badge>
+                  <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate pr-16">
                     {getDisplayName(group.name)}
                   </CardTitle>
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+                    <Calendar className="size-3 text-primary/40" />
+                    {latestGroupCycle 
+                      ? `${format(parseISO(latestGroupCycle.startDate), 'MMM dd')} → ${format(parseISO(latestGroupCycle.endDate), 'MMM dd')}`
+                      : "No Cycle Set"}
+                  </div>
                 </CardHeader>
 
                 <CardContent className="p-5 flex-1 space-y-4">
@@ -863,11 +856,11 @@ export default function RoundsPage() {
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label>
-                    <Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" />
+                    <Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(chitToEdit.monthlyAmount)})} required className="h-11 rounded-xl" />
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
-                    <Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" />
+                    <Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(chitToEdit.totalMembers)})} required className="h-11 rounded-xl" />
                   </div>
                   <div className="grid gap-2">
                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
