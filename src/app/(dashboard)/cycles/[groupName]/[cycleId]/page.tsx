@@ -288,33 +288,8 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
           </Card>
         </div>
 
-        {/* Audit Instructions & Sidebar */}
+        {/* Audit Sidebar */}
         <div className="space-y-6">
-          <Card className="border-border/60 shadow-sm rounded-3xl bg-muted/10 border-dashed">
-            <CardHeader className="p-6 pb-2">
-              <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                <History className="size-4 text-primary/60" />
-                Audit Logs
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 pt-2 space-y-4">
-              <div className="space-y-3">
-                <div className="p-4 rounded-2xl bg-white border border-border/40 shadow-sm">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">Operational Mode</p>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed font-medium">
-                    This registry shows verified collection snapshots. Use the date selector to verify daily installments.
-                  </p>
-                </div>
-                <div className="p-4 rounded-2xl bg-white border border-border/40 shadow-sm">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">Collection Scope</p>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed font-medium">
-                    Includes all success/paid transactions verified within the specified start and end dates.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           <div className="p-6 rounded-3xl bg-primary/5 border border-primary/10 flex items-start gap-4">
             <Clock className="size-5 text-primary/40 shrink-0 mt-0.5" />
             <p className="text-[10px] text-muted-foreground font-medium italic leading-relaxed">
