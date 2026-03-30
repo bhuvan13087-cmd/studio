@@ -98,30 +98,74 @@ const getInitials = (name: string) => {
 };
 
 /**
- * Cycle Control UI Component for each Group Card (Icon Popup version)
+ * Cycle Control UI Component for each Group Card
+ * UPDATED: Now supports pre-filling latest cycle and updating it or creating new.
  */
-function GroupCycleControl({ group }: { group: any }) {
-  const [startDate, setStartDate] = useState(group.startDate || "")
-  const [endDate, setEndDate] = useState(group.endDate || "")
+function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: any }) {
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
   const [isOpen, setIsOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  
+  const db = useFirestore()
+  const { user } = useUser()
+  const { toast } = useToast()
 
-  const handleSave = () => {
+  // Pre-fill effect when latestCycle changes or dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      if (latestCycle) {
+        setStartDate(latestCycle.startDate || "")
+        setEndDate(latestCycle.endDate || "")
+      } else {
+        setStartDate("")
+        setEndDate("")
+      }
+    }
+  }, [isOpen, latestCycle])
+
+  const handleSave = async () => {
     if (!startDate || !endDate) {
-      console.warn(`[Cycle Control] ${group.name}: Both dates are required.`);
+      toast({ variant: "destructive", title: "Validation Error", description: "Both dates are required." });
       return;
     }
 
     if (new Date(startDate) > new Date(endDate)) {
-      console.warn(`[Cycle Control] ${group.name}: Start Date cannot be after End Date.`);
+      toast({ variant: "destructive", title: "Validation Error", description: "Start Date cannot be after End Date." });
       return;
     }
 
-    console.log(`[Cycle Control] Saved Data:`, {
-      groupName: group.name,
-      startDate,
-      endDate
-    });
-    setIsOpen(false);
+    setIsSaving(true);
+    try {
+      if (latestCycle) {
+        // Update ONLY the latest cycle
+        const cycleRef = doc(db, 'cycles', latestCycle.id);
+        await withTimeout(updateDoc(cycleRef, {
+          startDate,
+          endDate,
+          updatedAt: new Date().toISOString()
+        }));
+        await createAuditLog(db, user, `Updated cycle dates for ${group.name}: ${startDate} to ${endDate}`);
+        toast({ title: "Cycle Updated", description: "The active cycle has been modified." });
+      } else {
+        // Create NEW cycle
+        const cycleRef = collection(db, 'cycles');
+        await withTimeout(addDoc(cycleRef, {
+          name: group.name,
+          startDate,
+          endDate,
+          status: 'active',
+          createdAt: new Date().toISOString()
+        }));
+        await createAuditLog(db, user, `Defined new cycle for ${group.name}: ${startDate} to ${endDate}`);
+        toast({ title: "Cycle Created", description: "New monitoring period defined." });
+      }
+      setIsOpen(false);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Persistence Error", description: error.message || "Failed to save cycle." });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -143,13 +187,20 @@ function GroupCycleControl({ group }: { group: any }) {
             Cycle Management
           </DialogTitle>
           <DialogDescription>
-            Configure the operational date range for {group.name}.
+            Configure or update the operational date range for {group.name}.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-6">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70">Local Configuration</span>
-            <Badge variant="outline" className="text-[8px] font-bold h-4 bg-muted/50 border-none px-1.5 uppercase">Draft Mode</Badge>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70">
+              {latestCycle ? 'Updating Existing Period' : 'Defining New Period'}
+            </span>
+            <Badge variant="outline" className={cn(
+              "text-[8px] font-bold h-4 border-none px-1.5 uppercase",
+              latestCycle ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"
+            )}>
+              {latestCycle ? 'Active Cycle' : 'Draft Mode'}
+            </Badge>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -159,6 +210,7 @@ function GroupCycleControl({ group }: { group: any }) {
                 value={startDate} 
                 onChange={(e) => setStartDate(e.target.value)}
                 className="h-10 rounded-xl"
+                disabled={isSaving}
               />
             </div>
             <div className="space-y-1.5">
@@ -168,6 +220,7 @@ function GroupCycleControl({ group }: { group: any }) {
                 value={endDate} 
                 onChange={(e) => setEndDate(e.target.value)}
                 className="h-10 rounded-xl"
+                disabled={isSaving}
               />
             </div>
           </div>
@@ -175,9 +228,11 @@ function GroupCycleControl({ group }: { group: any }) {
         <DialogFooter>
           <Button 
             onClick={handleSave}
+            disabled={isSaving}
             className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all shadow-lg"
           >
-            <Save className="size-4 mr-2" /> Save Cycle
+            {isSaving ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />}
+            {latestCycle ? 'Update Cycle' : 'Save Cycle'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -233,6 +288,9 @@ export default function RoundsPage() {
 
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: allPayments } = useCollection(paymentsQuery);
+
+  const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db]);
+  const { data: allCycles } = useCollection(cyclesQuery);
 
   // NEW STRICT DATE-WISE DYNAMIC CALCULATIONS
   const membersWithCalculatedStats = useMemo(() => {
@@ -565,6 +623,9 @@ export default function RoundsPage() {
             const groupPendingCount = getGroupPendingCount(group.name);
             const monthlyCollection = getGroupMonthlyCollection(group.name, format(new Date(), 'MMMM yyyy'));
             
+            // Find latest cycle for this specific group
+            const latestGroupCycle = (allCycles || []).find(c => c.name === group.name);
+            
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-3 right-3 flex items-center gap-1">
@@ -597,13 +658,21 @@ export default function RoundsPage() {
                     <Wallet className="size-4" />
                   </Button>
                   {/* Cycle Management Icon Trigger */}
-                  <GroupCycleControl group={group} />
+                  <GroupCycleControl group={group} latestCycle={latestGroupCycle} />
                 </div>
 
                 <CardHeader className="p-5 pb-3 space-y-3 border-b border-border/40">
-                  <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">
-                    {group.collectionType}
-                  </Badge>
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">
+                      {group.collectionType}
+                    </Badge>
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+                      <Calendar className="size-3" />
+                      {latestGroupCycle 
+                        ? `${format(parseISO(latestGroupCycle.startDate), 'MMM dd')} → ${format(parseISO(latestGroupCycle.endDate), 'MMM dd')}`
+                        : "No Cycle Set"}
+                    </div>
+                  </div>
                   <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate">
                     {getDisplayName(group.name)}
                   </CardTitle>
@@ -639,13 +708,6 @@ export default function RoundsPage() {
                           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Monthly Collection</span>
                           <span className="font-black text-emerald-600 text-base tabular-nums">₹{monthlyCollection.toLocaleString()}</span>
                        </div>
-                    </div>
-
-                    <div className="pt-3 flex items-center gap-2 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
-                      <Calendar className="size-3" />
-                      {group.startDate && group.endDate 
-                        ? `${format(parseISO(group.startDate), 'MMM dd')} → ${format(parseISO(group.endDate), 'MMM dd')}`
-                        : "No Cycle Set"}
                     </div>
                   </div>
                 </CardContent>
@@ -829,7 +891,7 @@ export default function RoundsPage() {
                       <Input type="date" value={chitToEdit.startDate ?? ""} onChange={e => setChitToEdit({...chitToEdit, startDate: e.target.value})} required className="h-11 rounded-xl" />
                     </div>
                     <div className="grid gap-2">
-                      <Label className="text-[10px) font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
+                      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
                       <Input type="date" value={chitToEdit.endDate ?? ""} onChange={e => setChitToEdit({...chitToEdit, endDate: e.target.value})} required className="h-11 rounded-xl" />
                     </div>
                   </div>
