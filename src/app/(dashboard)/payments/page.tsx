@@ -110,13 +110,22 @@ export default function PaymentsPage() {
     return () => clearInterval(recoveryInterval)
   }, []);
 
+  // Resilient Helpers
+  const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
+  const getPDateStr = (p: any) => {
+    if (p.targetDate) return p.targetDate;
+    const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? new Date(p.paymentDate) : null);
+    if (d && !isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    return null;
+  }
+
   // Dynamic Total Contribution Map
   const totalPaidByMember = useMemo(() => {
     const map = new Map<string, number>();
     payments.forEach(p => {
-      if (p.status === 'paid' || p.status === 'success') {
+      if (p.status === 'paid' || p.status === 'success' || !p.status) {
         const current = map.get(p.memberId) || 0;
-        map.set(p.memberId, current + (p.amountPaid || 0));
+        map.set(p.memberId, current + getPAmount(p));
       }
     });
     return map;
@@ -154,7 +163,7 @@ export default function PaymentsPage() {
       if (oldMember) {
         const oldMemberRef = doc(db, 'members', oldMember.id);
         batch.update(oldMemberRef, {
-          totalPaid: Math.max(0, (oldMember.totalPaid || 0) - (paymentToCorrect.amountPaid || 0))
+          totalPaid: Math.max(0, (oldMember.totalPaid || 0) - getPAmount(paymentToCorrect))
         });
       }
 
@@ -177,12 +186,12 @@ export default function PaymentsPage() {
       const newMemberRef = doc(db, 'members', newMember.id);
       batch.update(newMemberRef, {
         totalPaid: (newMember.id === oldMember?.id 
-          ? Math.max(0, (oldMember.totalPaid || 0) - (paymentToCorrect.amountPaid || 0)) 
+          ? Math.max(0, (oldMember.totalPaid || 0) - getPAmount(paymentToCorrect)) 
           : (newMember.totalPaid || 0)) + Number(correctionData.amount)
       });
 
       await withTimeout(batch.commit());
-      await createAuditLog(db, user, `Corrected payment for ${paymentToCorrect.memberName} (₹${paymentToCorrect.amountPaid}) to ${newMember.name} (₹${correctionData.amount})`);
+      await createAuditLog(db, user, `Corrected payment for ${paymentToCorrect.memberName} (₹${getPAmount(paymentToCorrect)}) to ${newMember.name} (₹${correctionData.amount})`);
 
       setIsCorrectionOpen(false);
       setPaymentToCorrect(null);
@@ -211,12 +220,12 @@ export default function PaymentsPage() {
       if (member) {
         const memberRef = doc(db, 'members', member.id);
         await withTimeout(updateDoc(memberRef, { 
-          totalPaid: Math.max(0, (member.totalPaid || 0) - (paymentToDelete.amountPaid || 0)) 
+          totalPaid: Math.max(0, (member.totalPaid || 0) - getPAmount(paymentToDelete)) 
         }));
       }
       
       await withTimeout(deleteDoc(doc(db, 'payments', paymentToDelete.id)));
-      await createAuditLog(db, user, `Deleted payment record of ₹${paymentToDelete.amountPaid} for ${paymentToDelete.memberName}`);
+      await createAuditLog(db, user, `Deleted payment record of ₹${getPAmount(paymentToDelete)} for ${paymentToDelete.memberName}`);
       
       setIsDeletePaymentDialogOpen(false);
       setPaymentToDelete(null);
@@ -229,7 +238,7 @@ export default function PaymentsPage() {
   }
 
   const filteredPayments = useMemo(() => {
-    let list = payments.filter(p => p.status === 'paid' || p.status === 'success' || p.status === 'corrected');
+    let list = payments.filter(p => p.status === 'paid' || p.status === 'success' || p.status === 'corrected' || !p.status);
     if (searchTerm) list = list.filter(p => p.memberName?.toLowerCase().includes(searchTerm.toLowerCase()));
     if (typeFilter !== "all") {
       list = list.filter(p => {
@@ -262,13 +271,12 @@ export default function PaymentsPage() {
         const memberPayments = payments.filter(p => p.memberId === member.id);
         
         const amountPaidInMonth = memberPayments
-          .filter(p => (p.status === 'paid' || p.status === 'success') && p.paymentDate && isWithinInterval(parseISO(p.paymentDate), { start, end }))
-          .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+          .filter(p => (p.status === 'paid' || p.status === 'success' || !p.status) && (p.paymentDate || p.createdAt) && isWithinInterval(p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? parseISO(p.paymentDate) : parseISO(p.createdAt)), { start, end }))
+          .reduce((acc, p) => acc + getPAmount(p), 0);
 
         const hasPaidToday = memberPayments.some(p => 
-          (p.status === 'paid' || p.status === 'success') && 
-          p.paymentDate && 
-          format(parseISO(p.paymentDate), 'yyyy-MM-dd') === todayStr
+          (p.status === 'paid' || p.status === 'success' || !p.status) && 
+          getPDateStr(p) === todayStr
         );
         
         return { 
@@ -346,15 +354,17 @@ export default function PaymentsPage() {
                     <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Loading history...</TableCell></TableRow>
                   ) : visiblePayments.length > 0 ? (
                     visiblePayments.map((p) => {
-                      const [m, y] = p.month.split(' ');
+                      const pDateStr = getPDateStr(p) || "-";
+                      const [m, y] = p.month ? p.month.split(' ') : [format(new Date(), 'MMMM'), format(new Date(), 'yyyy')];
                       const isLocked = monthLocks?.some(l => l.year === y && l.monthName === m);
                       const isCorrected = p.status === 'corrected';
+                      const pAmt = getPAmount(p);
                       return (
                         <TableRow key={p.id} className={cn("hover:bg-muted/10 transition-colors", isCorrected && "opacity-60 bg-muted/5")}>
                           <TableCell className="text-[10px] sm:text-xs font-medium tabular-nums text-muted-foreground">
                             <div className="flex items-center gap-1.5">
                               {isLocked && <Lock className="size-2.5 text-amber-600" title="Month Locked" />}
-                              {p.targetDate || (p.paymentDate ? format(parseISO(p.paymentDate), 'dd MMM yyyy') : "-")}
+                              {pDateStr}
                             </div>
                           </TableCell>
                           <TableCell className={cn("font-semibold text-xs sm:text-sm", isCorrected && "line-through")}>
@@ -362,7 +372,7 @@ export default function PaymentsPage() {
                               {p.memberName}
                             </button>
                           </TableCell>
-                          <TableCell className={cn("font-bold text-xs sm:text-sm tabular-nums", isCorrected ? "text-muted-foreground" : "text-emerald-600")}>₹{p.amountPaid?.toLocaleString()}</TableCell>
+                          <TableCell className={cn("font-bold text-xs sm:text-sm tabular-nums", isCorrected ? "text-muted-foreground" : "text-emerald-600")}>₹{pAmt.toLocaleString()}</TableCell>
                           <TableCell className="hidden md:table-cell">
                             <Badge variant={isCorrected ? "secondary" : "outline"} className={cn("text-[8px] uppercase font-bold", isCorrected ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700 border-emerald-200")}>
                               {isCorrected ? "Corrected" : "Paid"}
@@ -392,8 +402,8 @@ export default function PaymentsPage() {
                                         setPaymentToCorrect(p);
                                         setCorrectionData({
                                           memberId: p.memberId,
-                                          amount: p.amountPaid,
-                                          date: p.targetDate || format(new Date(), 'yyyy-MM-dd')
+                                          amount: pAmt,
+                                          date: pDateStr !== '-' ? pDateStr : format(new Date(), 'yyyy-MM-dd')
                                         });
                                         setIsCorrectionOpen(true);
                                       }
@@ -495,9 +505,9 @@ export default function PaymentsPage() {
                   <Label className="text-[10px] font-bold uppercase text-muted-foreground">Original Record</Label>
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold">{paymentToCorrect.memberName}</span>
-                    <span className="font-bold text-emerald-600">₹{paymentToCorrect.amountPaid?.toLocaleString()}</span>
+                    <span className="font-bold text-emerald-600">₹{getPAmount(paymentToCorrect).toLocaleString()}</span>
                   </div>
-                  <div className="text-[10px] text-muted-foreground">{paymentToCorrect.targetDate || "No target date"}</div>
+                  <div className="text-[10px] text-muted-foreground">{getPDateStr(paymentToCorrect) || "No target date"}</div>
                 </div>
 
                 <div className="flex justify-center"><ArrowRight className="size-5 text-primary/30" /></div>
@@ -568,7 +578,26 @@ export default function PaymentsPage() {
           {isHistoryOpen && (
             <>
               <DialogHeader><DialogTitle className="text-xl">History: {historyMember?.memberName}</DialogTitle></DialogHeader>
-              <div className="py-4"><Table><TableHeader><TableRow><TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead><TableHead className="text-xs uppercase font-bold text-muted-foreground">Paid</TableHead><TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead></TableRow></TableHeader><TableBody>{payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success')).map((e, i) => (<TableRow key={i}><TableCell className="text-sm font-semibold">{e.month}</TableCell><TableCell className="text-sm font-bold text-emerald-600">₹{e.amountPaid?.toLocaleString()}</TableCell><TableCell className="text-right text-xs text-muted-foreground font-medium">{e.paymentDate ? format(parseISO(e.paymentDate), 'dd MMM yyyy') : "-"}</TableCell></TableRow>))}</TableBody></Table></div>
+              <div className="py-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-muted-foreground">Paid</TableHead>
+                      <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payments.filter(p => p.memberId === historyMember?.memberId && (p.status === 'paid' || p.status === 'success' || !p.status)).map((e, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="text-sm font-semibold">{e.month || 'Current Cycle'}</TableCell>
+                        <TableCell className="text-sm font-bold text-emerald-600">₹{getPAmount(e).toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{getPDateStr(e) || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               <DialogFooter><Button className="w-full sm:w-auto font-bold" onClick={() => setIsHistoryOpen(false)}>Close</Button></DialogFooter>
             </>
           )}
@@ -577,7 +606,7 @@ export default function PaymentsPage() {
 
       <AlertDialog open={isDeletePaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeletePaymentDialogOpen(open); if (!open) setPaymentToDelete(null) } }}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Transaction?</AlertDialogTitle><AlertDialogDescription>Permanently remove this payment of <strong>₹{paymentToDelete?.amountPaid?.toLocaleString()}</strong>? This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Transaction?</AlertDialogTitle><AlertDialogDescription>Permanently remove this payment of <strong>₹{getPAmount(paymentToDelete || {}).toLocaleString()}</strong>? This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeletePayment} disabled={isActionPending}>{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

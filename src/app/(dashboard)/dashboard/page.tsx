@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
@@ -76,26 +77,34 @@ export default function DashboardPage() {
     const currentMonthStr = format(now, 'MMMM yyyy');
     const currentDayOfMonth = now.getDate();
 
+    // Helper to extract amount resiliently
+    const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
+    // Helper to extract date from record resiliently
+    const getPDateStr = (p: any) => {
+      if (p.targetDate) return p.targetDate;
+      const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? new Date(p.paymentDate) : null);
+      if (d && !isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      return null;
+    }
+
     const currentMonthPayments = (payments || []).filter(p => {
-      if (!p.paymentDate) return false;
+      if (!p.paymentDate && !p.createdAt) return false;
       try {
-        const pDate = p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate);
-        return isSameMonth(pDate, now);
+        const pDate = p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? parseISO(p.paymentDate) : parseISO(p.createdAt));
+        return isSameMonth(pDate, now) && (p.status === 'paid' || p.status === 'success' || !p.status);
       } catch {
         return false;
       }
     })
     
-    const collectedThisMonth = currentMonthPayments
-      .filter(p => p.status === 'paid' || p.status === 'success')
-      .reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+    const collectedThisMonth = currentMonthPayments.reduce((acc, p) => acc + getPAmount(p), 0)
     
     const collectedToday = (payments || []).filter(p => {
-      return p.targetDate === todayStr && (p.status === 'paid' || p.status === 'success');
-    }).reduce((acc, p) => acc + (p.amountPaid || 0), 0)
+      return getPDateStr(p) === todayStr && (p.status === 'paid' || p.status === 'success' || !p.status);
+    }).reduce((acc, p) => acc + getPAmount(p), 0)
 
     const membersWithCalculatedStats = (members || []).filter(m => m.status !== 'inactive').map(m => {
-      const mPayments = (payments || []).filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+      const mPayments = (payments || []).filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid' || !p.status));
       const scheme = (rounds || []).find(r => r.name === m.chitGroup);
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
       
@@ -113,8 +122,8 @@ export default function DashboardPage() {
               interval.forEach(day => {
                 const dStr = format(day, 'yyyy-MM-dd');
                 const dayPaymentSum = mPayments
-                  .filter(p => p.targetDate === dStr)
-                  .reduce((acc, p) => acc + (p.amountPaid || 0), 0);
+                  .filter(p => getPDateStr(p) === dStr)
+                  .reduce((acc, p) => acc + getPAmount(p), 0);
                 
                 if (dayPaymentSum < (m.monthlyAmount || 800)) {
                   pendingDaysCount++;
@@ -123,7 +132,7 @@ export default function DashboardPage() {
             }
           } catch {}
         }
-        memberStatus = mPayments.filter(p => p.targetDate === todayStr).reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
+        memberStatus = mPayments.filter(p => getPDateStr(p) === todayStr).reduce((acc, p) => acc + getPAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
       } else {
         // Monthly logic
         const dueDate = scheme?.dueDate || 5;
@@ -171,7 +180,7 @@ export default function DashboardPage() {
       collectedToday,
       pendingMembersList,
       schemeSummaries,
-      recentPaymentsList: (payments || []).filter(p => p.status === 'paid' || p.status === 'success').slice(0, 5)
+      recentPaymentsList: (payments || []).filter(p => p.status === 'paid' || p.status === 'success' || !p.status).slice(0, 5)
     }
   }, [mounted, members, payments, rounds, membersLoading, paymentsLoading, roundsLoading])
 
@@ -315,21 +324,25 @@ export default function DashboardPage() {
         <CardContent className="p-6">
            {recentPaymentsList.length > 0 ? (
              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-               {recentPaymentsList.map((payment, i) => (
-                 <div key={i} className="flex flex-col p-5 rounded-2xl bg-muted/20 hover:bg-muted/40 transition-all border border-transparent hover:border-border/60 group">
-                    <div className="flex items-center justify-between mb-3">
-                      <Badge className="bg-emerald-100 text-emerald-700 border-none text-[9px] font-black uppercase tracking-widest">Verified</Badge>
-                      <span className="text-[10px] text-muted-foreground font-bold tabular-nums">
-                        {payment.targetDate}
-                      </span>
-                    </div>
-                    <span className="font-bold text-base truncate mb-1">{payment.memberName}</span>
-                    <div className="flex items-center justify-between mt-auto">
-                      <span className="text-lg font-black text-emerald-600 tabular-nums">₹{payment.amountPaid?.toLocaleString()}</span>
-                      <span className="text-[10px] uppercase font-black text-muted-foreground/50 tracking-widest">{payment.method}</span>
-                    </div>
-                 </div>
-               ))}
+               {recentPaymentsList.map((payment, i) => {
+                 const pAmt = Number(payment.amountPaid || payment.amount || 0);
+                 const pDateStr = payment.targetDate || (payment.paymentDate ? (payment.paymentDate.toDate ? format(payment.paymentDate.toDate(), 'yyyy-MM-dd') : payment.paymentDate.split('T')[0]) : '-');
+                 return (
+                   <div key={i} className="flex flex-col p-5 rounded-2xl bg-muted/20 hover:bg-muted/40 transition-all border border-transparent hover:border-border/60 group">
+                      <div className="flex items-center justify-between mb-3">
+                        <Badge className="bg-emerald-100 text-emerald-700 border-none text-[9px] font-black uppercase tracking-widest">Verified</Badge>
+                        <span className="text-[10px] text-muted-foreground font-bold tabular-nums">
+                          {pDateStr}
+                        </span>
+                      </div>
+                      <span className="font-bold text-base truncate mb-1">{payment.memberName}</span>
+                      <div className="flex items-center justify-between mt-auto">
+                        <span className="text-lg font-black text-emerald-600 tabular-nums">₹{pAmt.toLocaleString()}</span>
+                        <span className="text-[10px] uppercase font-black text-muted-foreground/50 tracking-widest">{payment.method || 'Cash'}</span>
+                      </div>
+                   </div>
+                 );
+               })}
              </div>
            ) : (
              <div className="h-[120px] flex items-center justify-center text-muted-foreground italic text-xs font-medium border-2 border-dashed rounded-2xl">

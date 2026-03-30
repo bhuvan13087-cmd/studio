@@ -68,26 +68,39 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
     const memberIds = new Set(groupMembers.map(m => m.id))
 
+    // Helper to extract date from record resiliently
+    const getPDateStr = (p: any) => {
+      if (p.targetDate) return p.targetDate;
+      const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? new Date(p.paymentDate) : null);
+      if (d && !isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      return null;
+    }
+
+    // Helper to extract amount resiliently
+    const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
+
     // Filter payments within this cycle range for these members
     const cyclePayments = (Array.isArray(paymentsData) ? paymentsData : [])
       .filter(p => {
         if (!memberIds.has(p.memberId)) return false
-        if (p.status !== 'success' && p.status !== 'paid') return false
         
-        const targetDate = p.targetDate || ""
-        if (!targetDate || !startDate || !endDate) return false
+        // Status check: success, paid, or empty status (legacy) are included
+        if (p.status && p.status !== 'success' && p.status !== 'paid') return false
         
-        return targetDate >= startDate && targetDate <= endDate
+        const recordDate = getPDateStr(p);
+        if (!recordDate || !startDate || !endDate) return false
+        
+        return recordDate >= startDate && recordDate <= endDate
       })
 
-    const totalCollection = cyclePayments.reduce((sum, p) => sum + (p?.amountPaid || 0), 0)
+    const totalCollection = cyclePayments.reduce((sum, p) => sum + getPAmount(p), 0)
 
     // TASK 6 & 7: Daily Filtering & Collection
     const filteredPayments = cyclePayments.filter(p => 
-      !selectedDate || String(p?.targetDate || "") === selectedDate
+      !selectedDate || String(getPDateStr(p) || "") === selectedDate
     )
 
-    const dailyCollection = filteredPayments.reduce((sum, p) => sum + (p?.amountPaid || 0), 0)
+    const dailyCollection = filteredPayments.reduce((sum, p) => sum + getPAmount(p), 0)
 
     // TASK 8: Members List Status
     const membersWithStatus = groupMembers.map(m => {
@@ -97,7 +110,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
         name: m?.name || "Anonymous Participant",
         phone: m?.phone || "-",
         paid: !!dayPayment,
-        amount: dayPayment?.amountPaid || 0
+        amount: dayPayment ? getPAmount(dayPayment) : 0
       }
     })
 
