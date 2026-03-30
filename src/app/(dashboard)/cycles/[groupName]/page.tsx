@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, ArrowRight } from "lucide-react"
+import { Loader2, ChevronLeft, ArrowRight, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
@@ -34,6 +34,7 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
     return allCycles
       .filter((c) => String(c?.name || "").trim() === groupName)
       .map((c) => ({
+        id: String(c?.id || ""),
         startDate: String(c?.startDate || "-"),
         endDate: String(c?.endDate || "-")
       }))
@@ -54,6 +55,15 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
         <Loader2 className="size-8 animate-spin text-primary" />
       </div>
     )
+  }
+
+  const handleCycleClick = (cycle: { id: string, startDate: string }) => {
+    const safeGroupName = String(groupName || "")
+    const safeCycleId = String(cycle?.id || cycle?.startDate || "")
+
+    if (!safeGroupName || !safeCycleId) return
+
+    router.push(`/cycles/${encodeURIComponent(safeGroupName)}/${encodeURIComponent(safeCycleId)}`)
   }
 
   // TASK 2 & 3: Strict Render - Only show groupName and sanitized list
@@ -81,9 +91,10 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
         {safeCycles.length > 0 ? (
           <div className="grid gap-3">
             {safeCycles.map((cycle, i) => (
-              <div 
+              <button 
                 key={i} 
-                className="flex items-center justify-between p-6 rounded-2xl border border-border/60 bg-card shadow-sm hover:shadow-md transition-all"
+                onClick={() => handleCycleClick(cycle)}
+                className="flex items-center justify-between p-6 rounded-2xl border border-border/60 bg-card shadow-sm hover:shadow-md transition-all text-left group active:scale-[0.99]"
               >
                 <div className="flex items-center gap-4">
                   <span className="font-bold text-sm tracking-tight tabular-nums">
@@ -94,7 +105,8 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
                     {cycle.endDate}
                   </span>
                 </div>
-              </div>
+                <ChevronRight className="size-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
+              </button>
             ))}
           </div>
         ) : (
