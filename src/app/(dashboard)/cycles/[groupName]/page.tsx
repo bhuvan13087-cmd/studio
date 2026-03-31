@@ -156,13 +156,13 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
       className={cn(
         "group relative flex items-center justify-between w-full p-4 rounded-xl border transition-all duration-200 text-left active:scale-[0.99] overflow-hidden cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary",
         isActive 
-          ? "border-primary/20 bg-primary/[0.02] hover:border-primary/40 hover:bg-primary/[0.04] shadow-sm" 
+          ? "border-emerald-200 bg-emerald-50/40 hover:border-emerald-300 hover:bg-emerald-50/60 shadow-sm" 
           : "border-border/50 bg-card hover:border-primary/30 hover:shadow-sm"
       )}
     >
       <div className={cn(
         "absolute left-0 top-0 bottom-0 w-1 transition-colors",
-        isActive ? "bg-primary" : "bg-muted group-hover:bg-primary/40"
+        isActive ? "bg-emerald-500" : "bg-muted group-hover:bg-primary/40"
       )} />
       
       <div className="flex items-center gap-6 pl-2">
@@ -178,7 +178,7 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
 
           <div className="flex flex-col">
             <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">End</span>
-            <span className={cn("text-xs font-bold tabular-nums", isActive ? "text-primary" : "text-muted-foreground/80")}>
+            <span className={cn("text-xs font-bold tabular-nums", isActive ? "text-emerald-700" : "text-muted-foreground/80")}>
               {formatDateLabel(cycle.endDate)}
             </span>
           </div>
@@ -187,22 +187,28 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
 
       <div className="flex items-center gap-2">
         {isActive && (
-          <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-primary/20 text-primary bg-primary/5 h-5 px-1.5 hidden sm:flex">
+          <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-emerald-200 text-emerald-700 bg-emerald-50 h-5 px-1.5 hidden sm:flex">
             Active
           </Badge>
         )}
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10 text-primary"
+          className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-100 text-emerald-700"
           onClick={(e) => handleEditClick(e, cycle)}
         >
           <Pencil className="size-3.5" />
         </Button>
-        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-primary/0 group-hover:text-primary/60 transition-all">
+        <span className={cn(
+          "text-[8px] font-black uppercase tracking-[0.2em] transition-all",
+          isActive ? "text-emerald-600/0 group-hover:text-emerald-600/60" : "text-primary/0 group-hover:text-primary/60"
+        )}>
           View
         </span>
-        <ChevronRight className="size-4 text-muted-foreground/20 group-hover:text-primary transition-colors" />
+        <ChevronRight className={cn(
+          "size-4 text-muted-foreground/20 transition-colors",
+          isActive ? "group-hover:text-emerald-600" : "group-hover:text-primary"
+        )} />
       </div>
     </div>
   )
@@ -233,11 +239,11 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
         {/* Active Cycles Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
-            <ShieldCheck className="size-3 text-primary" />
-            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-primary">
+            <ShieldCheck className="size-3 text-emerald-500" />
+            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-emerald-600">
               Current Audit Period
             </h3>
-            <div className="h-px flex-1 bg-primary/10" />
+            <div className="h-px flex-1 bg-emerald-100" />
           </div>
           
           <div className="grid gap-2">
