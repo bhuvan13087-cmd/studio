@@ -1207,15 +1207,26 @@ export default function RoundsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {historyMember && (allPayments || [])
-                        .filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid'))
-                        .map((p, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="text-sm font-semibold">{p.month}</TableCell>
-                          <TableCell className="text-sm font-bold text-emerald-600">₹{(getPaymentAmount(p)).toLocaleString()}</TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground font-medium">{getRecordDate(p) || '-'}</TableCell>
-                        </TableRow>
-                      ))}
+                      {historyMember && (() => {
+                        const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(historyMember.chitGroup).trim() && c.status === 'active');
+                        
+                        // Show ONLY active cycle payments as per production requirement
+                        if (!activeCycle) return null;
+
+                        return (allPayments || [])
+                          .filter(p => {
+                            if (p.memberId !== historyMember.id || !(p.status === 'success' || p.status === 'paid')) return false;
+                            const pDate = getRecordDate(p);
+                            return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
+                          })
+                          .map((p, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="text-sm font-semibold">{p.month}</TableCell>
+                              <TableCell className="text-sm font-bold text-emerald-600">₹{(getPaymentAmount(p)).toLocaleString()}</TableCell>
+                              <TableCell className="text-right text-xs text-muted-foreground font-medium">{getRecordDate(p) || '-'}</TableCell>
+                            </TableRow>
+                          ));
+                      })()}
                     </TableBody>
                   </Table>
                 </ScrollArea>
