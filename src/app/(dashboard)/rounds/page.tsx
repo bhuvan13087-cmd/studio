@@ -381,6 +381,7 @@ export default function RoundsPage() {
             const cycleStart = parseISO(activeCycle.startDate);
             const cycleEnd = parseISO(activeCycle.endDate);
             
+            // STRICT CYCLE SCOPE
             const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
             const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
             
@@ -393,6 +394,7 @@ export default function RoundsPage() {
                   .filter(p => getRecordDate(p) === dStr)
                   .reduce((acc, p) => acc + getPaymentAmount(p), 0);
                 
+                // SCHEME AMOUNT RULE: Only full amount is valid for Daily
                 if (dayPaymentSum < (m.monthlyAmount || 800)) {
                   pendingDaysCount++;
                 }
@@ -400,6 +402,7 @@ export default function RoundsPage() {
             }
           } catch (e) {}
         }
+        // Today's status based on full daily goal
         memberStatus = mPayments.filter(p => getRecordDate(p) === todayStr).reduce((acc, p) => acc + getPaymentAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
       } else {
         // Monthly logic (DUAL COLLECTION SYSTEM - STRICT SEPARATION)
@@ -493,6 +496,24 @@ export default function RoundsPage() {
 
     const paymentAmount = Number(paymentData.amount);
     const targetDateStr = paymentData.date; 
+    
+    // DUPLICATE PROTECTION (HARD BLOCK)
+    const alreadyPaid = (allPayments || []).some(p => 
+      p.memberId === selectedMemberForPayment.id && 
+      getRecordDate(p) === targetDateStr && 
+      (p.status === 'success' || p.status === 'paid')
+    );
+
+    if (alreadyPaid) {
+      toast({ variant: "destructive", title: "Duplicate Entry", description: "Already paid for this date." });
+      return;
+    }
+
+    // DAILY MODE: Only full amount is valid
+    if ((selectedMemberForPayment.paymentType || currentRound.collectionType) === 'Daily' && paymentAmount < (selectedMemberForPayment.monthlyAmount || 800)) {
+       toast({ variant: "destructive", title: "Invalid Amount", description: "Full daily scheme amount is required." });
+       return;
+    }
     
     setIsActionPending(true);
 
@@ -669,6 +690,7 @@ export default function RoundsPage() {
           .filter(p => getRecordDate(p) === dStr)
           .reduce((acc, p) => acc + getPaymentAmount(p), 0);
         
+        // Strict scheme amount verification
         const isPaid = dayPaymentSum >= (selectedPendingMember.monthlyAmount || 800);
 
         return {
@@ -704,7 +726,7 @@ export default function RoundsPage() {
             const groupPendingCount = membersWithCalculatedStats.filter(m => String(m.chitGroup).trim() === String(group.name).trim() && m.status !== 'inactive' && m.memberStatus === 'pending').length;
             const activeCycleCollection = getGroupActiveCycleCollection(group.name);
             
-            // Refined cycle lookup: Prioritize active cycle, otherwise get newest for that group
+            // Refined cycle lookup: Prioritize active cycle
             const groupCycles = (allCycles || []).filter(c => String(c.name).trim() === String(group.name).trim());
             const latestGroupCycle = groupCycles.find(c => c.status === 'active') || groupCycles[0];
             
@@ -760,7 +782,7 @@ export default function RoundsPage() {
                 <CardContent className="p-5 flex-1 space-y-4">
                   <div className="space-y-3">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground font-semibold">Scheme Amount</span>
+                      <span className="text-muted-foreground font-semibold">Base Goal</span>
                       <span className="font-bold text-primary">₹{(group.monthlyAmount || 0).toLocaleString()}</span>
                     </div>
                     {group.collectionType === 'Monthly' && (
@@ -1000,7 +1022,7 @@ export default function RoundsPage() {
 
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl">
           <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between">
-            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Active Intake</CardTitle>
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Cycle Intake</CardTitle>
             <Button 
               variant="ghost" 
               size="icon" 
@@ -1096,7 +1118,7 @@ export default function RoundsPage() {
                               setSelectedMemberForPayment(m); 
                               setPaymentData({
                                   ...INITIAL_PAYMENT_STATE,
-                                  amount: currentRound?.monthlyAmount || 0,
+                                  amount: m.monthlyAmount || currentRound?.monthlyAmount || 800,
                                   date: format(new Date(), 'yyyy-MM-dd')
                               });
                               setIsQuickPaymentDialogOpen(true); 
@@ -1170,10 +1192,10 @@ export default function RoundsPage() {
       </Dialog>
 
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[400px]">
           {isHistoryDialogOpen && (
             <>
-              <DialogHeader><DialogTitle className="text-xl">Payment History: {historyMember?.name}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle className="text-xl">History: {historyMember?.name}</DialogTitle></DialogHeader>
               <div className="py-4">
                 <ScrollArea className="h-[400px] pr-4">
                   <Table>
@@ -1233,7 +1255,7 @@ export default function RoundsPage() {
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                  <span className="text-xs font-bold uppercase text-muted-foreground">Scheme Base</span>
+                  <span className="text-xs font-bold uppercase text-muted-foreground">Daily Goal</span>
                   <span className="font-bold text-sm text-primary">₹{(selectedProfileMember.monthlyAmount || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
@@ -1364,9 +1386,13 @@ export default function RoundsPage() {
                     value={paymentData.amount ?? ""} 
                     onChange={e => setPaymentData({...paymentData, amount: Number(e.target.value)})} 
                     required 
+                    readOnly={(selectedMemberForPayment.paymentType || currentRound.collectionType) === 'Daily'}
                     className="flex h-12 w-full rounded-xl border border-input bg-background px-3 py-2 text-lg font-black text-primary ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" 
                     placeholder="Enter amount"
                   />
+                  {(selectedMemberForPayment.paymentType || currentRound.collectionType) === 'Daily' && (
+                    <p className="text-[10px] text-primary font-bold italic ml-1">Daily mode requires full fixed amount.</p>
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Target Date (Paying FOR)</Label>
