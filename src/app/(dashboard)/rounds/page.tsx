@@ -1338,7 +1338,7 @@ export default function RoundsPage() {
                   </div>
                 </div>
 
-                <ScrollArea className="h-[350px]">
+                <ScrollArea className="max-h-[60vh] h-auto">
                   {(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Daily' ? (
                     <Table>
                       <TableHeader className="bg-muted/30 sticky top-0 z-10">
