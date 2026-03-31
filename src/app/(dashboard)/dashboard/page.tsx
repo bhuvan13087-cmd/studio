@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO, startOfDay, eachDayOfInterval, isBefore, max, isValid } from "date-fns"
+import { format, isSameMonth, parseISO, startOfDay, eachDayOfInterval, isBefore, max, isValid, differenceInDays, addDays } from "date-fns"
 import { cn } from "@/lib/utils"
 
 // STRICT SYSTEM START DATE
@@ -131,7 +131,7 @@ export default function DashboardPage() {
         }
         memberStatus = mPayments.filter(p => getPDateStr(p) === todayStr).reduce((acc, p) => acc + getPAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
       } else {
-        // Monthly logic (DUAL COLLECTION SYSTEM)
+        // Monthly logic (DUAL COLLECTION SYSTEM - ULTRA SAFE PATCH)
         const dueDate = scheme?.dueDate || 5;
         const hasPaidThisCycle = mPayments.some(p => {
           const pDate = getPDateStr(p);
@@ -142,12 +142,25 @@ export default function DashboardPage() {
           memberStatus = 'paid';
           pendingDaysCount = 0;
         } else {
-          if (currentDayOfMonth <= dueDate) {
+          const cycleStart = parseISO(activeCycle.startDate);
+          const cycleEnd = parseISO(activeCycle.endDate);
+          const isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > dueDate;
+
+          if (!isPastDue) {
             memberStatus = 'waiting';
             pendingDaysCount = 0;
           } else {
             memberStatus = 'pending';
-            pendingDaysCount = currentDayOfMonth - dueDate;
+            // Count days in cycle elapsed so far (respecting cycle boundaries)
+            const rawJoinDate = parseISO(m.joinDate);
+            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
+            const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
+            
+            if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) {
+              pendingDaysCount = differenceInDays(effectiveEnd, effectiveStart) + 1;
+            } else {
+              pendingDaysCount = 0;
+            }
           }
         }
       }
@@ -187,6 +200,12 @@ export default function DashboardPage() {
   }
 
   const { activeMembersCount, collectedThisMonth, collectedToday, dailyPendingCount, monthlyOverdueCount, schemeSummaries, recentPaymentsList } = dashboardData;
+
+  const getDisplayName = (name: string) => {
+    if (!name) return "";
+    const clean = name.replace(/Group/gi, '').trim();
+    return `Group ${clean}`;
+  };
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700 pb-10 overflow-x-hidden">
@@ -382,7 +401,7 @@ export default function DashboardPage() {
                               "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
                               status === 'paid' ? "bg-emerald-500 hover:bg-emerald-600" : (status === 'waiting' ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700")
                             )}>
-                              {status === 'paid' ? 'SUCCESS' : (status === 'waiting' ? (isMonthly ? 'DUE' : 'WAITING') : (isMonthly ? 'OVERDUE' : 'PENDING'))}
+                              {status === 'paid' ? 'SUCCESS' : (status === 'waiting' ? 'DUE' : (isMonthly ? 'OVERDUE' : 'PENDING'))}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center pr-8">
@@ -426,7 +445,7 @@ export default function DashboardPage() {
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-destructive/60 mb-3 relative z-10">Unpaid Cycle Debt</p>
                   <div className="text-5xl font-black text-destructive tabular-nums tracking-tighter relative z-10 mb-4">₹{(selectedMemberDebt.calculatedPendingAmount || 0).toLocaleString()}</div>
                   <Badge className="bg-destructive text-destructive-foreground px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-destructive/20 relative z-10">
-                    ⏳ {selectedMemberDebt.calculatedPendingDays || 0} {selectedMemberDebt.memberStatus === 'pending' ? 'Missed' : 'Pending'}
+                    ⏳ {selectedMemberDebt.calculatedPendingDays || 0} {selectedMemberDebt.memberStatus === 'pending' ? (selectedMemberDebt.paymentType === 'Daily' ? 'Missed' : 'Overdue') : 'Pending'}
                   </Badge>
                 </div>
                 <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-4">

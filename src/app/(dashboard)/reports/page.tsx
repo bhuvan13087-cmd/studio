@@ -42,7 +42,7 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, parseISO, getMonth, getYear, subDays, isValid, startOfDay, isBefore, max } from "date-fns"
+import { format, parseISO, getMonth, getYear, subDays, isValid, startOfDay, isBefore, max, isSameMonth } from "date-fns"
 import * as XLSX from 'xlsx'
 import { cn } from "@/lib/utils"
 
@@ -113,7 +113,6 @@ export default function ReportsPage() {
     
     const focusDate = isValid(parseISO(selectedDate)) ? parseISO(selectedDate) : new Date();
     const focusDateStr = format(focusDate, 'yyyy-MM-dd');
-    const focusDayOfMonth = focusDate.getDate();
     const yesterday = subDays(focusDate, 1);
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
@@ -137,13 +136,17 @@ export default function ReportsPage() {
         const dayPaymentSum = mPayments.filter(p => getPDateStr(p) === dateStr).reduce((acc, p) => acc + getPAmount(p), 0);
         return dayPaymentSum < (m.monthlyAmount || 800);
       } else {
-        // Monthly logic separation
+        // Monthly logic separation (ULTRA SAFE PATCH)
         const dueDate = scheme?.dueDate || 5;
         const hasPaidThisCycle = mPayments.some(p => {
           const pDate = getPDateStr(p);
           return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
         });
-        return !hasPaidThisCycle && date.getDate() > dueDate;
+        
+        const cycleStart = parseISO(activeCycle.startDate);
+        const isPastDue = !isSameMonth(date, cycleStart) || date.getDate() > dueDate;
+        
+        return !hasPaidThisCycle && isPastDue;
       }
     };
 

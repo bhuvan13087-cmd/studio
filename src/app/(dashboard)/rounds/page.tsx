@@ -415,12 +415,27 @@ export default function RoundsPage() {
           memberStatus = 'paid';
           pendingDaysCount = 0;
         } else {
-          if (currentDayOfMonth <= dueDate) {
+          const cycleStart = parseISO(activeCycle.startDate);
+          const cycleEnd = parseISO(activeCycle.endDate);
+          const isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > dueDate;
+
+          if (!isPastDue) {
             memberStatus = 'waiting'; // Rendered as "DUE"
             pendingDaysCount = 0;
           } else {
             memberStatus = 'pending'; // Rendered as "OVERDUE"
-            pendingDaysCount = currentDayOfMonth - dueDate;
+            
+            // ULTRA SAFE PATCH: Respect cycle boundaries for Monthly pending days
+            // Logic: count days in cycle interval up to today/end (only if past due)
+            const rawJoinDate = parseISO(m.joinDate);
+            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
+            const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
+            
+            if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) {
+              pendingDaysCount = differenceInDays(effectiveEnd, effectiveStart) + 1;
+            } else {
+              pendingDaysCount = 0;
+            }
           }
         }
       }

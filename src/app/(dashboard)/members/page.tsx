@@ -50,7 +50,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, doc, serverTimestamp, query, orderBy, updateDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, startOfDay, eachDayOfInterval, isBefore, max, isValid } from "date-fns"
+import { format, parseISO, startOfDay, eachDayOfInterval, isBefore, max, isValid, isSameMonth, differenceInDays, addDays } from "date-fns"
 import { createAuditLog } from "@/firebase/logging"
 import { withTimeout } from "@/lib/utils"
 
@@ -108,7 +108,7 @@ export default function MembersPage() {
         const isPaidToday = mPayments.filter(p => p.targetDate === todayStr).reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800);
         memberStatus = isPaidToday ? 'paid' : 'pending';
       } else {
-        // Monthly logic (DUAL COLLECTION SYSTEM)
+        // Monthly logic (DUAL COLLECTION SYSTEM - ULTRA SAFE PATCH)
         const dueDate = scheme?.dueDate || 5;
         const hasPaidThisCycle = mPayments.some(p => {
           const pDate = p.targetDate || (p.paymentDate?.toDate ? format(p.paymentDate.toDate(), 'yyyy-MM-dd') : null);
@@ -117,10 +117,15 @@ export default function MembersPage() {
         
         if (hasPaidThisCycle) {
           memberStatus = 'paid';
-        } else if (currentDayOfMonth <= dueDate) {
-          memberStatus = 'waiting'; // Rendered as "DUE"
         } else {
-          memberStatus = 'pending'; // Rendered as "OVERDUE"
+          const cycleStart = parseISO(activeCycle.startDate);
+          const isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > dueDate;
+          
+          if (!isPastDue) {
+            memberStatus = 'waiting'; // Rendered as "DUE"
+          } else {
+            memberStatus = 'pending'; // Rendered as "OVERDUE"
+          }
         }
       }
 
