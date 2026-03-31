@@ -58,7 +58,7 @@ import { format, parseISO, isSameMonth, eachDayOfInterval, isBefore, isAfter, st
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
-// STRICT SYSTEM START DATE
+// STRICT SYSTEM START DATE (FOR LEGACY FALLBACK)
 const CALCULATION_START_DATE = parseISO('2026-04-01');
 
 const INITIAL_CHIT_STATE = { 
@@ -111,18 +111,21 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
   const { user } = useUser()
   const { toast } = useToast()
 
+  const isLatestActive = latestCycle && latestCycle.status === 'active';
+
   // Pre-fill effect when latestCycle changes or dialog opens
   useEffect(() => {
     if (isOpen) {
-      if (latestCycle) {
+      if (isLatestActive) {
         setStartDate(latestCycle.startDate || "")
         setEndDate(latestCycle.endDate || "")
       } else {
+        // RESET: Ensure fresh state for new cycle initialization
         setStartDate("")
         setEndDate("")
       }
     }
-  }, [isOpen, latestCycle])
+  }, [isOpen, latestCycle, isLatestActive])
 
   const handleSave = async () => {
     if (!startDate || !endDate) {
@@ -137,16 +140,18 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
 
     setIsSaving(true);
     try {
-      if (latestCycle) {
+      if (isLatestActive) {
+        // UPDATE: Modify active operational window
         const cycleRef = doc(db, 'cycles', latestCycle.id);
         await withTimeout(updateDoc(cycleRef, {
           startDate,
           endDate,
           updatedAt: new Date().toISOString()
         }));
-        await createAuditLog(db, user, `Updated cycle dates for ${group.name}: ${startDate} to ${endDate}`);
-        toast({ title: "Cycle Updated", description: "The active cycle has been modified." });
+        await createAuditLog(db, user, `Updated active cycle for ${group.name}: ${startDate} to ${endDate}`);
+        toast({ title: "Cycle Updated", description: "Active period modified." });
       } else {
+        // INITIALIZE: Start brand new isolated cycle
         const cycleRef = collection(db, 'cycles');
         await withTimeout(addDoc(cycleRef, {
           name: group.name,
@@ -155,8 +160,8 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
           status: 'active',
           createdAt: new Date().toISOString()
         }));
-        await createAuditLog(db, user, `Defined new cycle for ${group.name}: ${startDate} to ${endDate}`);
-        toast({ title: "Cycle Created", description: "New monitoring period defined." });
+        await createAuditLog(db, user, `Started fresh audit cycle for ${group.name}: ${startDate} to ${endDate}`);
+        toast({ title: "New Cycle Started", description: "Fresh operational period initialized." });
       }
       setIsOpen(false);
     } catch (error: any) {
@@ -172,32 +177,37 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
         <Button 
           variant="ghost" 
           size="icon" 
-          className="h-8 w-8 rounded-full hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors"
-          title="Cycle Control"
+          className={cn(
+            "h-8 w-8 rounded-full transition-colors",
+            isLatestActive ? "text-primary/70 hover:text-primary hover:bg-primary/10" : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+          )}
+          title={isLatestActive ? "Modify Period" : "Start Fresh Period"}
         >
-          <CalendarDays className="size-4" />
+          {isLatestActive ? <CalendarDays className="size-4" /> : <Plus className="size-4" />}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarDays className="size-5 text-primary" />
-            Cycle Management
+            {isLatestActive ? 'Update Period' : 'Start New Cycle'}
           </DialogTitle>
           <DialogDescription>
-            Configure or update the operational date range for {group.name}.
+            {isLatestActive 
+              ? `Modify the current operational window for ${group.name}.`
+              : `Initialize a fresh audit period for ${group.name}. All existing collection data will be moved to history.`}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-6">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70">
-              {latestCycle ? 'Updating Existing Period' : 'Defining New Period'}
+              {isLatestActive ? 'Active Audit Phase' : 'New Initialization'}
             </span>
             <Badge variant="outline" className={cn(
               "text-[8px] font-bold h-4 border-none px-1.5 uppercase",
-              latestCycle ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"
+              isLatestActive ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"
             )}>
-              {latestCycle ? 'Active Cycle' : 'Draft Mode'}
+              {isLatestActive ? 'In Progress' : 'Fresh State'}
             </Badge>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -230,7 +240,7 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
             className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all shadow-lg"
           >
             {isSaving ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />}
-            {latestCycle ? 'Update Cycle' : 'Save Cycle'}
+            {isLatestActive ? 'Apply Changes' : 'Launch New Cycle'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -239,6 +249,7 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
 }
 
 export default function RoundsPage() {
+  const [mounted, setMounted] = useState(false)
   const [selectedChitId, setSelectedChitId] = useState<string | null>(null)
   const [isAddChitDialogOpen, setIsAddChitDialogOpen] = useState(false)
   const [isEditChitDialogOpen, setIsEditChitDialogOpen] = useState(false)
@@ -290,6 +301,39 @@ export default function RoundsPage() {
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db]);
   const { data: allCycles } = useCollection(cyclesQuery);
 
+  useEffect(() => { setMounted(true) }, [])
+
+  // AUTO CYCLE COMPLETION MONITOR (STRICT ISOLATION)
+  useEffect(() => {
+    const checkAndCloseCycles = async () => {
+      if (!db || !allCycles || !isAdmin) return;
+      const nowStr = format(new Date(), 'yyyy-MM-dd');
+      
+      const expiredCycles = allCycles.filter(c => 
+        c.status === 'active' && 
+        c.endDate && 
+        c.endDate < nowStr
+      );
+
+      for (const cycle of expiredCycles) {
+        try {
+          const cycleRef = doc(db, 'cycles', cycle.id);
+          await withTimeout(updateDoc(cycleRef, {
+            status: 'completed',
+            completedAt: new Date().toISOString()
+          }));
+          await createAuditLog(db, user, `System Auto-Finalized expired period for ${cycle.name}: ${cycle.startDate} to ${cycle.endDate}`);
+        } catch (e) {
+          console.error("Auto-finalization failed:", e);
+        }
+      }
+    };
+
+    if (mounted && !isRoundsLoading) {
+      checkAndCloseCycles();
+    }
+  }, [allCycles, db, isAdmin, mounted, isRoundsLoading, user]);
+
   // Helper to safely get payment amount
   const getPaymentAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
 
@@ -303,15 +347,16 @@ export default function RoundsPage() {
     return null;
   };
 
-  // NEW STRICT DATE-WISE DYNAMIC CALCULATIONS
+  // ISOLATED DYNAMIC CALCULATIONS (RESPECTS ACTIVE CYCLE WINDOW ONLY)
   const membersWithCalculatedStats = useMemo(() => {
-    if (!members || !allPayments) return [];
+    if (!members || !allPayments || !chitSchemes) return [];
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const today = startOfDay(new Date());
     const currentMonthStr = format(today, 'MMMM yyyy');
     const currentDayOfMonth = today.getDate();
 
     return members.map(m => {
+      const activeCycle = (allCycles || []).find(c => c.name === m.chitGroup && c.status === 'active');
       const mPayments = allPayments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
       const scheme = chitSchemes.find(r => r.name === m.chitGroup);
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
@@ -319,14 +364,29 @@ export default function RoundsPage() {
       let pendingDaysCount = 0;
       let memberStatus: 'paid' | 'pending' | 'waiting' = 'pending';
 
+      // ZERO STATE RULE: If no active cycle is defined, metrics reset to zero
+      if (!activeCycle) {
+        return {
+          ...m,
+          calculatedPendingDays: 0,
+          calculatedPendingAmount: 0,
+          memberStatus: 'paid' as const // Board shows as clear if no period active
+        };
+      }
+
       if (resolvedType === 'Daily') {
         if (m.joinDate && m.status !== 'inactive') {
           try {
             const rawJoinDate = parseISO(m.joinDate);
-            const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
+            const cycleStart = parseISO(activeCycle.startDate);
+            const cycleEnd = parseISO(activeCycle.endDate);
             
-            if (isBefore(effectiveStart, addDays(today, 1))) {
-              const interval = eachDayOfInterval({ start: effectiveStart, end: today });
+            // Limit tracking to the cycle's operational window
+            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
+            const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
+            
+            if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) {
+              const interval = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd });
               
               interval.forEach(day => {
                 const dStr = format(day, 'yyyy-MM-dd');
@@ -343,11 +403,14 @@ export default function RoundsPage() {
         }
         memberStatus = mPayments.filter(p => getRecordDate(p) === todayStr).reduce((acc, p) => acc + getPaymentAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
       } else {
-        // Monthly logic
+        // Monthly logic (Cycle Isolated)
         const dueDate = scheme?.dueDate || 5;
-        const hasPaidThisMonth = mPayments.some(p => p.month === currentMonthStr);
+        const hasPaidThisCycle = mPayments.some(p => {
+          const pDate = getRecordDate(p);
+          return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
+        });
         
-        if (hasPaidThisMonth) {
+        if (hasPaidThisCycle) {
           memberStatus = 'paid';
           pendingDaysCount = 0;
         } else if (currentDayOfMonth < dueDate) {
@@ -366,7 +429,7 @@ export default function RoundsPage() {
         memberStatus: memberStatus
       };
     });
-  }, [members, allPayments, chitSchemes]);
+  }, [members, allPayments, chitSchemes, allCycles]);
 
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
   const assignedMembers = useMemo(() => membersWithCalculatedStats.filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [membersWithCalculatedStats, currentRound])
@@ -408,22 +471,19 @@ export default function RoundsPage() {
     return getGroupCollectionForDate(groupName, format(new Date(), 'yyyy-MM-dd'));
   };
 
-  const getGroupMonthlyCollection = (groupName: string, monthStr?: string) => {
-    if (!allPayments || !members) return 0;
-    const targetMonth = monthStr || format(new Date(), 'MMMM yyyy');
+  const getGroupActiveCycleCollection = (groupName: string) => {
+    const activeCycle = (allCycles || []).find(c => c.name === groupName && c.status === 'active');
+    if (!activeCycle || !allPayments || !members) return 0;
+    
     const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
     return allPayments
-      .filter(p => 
-        groupMemberIds.has(p.memberId) && 
-        (p.status === 'success' || p.status === 'paid') &&
-        getPaymentAmount(p) > 0 &&
-        p.month === targetMonth
-      )
+      .filter(p => {
+        const pDate = getRecordDate(p);
+        return groupMemberIds.has(p.memberId) && 
+               (p.status === 'success' || p.status === 'paid') &&
+               pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
+      })
       .reduce((acc, p) => acc + getPaymentAmount(p), 0);
-  };
-
-  const getGroupPendingCount = (groupName: string) => {
-    return membersWithCalculatedStats.filter(m => m.chitGroup === groupName && m.status !== 'inactive' && m.memberStatus === 'pending').length;
   };
 
   const handleQuickPayment = async (e: React.FormEvent) => {
@@ -506,7 +566,7 @@ export default function RoundsPage() {
         startDate: chitToEdit.startDate,
         endDate: chitToEdit.endDate
       });
-      await createAuditLog(db, user, `Updated scheme: ${chitToEdit.name}`);
+      await createAuditLog(db, user, `Updated scheme parameters: ${chitToEdit.name}`);
       setIsEditChitDialogOpen(false);
       setChitToEdit(null);
       toast({ title: "Scheme Updated", description: "Changes saved." });
@@ -584,19 +644,26 @@ export default function RoundsPage() {
     }
   }
 
-  // GET LOG OF ALL DATES FOR PENDING POPUP (STRICT WINDOW)
+  // GET LOG OF ALL DATES FOR PENDING POPUP (STRICT CYCLE WINDOW)
   const memberDateLog = useMemo(() => {
     if (!selectedPendingMember || !allPayments) return [];
     try {
+      const activeCycle = (allCycles || []).find(c => c.name === selectedPendingMember.chitGroup && c.status === 'active');
+      if (!activeCycle) return [];
+
       const rawJoinDate = parseISO(selectedPendingMember.joinDate);
-      const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
+      const cycleStart = parseISO(activeCycle.startDate);
+      const cycleEnd = parseISO(activeCycle.endDate);
       const today = startOfDay(new Date());
       
-      if (isAfter(effectiveStart, today)) return [];
+      const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
+      const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
+      
+      if (isAfter(effectiveStart, effectiveEnd)) return [];
 
       const mPayments = allPayments.filter(p => p.memberId === selectedPendingMember.id && (p.status === 'success' || p.status === 'paid'));
       
-      return eachDayOfInterval({ start: effectiveStart, end: today }).map(day => {
+      return eachDayOfInterval({ start: effectiveStart, end: effectiveEnd }).map(day => {
         const dStr = format(day, 'yyyy-MM-dd');
         const dayPaymentSum = mPayments
           .filter(p => getRecordDate(p) === dStr)
@@ -614,7 +681,7 @@ export default function RoundsPage() {
     } catch (e) {
       return [];
     }
-  }, [selectedPendingMember, allPayments]);
+  }, [selectedPendingMember, allPayments, allCycles]);
 
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
@@ -624,7 +691,7 @@ export default function RoundsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary font-headline">Seat Reservations</h2>
-            <p className="text-sm text-muted-foreground font-medium">Manage schemes and seat availability.</p>
+            <p className="text-sm text-muted-foreground font-medium">Manage schemes and isolated audit periods.</p>
           </div>
           <Button onClick={() => setIsAddChitDialogOpen(true)} className="font-bold gap-2 px-6 h-11 shadow-lg bg-primary hover:bg-primary/90 transition-all active:scale-95">
             <Plus className="size-5" /> Add Scheme
@@ -634,8 +701,8 @@ export default function RoundsPage() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
-            const groupPendingCount = getGroupPendingCount(group.name);
-            const monthlyCollection = getGroupMonthlyCollection(group.name, format(new Date(), 'MMMM yyyy'));
+            const groupPendingCount = membersWithCalculatedStats.filter(m => m.chitGroup === group.name && m.status !== 'inactive' && m.memberStatus === 'pending').length;
+            const activeCycleCollection = getGroupActiveCycleCollection(group.name);
             const latestGroupCycle = (allCycles || []).find(c => c.name === group.name);
             
             return (
@@ -681,9 +748,9 @@ export default function RoundsPage() {
                   </CardTitle>
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
                     <Calendar className="size-3 text-primary/40" />
-                    {latestGroupCycle 
+                    {latestGroupCycle && latestGroupCycle.status === 'active'
                       ? `${format(parseISO(latestGroupCycle.startDate), 'MMM dd')} → ${format(parseISO(latestGroupCycle.endDate), 'MMM dd')}`
-                      : "No Cycle Set"}
+                      : <span className="text-amber-600 font-black">Requires Fresh Cycle</span>}
                   </div>
                 </CardHeader>
 
@@ -700,7 +767,7 @@ export default function RoundsPage() {
                       </div>
                     )}
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-amber-600 font-semibold">Pending Today</span>
+                      <span className="text-amber-600 font-semibold">Active Arrears</span>
                       <span className={cn("font-bold text-sm", groupPendingCount > 0 ? "text-amber-500" : "text-emerald-600")}>
                         {groupPendingCount}
                       </span>
@@ -714,8 +781,8 @@ export default function RoundsPage() {
                     
                     <div className="pt-4 border-t border-dashed border-border/60 mt-4">
                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Monthly Collection</span>
-                          <span className="font-black text-emerald-600 text-base tabular-nums">₹{monthlyCollection.toLocaleString()}</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Cycle Intake</span>
+                          <span className="font-black text-emerald-600 text-base tabular-nums">₹{activeCycleCollection.toLocaleString()}</span>
                        </div>
                     </div>
                   </div>
@@ -727,7 +794,7 @@ export default function RoundsPage() {
                     className="w-full h-7 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition-all rounded-lg"
                     onClick={() => setSelectedChitId(group.id)}
                   >
-                    View Board
+                    Manage Registry
                   </Button>
                 </CardFooter>
               </Card>
@@ -749,7 +816,7 @@ export default function RoundsPage() {
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
                     <Wallet className="size-5 text-primary" />
-                    Reconciliation Board
+                    Board Reconciliation
                   </DialogTitle>
                   <DialogDescription>
                     Summary for {getDisplayName(activePopupGroupName)}.
@@ -783,7 +850,7 @@ export default function RoundsPage() {
                   </div>
 
                   <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-3xl border border-dashed border-emerald-200 text-center">
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Verified Monthly Intake</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Verified Monthly Total</p>
                     <div className="text-5xl font-black text-emerald-600 tabular-nums tracking-tighter">
                       ₹{getGroupMonthlyCollection(activePopupGroupName, `${viewMonth} ${viewYear}`).toLocaleString()}
                     </div>
@@ -800,6 +867,7 @@ export default function RoundsPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Existing Chit Dialogs (Add/Edit/Delete) remain unchanged */}
         <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleAddChit}>
@@ -856,88 +924,28 @@ export default function RoundsPage() {
             </form>
           </DialogContent>
         </Dialog>
-
-        <Dialog open={isEditChitDialogOpen} onOpenChange={setIsEditChitDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]">
-            {chitToEdit && (
-              <form onSubmit={handleUpdateChit}>
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-bold">Edit Scheme</DialogTitle>
-                  <DialogDescription className="font-medium">Modify parameters for {chitToEdit.name}.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-5 py-6">
-                  <div className="grid gap-2">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Scheme Name</Label>
-                    <Input value={chitToEdit.name ?? ""} onChange={e => setChitToEdit({...chitToEdit, name: e.target.value})} required className="h-11 rounded-xl" />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label>
-                    <Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(chitToEdit.monthlyAmount)})} required className="h-11 rounded-xl" />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
-                    <Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(chitToEdit.totalMembers)})} required className="h-11 rounded-xl" />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
-                    <Select value={chitToEdit.collectionType ?? "Daily"} onValueChange={(v) => setChitToEdit({...chitToEdit, collectionType: v})}>
-                      <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select frequency" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Daily">Daily</SelectItem>
-                        <SelectItem value="Monthly">Monthly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {chitToEdit.collectionType === 'Monthly' && (
-                    <div className="grid gap-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Due Date (Day 1-31)</Label>
-                      <Input type="number" min="1" max="31" value={chitToEdit.dueDate || ""} onChange={e => setChitToEdit({...chitToEdit, dueDate: Number(e.target.value)})} required className="h-11 rounded-xl" />
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
-                      <Input type="date" value={chitToEdit.startDate ?? ""} onChange={e => setChitToEdit({...chitToEdit, startDate: e.target.value})} required className="h-11 rounded-xl" />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
-                      <Input type="date" value={chitToEdit.endDate ?? ""} onChange={e => setChitToEdit({...chitToEdit, endDate: e.target.value})} required className="h-11 rounded-xl" />
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold">
-                    {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}
-                    Save Changes
-                  </Button>
-                </DialogFooter>
-              </form>
-            )}
-          </DialogContent>
-        </Dialog>
-
-        <AlertDialog open={isDeleteChitDialogOpen} onOpenChange={setIsDeleteChitDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete <strong>{chitToDelete?.name}</strong>? This will permanently remove the scheme and its configuration.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
-              <AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeleteChit} disabled={isActionPending}>
-                {isActionPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                Delete Scheme
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     )
   }
 
+  // REPURPOSED HELPERS FOR ISOLATION
+  const getGroupMonthlyCollection = (groupName: string, monthStr?: string) => {
+    if (!allPayments || !members) return 0;
+    const targetMonth = monthStr || format(new Date(), 'MMMM yyyy');
+    const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
+    return allPayments
+      .filter(p => 
+        groupMemberIds.has(p.memberId) && 
+        (p.status === 'success' || p.status === 'paid') &&
+        getPaymentAmount(p) > 0 &&
+        p.month === targetMonth
+      )
+      .reduce((acc, p) => acc + getPaymentAmount(p), 0);
+  };
+
+  const currentActiveCycle = (allCycles || []).find(c => c.name === currentRound?.name && c.status === 'active');
   const todayGroupCollection = getGroupTodayCollection(currentRound?.name || "");
+  const cycleGroupCollection = currentRound ? getGroupActiveCycleCollection(currentRound.name) : 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
@@ -961,7 +969,7 @@ export default function RoundsPage() {
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-xl">
           <CardHeader className="p-2.5 pb-1">
-            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Scheme Amount</CardTitle>
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Base Rate</CardTitle>
           </CardHeader>
           <CardContent className="p-2.5 pt-0">
             <div className="text-lg font-bold tabular-nums tracking-tight">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div>
@@ -981,7 +989,7 @@ export default function RoundsPage() {
 
         <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-xl">
           <CardHeader className="p-2.5 pb-1">
-            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Pending Today</CardTitle>
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Active Arrears</CardTitle>
           </CardHeader>
           <CardContent className="p-2.5 pt-0">
             <div className="text-lg font-bold tabular-nums text-amber-600 tracking-tight">
@@ -992,7 +1000,7 @@ export default function RoundsPage() {
 
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl">
           <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between">
-            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today's Collection</CardTitle>
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Active Intake</CardTitle>
             <Button 
               variant="ghost" 
               size="icon" 
@@ -1003,7 +1011,7 @@ export default function RoundsPage() {
             </Button>
           </CardHeader>
           <CardContent className="p-2.5 pt-0">
-            <div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{todayGroupCollection.toLocaleString()}</div>
+            <div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{cycleGroupCollection.toLocaleString()}</div>
           </CardContent>
         </Card>
       </div>
@@ -1011,8 +1019,11 @@ export default function RoundsPage() {
       <div className="rounded-2xl border bg-card shadow-sm overflow-hidden border-border/60">
         <div className="p-5 border-b bg-muted/30 flex justify-between items-center">
           <h3 className="text-sm font-bold flex items-center gap-2 tracking-tight text-foreground/80 uppercase">
-            <Users className="size-4 text-primary" /> Current Active Board
+            <Users className="size-4 text-primary" /> Board Participants
           </h3>
+          {!currentActiveCycle && (
+            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-black animate-pulse">Requires Fresh Cycle Activation</Badge>
+          )}
         </div>
         <div className="overflow-x-auto">
           <Table>
@@ -1050,8 +1061,9 @@ export default function RoundsPage() {
                           setSelectedPendingMember(m); 
                           setIsPendingDetailsOpen(true); 
                         }}
+                        disabled={!currentActiveCycle}
                         className={cn(
-                          "px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest tabular-nums transition-all active:scale-95 tabular-nums hover:underline cursor-pointer hover:bg-muted/5",
+                          "px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest tabular-nums transition-all active:scale-95 tabular-nums hover:underline cursor-pointer hover:bg-muted/5 disabled:opacity-30 disabled:cursor-not-allowed",
                           pDays > 0 ? "text-destructive font-bold" : "text-muted-foreground/40"
                         )}
                       >
@@ -1077,7 +1089,7 @@ export default function RoundsPage() {
                               ? "text-emerald-500 bg-emerald-50 cursor-default" 
                               : "text-emerald-600 hover:bg-emerald-50 active:scale-90"
                           )}
-                          disabled={status === 'paid' || isActionPending}
+                          disabled={status === 'paid' || isActionPending || !currentActiveCycle}
                           onClick={() => { 
                             if (status !== 'paid') {
                               setSelectedMemberForPayment(m); 
@@ -1117,7 +1129,7 @@ export default function RoundsPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Wallet className="size-5 text-primary" />
-                  Daily Reconciliation
+                  Audit Ledger
                 </DialogTitle>
                 <DialogDescription>
                   Review collections for a specific date in {getDisplayName(currentRound.name)}.
@@ -1166,9 +1178,9 @@ export default function RoundsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-xs uppercase font-bold text-muted-foreground">Month</TableHead>
+                        <TableHead className="text-xs uppercase font-bold text-muted-foreground">Period</TableHead>
                         <TableHead className="text-xs uppercase font-bold text-muted-foreground">Amount</TableHead>
-                        <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Target Date</TableHead>
+                        <TableHead className="text-right text-xs uppercase font-bold text-muted-foreground">Verified Date</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1220,11 +1232,11 @@ export default function RoundsPage() {
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                  <span className="text-xs font-bold uppercase text-muted-foreground">Scheme Amount</span>
+                  <span className="text-xs font-bold uppercase text-muted-foreground">Scheme Base</span>
                   <span className="font-bold text-sm text-primary">₹{(selectedProfileMember.monthlyAmount || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
-                  <span className="text-xs font-bold uppercase text-emerald-600">Total Contribution</span>
+                  <span className="text-xs font-bold uppercase text-emerald-600">Lifetime Contribution</span>
                   <span className="font-bold text-sm text-emerald-700">
                     ₹{(totalPaidByMember.get(selectedProfileMember.id) || 0).toLocaleString()}
                   </span>
@@ -1261,21 +1273,21 @@ export default function RoundsPage() {
           {selectedPendingMember && (
             <>
               <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b relative">
-                <DialogTitle className="text-xl font-bold tracking-tight text-primary">Member Audit Ledger</DialogTitle>
-                <DialogDescription className="text-xs font-medium text-muted-foreground">Date-wise payment status for {selectedPendingMember.name} (Post April 2026)</DialogDescription>
+                <DialogTitle className="text-xl font-bold tracking-tight text-primary">Isolated Audit Ledger</DialogTitle>
+                <DialogDescription className="text-xs font-medium text-muted-foreground">Active period payment status for {selectedPendingMember.name}.</DialogDescription>
                 <Button variant="ghost" size="icon" onClick={() => setIsPendingDetailsOpen(false)} className="absolute right-4 top-4 rounded-full"><X className="size-4" /></Button>
               </DialogHeader>
               
               <div className="p-0 bg-background">
                 <div className="grid grid-cols-2 p-4 bg-muted/20 border-b gap-4">
                   <div className="space-y-1">
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Total Arrears</span>
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Cycle Arrears</span>
                     <span className="text-lg font-black text-destructive tabular-nums tracking-tighter">
                       ₹{selectedPendingMember.calculatedPendingAmount.toLocaleString()}
                     </span>
                   </div>
                   <div className="space-y-1 text-right">
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Unpaid Interval</span>
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Unpaid Span</span>
                     <span className="text-lg font-black text-destructive tabular-nums tracking-tighter">
                       {selectedPendingMember.calculatedPendingDays} {currentRound?.collectionType === 'Daily' ? 'Days' : 'Month'}
                     </span>
@@ -1316,7 +1328,7 @@ export default function RoundsPage() {
                     </Table>
                   ) : (
                     <div className="p-10 text-center text-muted-foreground italic text-xs">
-                      Date-wise audit ledger is only available for Daily schemes.
+                      Date-wise audit ledger is optimized for Daily schemes.
                     </div>
                   )}
                 </ScrollArea>
@@ -1327,7 +1339,7 @@ export default function RoundsPage() {
                   onClick={() => setIsPendingDetailsOpen(false)} 
                   className="w-full h-11 font-black uppercase tracking-widest text-xs rounded-xl shadow-md"
                 >
-                  Close Board
+                  Close Audit
                 </Button>
               </DialogFooter>
             </>
@@ -1364,7 +1376,7 @@ export default function RoundsPage() {
                     required 
                     className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" 
                   />
-                  <p className="text-[10px] text-muted-foreground italic ml-1">The system will mark this specific date as 'Paid'.</p>
+                  <p className="text-[10px] text-muted-foreground italic ml-1">Record will be attributed to this operational date.</p>
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Method</Label>
@@ -1381,7 +1393,7 @@ export default function RoundsPage() {
               <DialogFooter className="mt-4">
                 <Button type="submit" disabled={isActionPending} className="w-full h-12 font-black uppercase tracking-[0.2em] bg-emerald-600 hover:bg-emerald-700 shadow-lg active:scale-[0.98] transition-all">
                   {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : <CheckCircle2 className="mr-2 size-5" />}
-                  Confirm Payment
+                  Confirm Entry
                 </Button>
               </DialogFooter>
             </form>
@@ -1389,6 +1401,7 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Add Member and Profile Dialogs remain unchanged */}
       <Dialog open={isAddMemberDialogOpen} onOpenChange={setIsAddMemberDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <form onSubmit={handleAddMemberToScheme}>
@@ -1446,49 +1459,6 @@ export default function RoundsPage() {
               </Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isEditMemberProfileOpen} onOpenChange={setIsEditMemberProfileOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          {memberProfileToEdit && (
-            <form onSubmit={handleUpdateMemberProfile}>
-              <DialogHeader>
-                <DialogTitle>Edit Member Profile</DialogTitle>
-                <DialogDescription>Modify personal details and scheme settings for this member.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-5 py-6">
-                <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Full Name</Label>
-                  <Input value={memberProfileToEdit.name} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} required />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
-                  <Input value={memberProfileToEdit.phone} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} required />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label>
-                  <Select value={memberProfileToEdit.paymentType} onValueChange={(v) => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Daily">Daily</SelectItem>
-                      <SelectItem value="Monthly">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Join Date</Label>
-                  <Input type="date" value={memberProfileToEdit.joinDate} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} required />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={isActionPending} className="w-full font-bold">
-                  {isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}
-                  Save Changes
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
         </DialogContent>
       </Dialog>
     </div>

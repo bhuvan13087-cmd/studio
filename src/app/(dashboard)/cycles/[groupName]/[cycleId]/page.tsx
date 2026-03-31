@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, CalendarDays, IndianRupee, History, Search, Filter, CheckCircle2, Clock, User } from "lucide-react"
+import { Loader2, ChevronLeft, CalendarDays, IndianRupee, History, Search, Filter, CheckCircle2, Clock, User, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
  * 
  * Provides a granular, real-time view of a specific historical period.
  * Connects to existing database data for members and payments safely.
+ * ISOLATION RULE: Once a cycle is completed, it remains immutable.
  */
 export default function CycleDetailsPage({ params }: { params: Promise<{ groupName: string, cycleId: string }> }) {
   const router = useRouter()
@@ -35,7 +36,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
   const db = useFirestore()
 
-  // TASK 1: Safe Base Data Fetching
+  // Base Data Fetching
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('startDate', 'desc')), [db])
   const { data: cyclesData, isLoading: cyclesLoading } = useCollection(cyclesQuery)
   
@@ -45,7 +46,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db])
   const { data: paymentsData, isLoading: paymentsLoading } = useCollection(paymentsQuery)
 
-  // TASK 2: Find Exact Cycle
+  // Find Exact Cycle
   const selectedCycle = React.useMemo(() => {
     const allCycles = Array.isArray(cyclesData) ? cyclesData : []
     return allCycles.find(
@@ -55,7 +56,9 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
     )
   }, [cyclesData, groupName, cycleId])
 
-  // TASK 3 & 4: Safe Members + Payments + Total Calculation
+  const isCompleted = selectedCycle?.status === 'completed';
+
+  // Safe Members + Payments + Total Calculation
   const auditData = React.useMemo(() => {
     if (!selectedCycle) return null
 
@@ -84,7 +87,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
     // RESILIENT AMOUNT EXTRACTION
     const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
 
-    // Filter payments within this cycle range for these members
+    // Filter payments strictly within this cycle range
     const cyclePayments = (Array.isArray(paymentsData) ? paymentsData : [])
       .filter(p => {
         if (!memberIds.has(p.memberId)) return false
@@ -100,14 +103,14 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
     const totalCollection = cyclePayments.reduce((sum, p) => sum + getPAmount(p), 0)
 
-    // TASK 6 & 7: Daily Filtering & Collection
+    // Daily Filtering & Collection
     const filteredPayments = cyclePayments.filter(p => 
       !selectedDate || getPDateStr(p) === selectedDate
     )
 
     const dailyCollection = filteredPayments.reduce((sum, p) => sum + getPAmount(p), 0)
 
-    // TASK 8: Members List Status
+    // Members List Status
     const membersWithStatus = groupMembers.map(m => {
       const dayPayment = filteredPayments.find(p => String(p?.memberId || "") === String(m?.id || ""))
       return {
@@ -292,9 +295,16 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
         <div className="space-y-6">
           <div className="p-6 rounded-3xl bg-primary/5 border border-primary/10 flex items-start gap-4">
             <Clock className="size-5 text-primary/40 shrink-0 mt-0.5" />
-            <p className="text-[10px] text-muted-foreground font-medium italic leading-relaxed">
-              Calculations are performed in real-time based on your isolated ledger entries for this group.
-            </p>
+            <div className="space-y-2">
+              <p className="text-[10px] text-muted-foreground font-medium italic leading-relaxed">
+                Calculations are strictly isolated to this operational interval. 
+              </p>
+              {isCompleted && (
+                <div className="flex items-center gap-2 text-amber-700 font-black text-[9px] uppercase tracking-wider">
+                  <Lock className="size-3" /> Historical Record Locked
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
