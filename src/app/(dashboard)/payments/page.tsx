@@ -58,6 +58,7 @@ const PAGE_SIZE = 50
 
 export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [memberSearchTerm, setMemberSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
@@ -388,7 +389,7 @@ export default function PaymentsPage() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={isCorrectionOpen} onOpenChange={(o) => { if(!isActionPending) { setIsCorrectionOpen(o); if(!o) setPaymentToCorrect(null); } }}>
+      <Dialog open={isCorrectionOpen} onOpenChange={(o) => { if(!isActionPending) { setIsCorrectionOpen(o); if(!o) { setPaymentToCorrect(null); setMemberSearchTerm(""); } } }}>
         <DialogContent className="sm:max-w-[450px]">
           {paymentToCorrect && (
             <form onSubmit={handleCorrectPayment} className="space-y-6">
@@ -438,20 +439,46 @@ export default function PaymentsPage() {
                   )}
 
                   {correctionData.type === 'wrong-member' && (
-                    <div className="grid gap-2 animate-in fade-in slide-in-from-top-1">
-                      <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Correct Member</Label>
-                      <Select 
-                        value={correctionData.memberId} 
-                        onValueChange={(v) => setCorrectionData({...correctionData, memberId: v})} 
-                        disabled={isActionPending}
-                      >
-                        <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
-                        <SelectContent>
-                          {members.filter(m => m.status !== 'inactive').map(m => (
-                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="grid gap-3 animate-in fade-in slide-in-from-top-1">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Search Member Name</Label>
+                        <div className="relative group">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                          <Input 
+                            placeholder="Type to filter..." 
+                            value={memberSearchTerm}
+                            onChange={(e) => setMemberSearchTerm(e.target.value)}
+                            className="pl-9 h-9 text-xs rounded-lg border-muted focus-visible:ring-1"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Select Correct Member</Label>
+                        <Select 
+                          value={correctionData.memberId} 
+                          onValueChange={(v) => setCorrectionData({...correctionData, memberId: v})} 
+                          disabled={isActionPending}
+                        >
+                          <SelectTrigger className="h-11 rounded-xl">
+                            <SelectValue placeholder={memberSearchTerm ? "Results from search" : "Choose member"} />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[250px]">
+                            {members
+                              .filter(m => m.status !== 'inactive')
+                              .filter(m => m.name.toLowerCase().includes(memberSearchTerm.toLowerCase()))
+                              .map(m => (
+                                <SelectItem key={m.id} value={m.id} className="text-xs font-medium">
+                                  {m.name}
+                                </SelectItem>
+                              ))}
+                            {members.filter(m => m.status !== 'inactive' && m.name.toLowerCase().includes(memberSearchTerm.toLowerCase())).length === 0 && (
+                              <div className="p-4 text-center text-[10px] text-muted-foreground italic uppercase font-bold tracking-widest">
+                                No members match
+                              </div>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   )}
 
