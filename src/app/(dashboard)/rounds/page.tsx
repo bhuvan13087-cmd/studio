@@ -781,7 +781,7 @@ export default function RoundsPage() {
                     
                     <div className="pt-4 border-t border-dashed border-border/60 mt-4">
                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Cycle Intake</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Total Collection</span>
                           <span className="font-black text-emerald-600 text-base tabular-nums">₹{activeCycleCollection.toLocaleString()}</span>
                        </div>
                     </div>
