@@ -45,11 +45,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarPicker } from "@/components/ui/calendar"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
@@ -956,7 +960,7 @@ export default function RoundsPage() {
                   <Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="800" />
                 </div>
                 <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
+                  <Label className="text-[10px) font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label>
                   <Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="20" />
                 </div>
                 <div className="grid gap-2">
@@ -1236,12 +1240,12 @@ export default function RoundsPage() {
       </Dialog>
 
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
-        <DialogContent className="w-fit min-w-[320px] max-w-[90vw] sm:max-w-xl max-h-[85vh] flex flex-col">
+        <DialogContent className="w-fit min-w-[320px] max-w-[90vw] sm:max-w-xl flex flex-col max-h-[85vh]">
           {isHistoryDialogOpen && (
             <>
               <DialogHeader><DialogTitle className="text-xl">History: {historyMember?.name}</DialogTitle></DialogHeader>
               <div className="py-4 overflow-y-auto flex-1">
-                <ScrollArea className="max-h-[60vh] h-auto pr-4">
+                <ScrollArea className="h-full pr-4">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1357,7 +1361,7 @@ export default function RoundsPage() {
 
       <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
         <DialogContent 
-          className="sm:max-w-[450px] p-0 overflow-hidden rounded-xl border-none shadow-2xl max-h-[85vh] flex flex-col"
+          className="sm:max-w-[450px] p-0 overflow-hidden rounded-xl border-none shadow-2xl flex flex-col max-h-[85vh]"
         >
           {selectedPendingMember && (
             <>
@@ -1385,7 +1389,7 @@ export default function RoundsPage() {
                             : 'Set Due Date'}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="end">
+                      <PopoverContent className="w-auto p-0" align="end" side="bottom">
                         <CalendarPicker
                           mode="single"
                           selected={currentRound?.specificDueDate ? parseISO(currentRound.specificDueDate) : undefined}
@@ -1424,7 +1428,7 @@ export default function RoundsPage() {
                   </div>
                 </div>
 
-                <ScrollArea className="max-h-[60vh] h-auto">
+                <ScrollArea className="h-full">
                   {(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Daily' ? (
                     <Table>
                       <TableHeader className="bg-muted/30 sticky top-0 z-10">
