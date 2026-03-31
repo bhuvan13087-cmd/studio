@@ -792,7 +792,7 @@ export default function RoundsPage() {
                     <Calendar className="size-3 text-primary/40" />
                     {latestGroupCycle && latestGroupCycle.status === 'active'
                       ? `${format(parseISO(latestGroupCycle.startDate), 'MMM dd')} → ${format(parseISO(latestGroupCycle.endDate), 'MMM dd')}`
-                      : <span className="text-amber-600 font-black">Requires Fresh Cycle</span>}
+                      : null}
                   </div>
                 </CardHeader>
 
@@ -1060,9 +1060,6 @@ export default function RoundsPage() {
           <h3 className="text-sm font-bold flex items-center gap-2 tracking-tight text-foreground/80 uppercase">
             <Users className="size-4 text-primary" /> Board Participants
           </h3>
-          {!currentActiveCycle && (
-            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-black animate-pulse">Requires Fresh Cycle Activation</Badge>
-          )}
         </div>
         <div className="overflow-x-auto">
           <Table>
@@ -1334,10 +1331,9 @@ export default function RoundsPage() {
         >
           {selectedPendingMember && (
             <>
-              <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b relative">
+              <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b">
                 <DialogTitle className="text-xl font-bold tracking-tight text-primary">Isolated Audit Ledger</DialogTitle>
                 <DialogDescription className="text-xs font-medium text-muted-foreground">Active period payment status for {selectedPendingMember.name}.</DialogDescription>
-                <Button variant="ghost" size="icon" onClick={() => setIsPendingDetailsOpen(false)} className="absolute right-4 top-4 rounded-full"><X className="size-4" /></Button>
               </DialogHeader>
               
               <div className="p-0 bg-background">
