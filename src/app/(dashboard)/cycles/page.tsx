@@ -124,9 +124,6 @@ export default function CyclesPage() {
           <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-primary font-headline uppercase leading-none">
             Cycles Registry
           </h2>
-          <p className="text-xs text-muted-foreground font-medium max-w-lg leading-relaxed">
-            Historical period auditing and collection verification. Access a specific unit to inspect chronological ledger logs and daily installments.
-          </p>
         </div>
         <div className="hidden lg:flex flex-col items-end gap-1.5 opacity-30">
           <div className="flex items-center gap-2">
