@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, CheckCircle2, Clock, MoreHorizontal, History, Plus, Loader2, Calendar, Trash2, X, LayoutList, FileText, User, Lock, ChevronDown, Edit3, ArrowRight } from "lucide-react"
+import { Search, CheckCircle2, Clock, MoreHorizontal, History, Plus, Loader2, Calendar, Trash2, X, LayoutList, FileText, User, Lock, ChevronDown, Edit3, ArrowRight, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -50,7 +50,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc, writeBatch } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns"
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, isValid } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -75,7 +75,7 @@ export default function PaymentsPage() {
   const [correctionData, setCorrectionData] = useState({
     memberId: "",
     amount: 0,
-    date: ""
+    type: "wrong-amount"
   })
 
   const { toast } = useToast()
@@ -131,29 +131,76 @@ export default function PaymentsPage() {
   const handleCorrectPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || !paymentToCorrect || isActionPending) return;
-    const newMember = members.find(m => m.id === correctionData.memberId);
-    if (!newMember) { toast({ variant: "destructive", title: "Member Required", description: "Please select a valid member." }); return; }
+
     setIsActionPending(true);
     try {
       const batch = writeBatch(db);
       const originalPaymentRef = doc(db, 'payments', paymentToCorrect.id);
-      const newPaymentRef = doc(collection(db, 'payments'));
-      const [monthName, yearStr] = format(parseISO(correctionData.date), 'MMMM yyyy').split(' ');
-      const isLocked = monthLocks?.some(l => l.year === yearStr && l.monthName === monthName);
-      if (isLocked) throw new Error("Target month is locked.");
-      batch.update(originalPaymentRef, { status: 'corrected', correctedAt: new Date().toISOString(), correctedToId: newPaymentRef.id });
       const oldMember = members.find(m => m.id === paymentToCorrect.memberId);
-      if (oldMember) {
-        const oldMemberRef = doc(db, 'members', oldMember.id);
-        batch.update(oldMemberRef, { totalPaid: Math.max(0, (oldMember.totalPaid || 0) - getPAmount(paymentToCorrect)) });
+      const oldAmount = getPAmount(paymentToCorrect);
+      
+      if (correctionData.type === 'wrong-amount') {
+        const newAmount = Number(correctionData.amount);
+        batch.update(originalPaymentRef, { amountPaid: newAmount });
+        if (oldMember) {
+          const diff = newAmount - oldAmount;
+          batch.update(doc(db, 'members', oldMember.id), { 
+            totalPaid: (oldMember.totalPaid || 0) + diff 
+          });
+        }
+        await createAuditLog(db, user, `Correction (Wrong Amount): Updated ${paymentToCorrect.memberName} payment from ₹${oldAmount} to ₹${newAmount}`);
+      } 
+      else if (correctionData.type === 'wrong-member') {
+        const newMember = members.find(m => m.id === correctionData.memberId);
+        if (!newMember) throw new Error("Please select a valid member.");
+        
+        // Remove from old
+        batch.delete(originalPaymentRef);
+        if (oldMember) {
+          batch.update(doc(db, 'members', oldMember.id), { 
+            totalPaid: Math.max(0, (oldMember.totalPaid || 0) - oldAmount) 
+          });
+        }
+        
+        // Add to new
+        const newPaymentRef = doc(collection(db, 'payments'));
+        const pDateStr = getPDateStr(paymentToCorrect) || format(new Date(), 'yyyy-MM-dd');
+        batch.set(newPaymentRef, {
+          id: newPaymentRef.id,
+          memberId: newMember.id,
+          memberName: newMember.name,
+          month: paymentToCorrect.month || format(parseISO(pDateStr), 'MMMM yyyy'),
+          targetDate: pDateStr,
+          amountPaid: oldAmount,
+          paymentDate: paymentToCorrect.paymentDate || new Date().toISOString(),
+          status: "success",
+          method: paymentToCorrect.method || "Cash",
+          createdAt: serverTimestamp()
+        });
+        batch.update(doc(db, 'members', newMember.id), {
+          totalPaid: (newMember.totalPaid || 0) + oldAmount
+        });
+        await createAuditLog(db, user, `Correction (Wrong Member): Moved ₹${oldAmount} from ${paymentToCorrect.memberName} to ${newMember.name}`);
+      } 
+      else if (correctionData.type === 'duplicate') {
+        batch.delete(originalPaymentRef);
+        if (oldMember) {
+          batch.update(doc(db, 'members', oldMember.id), { 
+            totalPaid: Math.max(0, (oldMember.totalPaid || 0) - oldAmount) 
+          });
+        }
+        await createAuditLog(db, user, `Correction (Duplicate): Deleted ₹${oldAmount} entry for ${paymentToCorrect.memberName}`);
       }
-      batch.set(newPaymentRef, { id: newPaymentRef.id, memberId: newMember.id, memberName: newMember.name, month: format(parseISO(correctionData.date), 'MMMM yyyy'), targetDate: correctionData.date, amountPaid: Number(correctionData.amount), paymentDate: new Date().toISOString(), status: "success", method: paymentToCorrect.method || "Cash", originalPaymentId: paymentToCorrect.id, createdAt: serverTimestamp() });
-      const newMemberRef = doc(db, 'members', newMember.id);
-      batch.update(newMemberRef, { totalPaid: (newMember.id === oldMember?.id ? Math.max(0, (oldMember.totalPaid || 0) - getPAmount(paymentToCorrect)) : (newMember.totalPaid || 0)) + Number(correctionData.amount) });
+
       await withTimeout(batch.commit());
-      await createAuditLog(db, user, `Corrected payment for ${paymentToCorrect.memberName} (₹${getPAmount(paymentToCorrect)}) to ${newMember.name} (₹${correctionData.amount})`);
-      setIsCorrectionOpen(false); setPaymentToCorrect(null); toast({ title: "Payment Corrected", description: "Record updated and balances re-calculated." });
-    } catch (error: any) { toast({ variant: "destructive", title: "Correction Failed", description: error.message || "An error occurred." }); } finally { setIsActionPending(false); }
+      setIsCorrectionOpen(false); 
+      setPaymentToCorrect(null); 
+      toast({ title: "Payment Corrected", description: "Ledger updated successfully." });
+    } catch (error: any) { 
+      toast({ variant: "destructive", title: "Correction Failed", description: error.message || "An error occurred." }); 
+    } finally { 
+      setIsActionPending(false); 
+    }
   };
 
   const handleDeletePayment = async () => {
@@ -283,7 +330,24 @@ export default function PaymentsPage() {
                               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" disabled={isActionPending}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44">
                                 <DropdownMenuItem onSelect={() => { if (!isActionPending) { setHistoryMember(p); setIsHistoryOpen(true); } }}><History className="mr-2 size-4" /> Cycle History</DropdownMenuItem>
-                                {!isCorrected && (<><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => { if (!isActionPending) { setPaymentToCorrect(p); setCorrectionData({ memberId: p.memberId, amount: pAmt, date: pDateStr !== '-' ? pDateStr : format(new Date(), 'yyyy-MM-dd') }); setIsCorrectionOpen(true); } }}><Edit3 className="mr-2 size-4 text-primary" /> Correct Payment</DropdownMenuItem></>)}
+                                {!isCorrected && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onSelect={() => { 
+                                      if (!isActionPending) { 
+                                        setPaymentToCorrect(p); 
+                                        setCorrectionData({ 
+                                          memberId: p.memberId, 
+                                          amount: pAmt, 
+                                          type: "wrong-amount" 
+                                        }); 
+                                        setIsCorrectionOpen(true); 
+                                      } 
+                                    }}>
+                                      <Edit3 className="mr-2 size-4 text-primary" /> Correct Payment
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem disabled={isLocked || isActionPending} className={cn("text-destructive focus:bg-destructive/10 focus:text-destructive", (isLocked || isCorrected) && "opacity-50 pointer-events-none")} onSelect={() => { if (!isActionPending) { setPaymentToDelete(p); setIsDeletePaymentDialogOpen(true); } }}><Trash2 className="mr-2 size-4" /> Delete Record</DropdownMenuItem>
                               </DropdownMenuContent>
@@ -325,7 +389,100 @@ export default function PaymentsPage() {
       </Tabs>
 
       <Dialog open={isCorrectionOpen} onOpenChange={(o) => { if(!isActionPending) { setIsCorrectionOpen(o); if(!o) setPaymentToCorrect(null); } }}>
-        <DialogContent className="sm:max-w-[450px]">{paymentToCorrect && (<form onSubmit={handleCorrectPayment} className="space-y-6"><DialogHeader><DialogTitle className="flex items-center gap-2"><Edit3 className="size-5 text-primary" /> Payment Correction</DialogTitle><DialogDescription>Rectify mistakes in member, amount, or date. Original data remains as an audit record.</DialogDescription></DialogHeader><div className="space-y-4"><div className="p-3 bg-muted/30 rounded-lg space-y-2"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Original Record</Label><div className="flex items-center justify-between text-xs"><span className="font-semibold">{paymentToCorrect.memberName}</span><span className="font-bold text-emerald-600">₹{getPAmount(paymentToCorrect).toLocaleString()}</span></div><div className="text-[10px] text-muted-foreground">{getPDateStr(paymentToCorrect) || "No target date"}</div></div><div className="flex justify-center"><ArrowRight className="size-5 text-primary/30" /></div><div className="grid gap-4"><div className="grid gap-2"><Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Correct Member</Label><Select value={correctionData.memberId} onValueChange={(v) => setCorrectionData({...correctionData, memberId: v})} disabled={isActionPending}><SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger><SelectContent>{members.filter(m => m.status !== 'inactive').map(m => (<SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>))}</SelectContent></Select></div><div className="grid gap-2"><Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Correct Amount (₹)</Label><Input type="number" value={correctionData.amount || ""} onChange={e => setCorrectionData({...correctionData, amount: Number(e.target.value)})} required disabled={isActionPending} /></div><div className="grid gap-2"><Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Correct Date</Label><Input type="date" value={correctionData.date} onChange={e => setCorrectionData({...correctionData, date: e.target.value})} required disabled={isActionPending} /></div></div></div><DialogFooter className="gap-2"><Button variant="outline" type="button" onClick={() => setIsCorrectionOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button><Button type="submit" disabled={isActionPending} className="w-full sm:w-auto font-bold gap-2">{isActionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}Apply Correction</Button></DialogFooter></form>)}</DialogContent>
+        <DialogContent className="sm:max-w-[450px]">
+          {paymentToCorrect && (
+            <form onSubmit={handleCorrectPayment} className="space-y-6">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><Edit3 className="size-5 text-primary" /> Payment Correction</DialogTitle>
+                <DialogDescription>Select the correction type and update the details.</DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                <div className="p-3 bg-muted/30 rounded-lg space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Original Record</Label>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold">{paymentToCorrect.memberName}</span>
+                    <span className="font-bold text-emerald-600">₹{getPAmount(paymentToCorrect).toLocaleString()}</span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">{getPDateStr(paymentToCorrect) || "No target date"}</div>
+                </div>
+
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Correction Type</Label>
+                    <Select 
+                      value={correctionData.type} 
+                      onValueChange={(v) => setCorrectionData({...correctionData, type: v})}
+                      disabled={isActionPending}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="wrong-amount">Wrong Amount</SelectItem>
+                        <SelectItem value="wrong-member">Wrong Member</SelectItem>
+                        <SelectItem value="duplicate">Duplicate Entry</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {correctionData.type === 'wrong-amount' && (
+                    <div className="grid gap-2 animate-in fade-in slide-in-from-top-1">
+                      <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Correct Amount (₹)</Label>
+                      <Input 
+                        type="number" 
+                        value={correctionData.amount || ""} 
+                        onChange={e => setCorrectionData({...correctionData, amount: Number(e.target.value)})} 
+                        required 
+                        disabled={isActionPending} 
+                      />
+                    </div>
+                  )}
+
+                  {correctionData.type === 'wrong-member' && (
+                    <div className="grid gap-2 animate-in fade-in slide-in-from-top-1">
+                      <Label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Correct Member</Label>
+                      <Select 
+                        value={correctionData.memberId} 
+                        onValueChange={(v) => setCorrectionData({...correctionData, memberId: v})} 
+                        disabled={isActionPending}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
+                        <SelectContent>
+                          {members.filter(m => m.status !== 'inactive').map(m => (
+                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {correctionData.type === 'duplicate' && (
+                    <div className="p-4 bg-destructive/5 border border-destructive/20 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-1">
+                      <AlertCircle className="size-5 text-destructive shrink-0 mt-0.5" />
+                      <p className="text-xs text-destructive font-medium leading-relaxed">
+                        Choosing "Duplicate Entry" will permanently delete this payment record and update the member's balance. This action is not reversible.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button variant="outline" type="button" onClick={() => setIsCorrectionOpen(false)} disabled={isActionPending} className="w-full sm:w-auto">Cancel</Button>
+                <Button 
+                  type="submit" 
+                  disabled={isActionPending} 
+                  className={cn(
+                    "w-full sm:w-auto font-bold gap-2",
+                    correctionData.type === 'duplicate' ? "bg-destructive hover:bg-destructive/90" : ""
+                  )}
+                >
+                  {isActionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                  {correctionData.type === 'duplicate' ? 'Confirm Deletion' : 'Apply Correction'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
       </Dialog>
 
       <Dialog open={isAuditProfileOpen} onOpenChange={setIsAuditProfileOpen}>
