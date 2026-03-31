@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, CalendarDays, IndianRupee, History, Search, Filter, CheckCircle2, Clock, User, Lock } from "lucide-react"
+import { Loader2, ChevronLeft, CalendarDays, IndianRupee, History, Search, Filter, CheckCircle2, Clock, User, Lock, Wallet } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
 import { useRouter } from "next/navigation"
-import { format, parseISO, isWithinInterval, startOfDay, endOfDay, isValid } from "date-fns"
+import { format, parseISO, isWithinInterval, startOfDay, endOfDay, isValid, eachDayOfInterval, isAfter, max } from "date-fns"
 import { cn } from "@/lib/utils"
 
 /**
@@ -45,6 +45,9 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db])
   const { data: paymentsData, isLoading: paymentsLoading } = useCollection(paymentsQuery)
+
+  const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds')), [db])
+  const { data: roundsData } = useCollection(roundsQuery)
 
   // Find Exact Cycle
   const selectedCycle = React.useMemo(() => {
@@ -122,6 +125,31 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
       }
     })
 
+    // ULTRA SAFE: Calculate Pending Members for Completed Cycle
+    const pendingMembersCount = groupMembers.filter(m => {
+      const scheme = (roundsData || []).find(r => r.name === groupName);
+      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
+      
+      if (resolvedType === 'Daily') {
+        const start = startOfDay(max([parseISO(m.joinDate), parseISO(startDate)]));
+        const end = parseISO(endDate);
+        if (isAfter(start, end)) return false;
+        try {
+          const interval = eachDayOfInterval({ start, end });
+          return interval.some(day => {
+            const dStr = format(day, 'yyyy-MM-dd');
+            const dayPaymentSum = cyclePayments
+              .filter(p => p.memberId === m.id && getPDateStr(p) === dStr)
+              .reduce((sum, p) => sum + getPAmount(p), 0);
+            return dayPaymentSum < (m.monthlyAmount || 800);
+          });
+        } catch(e) { return false; }
+      } else {
+        const hasPaid = cyclePayments.some(p => p.memberId === m.id);
+        return !hasPaid;
+      }
+    }).length;
+
     return {
       groupMembers,
       cyclePayments,
@@ -129,9 +157,10 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
       dailyCollection,
       membersWithStatus,
       startDate,
-      endDate
+      endDate,
+      pendingMembersCount
     }
-  }, [selectedCycle, membersData, paymentsData, groupName, selectedDate])
+  }, [selectedCycle, membersData, paymentsData, roundsData, groupName, selectedDate])
 
   if (!groupName || !cycleId) {
     return (
@@ -174,23 +203,36 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
       {/* Header Navigation */}
-      <div className="flex items-center gap-4">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={() => router.push(`/cycles/${encodeURIComponent(groupName)}`)}
-          className="rounded-full h-10 w-10 hover:bg-primary/10 text-primary transition-all active:scale-90"
-        >
-          <ChevronLeft className="size-6" />
-        </Button>
-        <div className="space-y-0.5">
-          <h2 className="text-2xl font-black tracking-tight text-primary font-headline uppercase">
-            Audit Board
-          </h2>
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-            {groupName} Registry Detail
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => router.push(`/cycles/${encodeURIComponent(groupName)}`)}
+            className="rounded-full h-10 w-10 hover:bg-primary/10 text-primary transition-all active:scale-90"
+          >
+            <ChevronLeft className="size-6" />
+          </Button>
+          <div className="space-y-0.5">
+            <h2 className="text-2xl font-black tracking-tight text-primary font-headline uppercase">
+              Audit Board
+            </h2>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+              {groupName} Registry Detail
+            </p>
+          </div>
         </div>
+
+        {/* ULTRA SAFE: Show Collect Payment Button only if completed and pending exists */}
+        {isCompleted && auditData.pendingMembersCount > 0 && (
+          <Button 
+            onClick={() => router.push(`/cycles/${encodeURIComponent(groupName)}/${encodeURIComponent(cycleId)}/collect`)}
+            className="bg-emerald-600 hover:bg-emerald-700 font-black uppercase tracking-[0.15em] text-[10px] h-10 px-6 rounded-xl shadow-lg active:scale-95 transition-all gap-2"
+          >
+            <Wallet className="size-3.5" />
+            Collect History Pending ({auditData.pendingMembersCount})
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
