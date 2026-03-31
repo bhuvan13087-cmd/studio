@@ -100,42 +100,37 @@ export default function MembersPage() {
       let memberStatus: 'paid' | 'pending' | 'waiting' = 'pending';
 
       if (!activeCycle) {
-        return { ...m, memberStatus: 'paid' as const, totalPaidSum: mPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0) };
+        return { ...m, memberStatus: 'paid' as const, totalPaidSum: 0 };
       }
 
       if (resolvedType === 'Daily') {
         const isPaidToday = mPayments.filter(p => p.targetDate === todayStr).reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800);
         memberStatus = isPaidToday ? 'paid' : 'pending';
       } else {
-        // Monthly logic (DUAL COLLECTION SYSTEM - ULTRA SAFE PATCH)
         const hasPaidThisCycle = mPayments.some(p => {
           const pDate = p.targetDate || (p.paymentDate?.toDate ? format(p.paymentDate.toDate(), 'yyyy-MM-dd') : null);
           return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
         });
-        
-        if (hasPaidThisCycle) {
-          memberStatus = 'paid';
-        } else {
+        if (hasPaidThisCycle) { memberStatus = 'paid'; } else {
           const cycleStart = parseISO(activeCycle.startDate);
           const specificDueDate = scheme?.specificDueDate;
           const numericDueDate = scheme?.dueDate || 5;
-          
           let isPastDue = false;
-          if (specificDueDate) {
-            isPastDue = isAfter(today, parseISO(specificDueDate));
-          } else {
-            isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate;
-          }
-          
-          if (!isPastDue) {
-            memberStatus = 'waiting'; // Rendered as "DUE"
-          } else {
-            memberStatus = 'pending'; // Rendered as "OVERDUE"
-          }
+          if (specificDueDate) { isPastDue = isAfter(today, parseISO(specificDueDate)); } else { isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate; }
+          if (!isPastDue) { memberStatus = 'waiting'; } else { memberStatus = 'pending'; }
         }
       }
 
-      return { ...m, memberStatus: memberStatus, totalPaidSum: mPayments.reduce((acc, p) => acc + (p.amountPaid || 0), 0) };
+      return { 
+        ...m, 
+        memberStatus: memberStatus, 
+        totalPaidSum: mPayments
+          .filter(p => {
+            const pDate = p.targetDate || (p.paymentDate?.toDate ? format(p.paymentDate.toDate(), 'yyyy-MM-dd') : null);
+            return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
+          })
+          .reduce((acc, p) => acc + (p.amountPaid || 0), 0) 
+      };
     });
   }, [members, payments, chitRounds, allCycles]);
 
@@ -152,7 +147,7 @@ export default function MembersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-2xl sm:text-3xl font-headline font-bold tracking-tight text-primary">Member Directory</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage participants and mode-specific seat status.</p>
+          <p className="text-sm sm:text-base text-muted-foreground">Cycle-based seat status and contribution management.</p>
         </div>
       </div>
 
@@ -169,7 +164,7 @@ export default function MembersPage() {
                 <TableHead className="font-bold text-sm uppercase tracking-wider min-w-[200px]">Member</TableHead>
                 <TableHead className="font-bold text-sm uppercase tracking-wider hidden md:table-cell">Phone</TableHead>
                 <TableHead className="font-bold text-sm uppercase tracking-wider">Status</TableHead>
-                <TableHead className="font-bold text-sm uppercase tracking-wider text-right">Ledger (₹)</TableHead>
+                <TableHead className="font-bold text-sm uppercase tracking-wider text-right">Cycle Ledger (₹)</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -199,7 +194,7 @@ export default function MembersPage() {
                           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 uppercase tracking-tight shadow-sm w-fit"><AlertCircle className="size-2.5" /> {isMonthly ? 'OVERDUE' : 'PENDING'}</div>
                         )}
                       </TableCell>
-                      <TableCell className="text-right whitespace-nowrap"><div className="flex flex-col items-end gap-0.5"><span className="text-sm font-bold text-emerald-600">₹{member.totalPaidSum.toLocaleString()}</span><span className="text-[10px] font-bold text-muted-foreground uppercase">Total Paid</span></div></TableCell>
+                      <TableCell className="text-right whitespace-nowrap"><div className="flex flex-col items-end gap-0.5"><span className="text-sm font-bold text-emerald-600">₹{member.totalPaidSum.toLocaleString()}</span><span className="text-[10px] font-bold text-muted-foreground uppercase">Current Cycle</span></div></TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
