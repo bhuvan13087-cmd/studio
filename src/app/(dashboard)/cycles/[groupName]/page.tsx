@@ -28,6 +28,7 @@ import { createAuditLog } from "@/firebase/logging"
  * 
  * Displays a chronological list of cycle date ranges with a compact, professional UI.
  * Now categorizes cycles into "Active" and "Past" states for better auditing flow.
+ * includes high-integrity deduplication for overlapping or duplicate date records.
  */
 export default function GroupCyclesPage({ params }: { params: Promise<{ groupName: string }> }) {
   const router = useRouter()
@@ -50,22 +51,38 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('startDate', 'desc')), [db])
   const { data: allCycles, isLoading } = useCollection(cyclesQuery)
 
-  // Data Sanitization - Categorize by Status
+  // Data Sanitization - Categorize by Status & Deduplicate
   const { activeCycles, pastCycles } = React.useMemo(() => {
     if (!Array.isArray(allCycles)) return { activeCycles: [], pastCycles: [] }
     
-    const filtered = allCycles
+    // Map to track unique periods: key = startDate + endDate
+    const uniqueMap = new Map<string, any>()
+
+    allCycles
       .filter((c) => String(c?.name || "").trim() === groupName)
-      .map((c) => ({
-        id: String(c?.id || ""),
-        startDate: String(c?.startDate || "-"),
-        endDate: String(c?.endDate || "-"),
-        status: c?.status || 'active'
-      }))
+      .forEach((c) => {
+        const start = String(c?.startDate || "-")
+        const end = String(c?.endDate || "-")
+        const key = `${start}_${end}`
+        
+        // Strategy: Keep 'active' over 'completed' for the same period
+        // Otherwise keep the first one encountered (Firestore orderBy handled this)
+        const existing = uniqueMap.get(key)
+        if (!existing || (c.status === 'active' && existing.status !== 'active')) {
+          uniqueMap.set(key, {
+            id: String(c?.id || ""),
+            startDate: start,
+            endDate: end,
+            status: c?.status || 'active'
+          })
+        }
+      })
+
+    const deduplicated = Array.from(uniqueMap.values())
 
     return {
-      activeCycles: filtered.filter(c => c.status === 'active'),
-      pastCycles: filtered.filter(c => c.status !== 'active')
+      activeCycles: deduplicated.filter(c => c.status === 'active'),
+      pastCycles: deduplicated.filter(c => c.status !== 'active')
     }
   }, [allCycles, groupName])
 
