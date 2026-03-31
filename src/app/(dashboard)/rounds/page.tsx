@@ -1379,7 +1379,10 @@ export default function RoundsPage() {
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" className="h-8 text-[10px] font-black uppercase tracking-widest gap-2 bg-white">
-                          <CalendarDays className="size-3.5 text-primary" /> Set Due Date
+                          <CalendarDays className="size-3.5 text-primary" /> 
+                          {currentRound?.specificDueDate 
+                            ? format(parseISO(currentRound.specificDueDate), 'dd MMM yyyy') 
+                            : 'Set Due Date'}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="end">
