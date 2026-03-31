@@ -2,10 +2,10 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, ArrowRight, ChevronRight, Calendar, History, Clock, Pencil, Save, ShieldCheck, Archive } from "lucide-react"
+import { Loader2, ChevronLeft, ArrowRight, ChevronRight, Calendar, History, Clock, Pencil, Save, ShieldCheck, Archive, RefreshCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, orderBy, doc, updateDoc } from "firebase/firestore"
+import { collection, query, orderBy, doc, updateDoc, addDoc } from "firebase/firestore"
 import { useRouter } from "next/navigation"
 import { format, parseISO, isValid } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
@@ -143,6 +143,32 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
       setEditingCycle(null)
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update cycle." })
+    } finally {
+      setIsActionPending(false)
+    }
+  }
+
+  const handleReconcileHistory = async () => {
+    if (!db || !user || isActionPending) return
+
+    setIsActionPending(true)
+    try {
+      const cycleRef = collection(db, 'cycles')
+      await addDoc(cycleRef, {
+        name: groupName,
+        startDate: "2026-03-15",
+        endDate: "2026-03-29",
+        status: "completed",
+        type: "recovered",
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString()
+      })
+
+      await createAuditLog(db, user, `Reconciled legacy history for ${groupName}: 2026-03-15 to 2026-03-29`)
+      
+      toast({ title: "History Restored", description: "Legacy operational window has been archived." })
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to restore history." })
     } finally {
       setIsActionPending(false)
     }
@@ -295,11 +321,23 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
                 <CycleItem key={cycle.id} cycle={cycle} isActive={false} />
               ))
             ) : (
-              <div className="p-12 text-center border-2 border-dashed rounded-3xl bg-muted/5 text-muted-foreground/40 space-y-3">
-                <History className="size-8 mx-auto opacity-20" />
-                <p className="text-[9px] font-black uppercase tracking-[0.2em] italic">
-                  No historical records located
-                </p>
+              <div className="p-12 text-center border-2 border-dashed rounded-3xl bg-muted/5 space-y-4">
+                <div className="space-y-2">
+                  <History className="size-8 mx-auto text-muted-foreground/20" />
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 italic">
+                    No historical records located
+                  </p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  disabled={isActionPending}
+                  onClick={handleReconcileHistory}
+                  className="h-9 px-4 rounded-xl font-black uppercase text-[8px] tracking-[0.15em] border-primary/20 text-primary hover:bg-primary/5"
+                >
+                  {isActionPending ? <Loader2 className="size-3 mr-2 animate-spin" /> : <RefreshCcw className="size-3 mr-2" />}
+                  Restore Legacy Archive (Mar 15 - Mar 29)
+                </Button>
               </div>
             )}
           </div>
