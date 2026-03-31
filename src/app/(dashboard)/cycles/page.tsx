@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -113,14 +112,6 @@ export default function CyclesPage() {
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 border-b border-border/60 pb-8">
         <div className="space-y-2">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="h-5 w-5 rounded bg-primary/10 flex items-center justify-center">
-              <ShieldCheck className="size-3 text-primary" />
-            </div>
-            <span className="text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground/70">
-              Administrative Audit Registry
-            </span>
-          </div>
           <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-primary font-headline uppercase leading-none">
             Cycles Registry
           </h2>
