@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -305,7 +304,7 @@ export default function RoundsPage() {
 
   // AUTO CYCLE COMPLETION MONITOR (STRICT ISOLATION)
   useEffect(() => {
-    const checkAndCloseCycles = async () => {
+    const checkAndCloseCycles = async ( ) => {
       if (!db || !allCycles || !isAdmin) return;
       const nowStr = format(new Date(), 'yyyy-MM-dd');
       
@@ -1192,12 +1191,12 @@ export default function RoundsPage() {
       </Dialog>
 
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="w-fit min-w-[320px] max-w-[90vw] sm:max-w-xl">
           {isHistoryDialogOpen && (
             <>
               <DialogHeader><DialogTitle className="text-xl">History: {historyMember?.name}</DialogTitle></DialogHeader>
               <div className="py-4">
-                <ScrollArea className="h-[400px] pr-4">
+                <ScrollArea className="max-h-[60vh] h-auto pr-4">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1213,19 +1212,30 @@ export default function RoundsPage() {
                         // Show ONLY active cycle payments as per production requirement
                         if (!activeCycle) return null;
 
-                        return (allPayments || [])
+                        const records = (allPayments || [])
                           .filter(p => {
                             if (p.memberId !== historyMember.id || !(p.status === 'success' || p.status === 'paid')) return false;
                             const pDate = getRecordDate(p);
                             return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
-                          })
-                          .map((p, i) => (
-                            <TableRow key={i}>
-                              <TableCell className="text-sm font-semibold">{p.month}</TableCell>
-                              <TableCell className="text-sm font-bold text-emerald-600">₹{(getPaymentAmount(p)).toLocaleString()}</TableCell>
-                              <TableCell className="text-right text-xs text-muted-foreground font-medium">{getRecordDate(p) || '-'}</TableCell>
+                          });
+
+                        if (records.length === 0) {
+                          return (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center py-10 text-muted-foreground italic text-xs">
+                                No verified records for this period.
+                              </TableCell>
                             </TableRow>
-                          ));
+                          );
+                        }
+
+                        return records.map((p, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="text-sm font-semibold">{p.month}</TableCell>
+                            <TableCell className="text-sm font-bold text-emerald-600">₹{(getPaymentAmount(p)).toLocaleString()}</TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground font-medium">{getRecordDate(p) || '-'}</TableCell>
+                          </TableRow>
+                        ));
                       })()}
                     </TableBody>
                   </Table>
