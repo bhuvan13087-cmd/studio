@@ -1098,7 +1098,7 @@ export default function RoundsPage() {
                         "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
                         status === 'paid' ? "bg-emerald-500 hover:bg-emerald-600" : (status === 'waiting' ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700")
                       )}>
-                        {status === 'paid' ? 'SUCCESS' : (status === 'waiting' ? 'DUE' : 'OVERDUE')}
+                        {status === 'paid' ? 'SUCCESS' : (status === 'waiting' ? 'DUE' : (isMonthly ? 'OVERDUE' : 'PENDING'))}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right pr-6">
