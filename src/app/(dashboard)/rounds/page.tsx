@@ -49,6 +49,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as CalendarPicker } from "@/components/ui/calendar"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc, addDoc } from "firebase/firestore"
@@ -349,10 +351,9 @@ export default function RoundsPage() {
   // ISOLATED DYNAMIC CALCULATIONS (RESPECTS ACTIVE CYCLE WINDOW ONLY)
   const membersWithCalculatedStats = useMemo(() => {
     if (!members || !allPayments || !chitSchemes) return [];
-    const now = new Date();
+    const now = startOfDay(new Date());
     const todayStr = format(now, 'yyyy-MM-dd');
-    const today = startOfDay(now);
-    const currentDayOfMonth = now.getDate();
+    const today = now;
 
     return members.map(m => {
       const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(m.chitGroup).trim() && c.status === 'active');
@@ -405,7 +406,6 @@ export default function RoundsPage() {
         memberStatus = mPayments.filter(p => getRecordDate(p) === todayStr).reduce((acc, p) => acc + getPaymentAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
       } else {
         // Monthly logic (DUAL COLLECTION SYSTEM - STRICT SEPARATION)
-        const dueDate = scheme?.dueDate || 5;
         const hasPaidThisCycle = mPayments.some(p => {
           const pDate = getRecordDate(p);
           return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
@@ -417,7 +417,20 @@ export default function RoundsPage() {
         } else {
           const cycleStart = parseISO(activeCycle.startDate);
           const cycleEnd = parseISO(activeCycle.endDate);
-          const isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > dueDate;
+          
+          const specificDueDate = scheme?.specificDueDate; // YYYY-MM-DD
+          const numericDueDate = scheme?.dueDate || 5;
+          
+          let isPastDue = false;
+          let dueDateLimit: Date;
+
+          if (specificDueDate) {
+            dueDateLimit = parseISO(specificDueDate);
+            isPastDue = isAfter(today, dueDateLimit);
+          } else {
+            isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate;
+            dueDateLimit = startOfDay(addDays(cycleStart, numericDueDate - 1));
+          }
 
           if (!isPastDue) {
             memberStatus = 'waiting'; // Rendered as "DUE"
@@ -425,10 +438,9 @@ export default function RoundsPage() {
           } else {
             memberStatus = 'pending'; // Rendered as "OVERDUE"
             
-            // ULTRA SAFE PATCH: Respect cycle boundaries for Monthly pending days
-            // Logic: count days in cycle interval up to today/end (only if past due)
             const rawJoinDate = parseISO(m.joinDate);
-            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
+            const countFrom = addDays(dueDateLimit, 1);
+            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart, countFrom]));
             const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
             
             if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) {
@@ -686,12 +698,30 @@ export default function RoundsPage() {
       const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(selectedPendingMember.chitGroup).trim() && c.status === 'active');
       if (!activeCycle) return [];
 
+      const scheme = chitSchemes.find(r => String(r.name).trim() === String(selectedPendingMember.chitGroup).trim());
       const rawJoinDate = parseISO(selectedPendingMember.joinDate);
       const cycleStart = parseISO(activeCycle.startDate);
       const cycleEnd = parseISO(activeCycle.endDate);
       const today = startOfDay(new Date());
       
-      const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
+      let effectiveStart: Date;
+      const isDaily = (selectedPendingMember.paymentType || scheme?.collectionType) === 'Daily';
+
+      if (isDaily) {
+        effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
+      } else {
+        const specificDueDate = scheme?.specificDueDate;
+        const numericDueDate = scheme?.dueDate || 5;
+        let dueDateLimit: Date;
+
+        if (specificDueDate) {
+          dueDateLimit = parseISO(specificDueDate);
+        } else {
+          dueDateLimit = startOfDay(addDays(cycleStart, numericDueDate - 1));
+        }
+        effectiveStart = addDays(dueDateLimit, 1);
+      }
+
       const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
       
       if (isAfter(effectiveStart, effectiveEnd)) return [];
@@ -720,7 +750,7 @@ export default function RoundsPage() {
     } catch (e) {
       return [];
     }
-  }, [selectedPendingMember, allPayments, allCycles]);
+  }, [selectedPendingMember, allPayments, allCycles, chitSchemes]);
 
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
@@ -805,7 +835,7 @@ export default function RoundsPage() {
                     {group.collectionType === 'Monthly' && (
                       <div className="flex justify-between items-center text-xs">
                         <span className="text-muted-foreground font-semibold">Due Date</span>
-                        <span className="font-bold">Day {group.dueDate || 5}</span>
+                        <span className="font-bold">{group.specificDueDate ? format(parseISO(group.specificDueDate), 'dd MMM') : `Day ${group.dueDate || 5}`}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center text-xs">
@@ -1206,11 +1236,11 @@ export default function RoundsPage() {
       </Dialog>
 
       <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
-        <DialogContent className="w-fit min-w-[320px] max-w-[90vw] sm:max-w-xl">
+        <DialogContent className="w-fit min-w-[320px] max-w-[90vw] sm:max-w-xl max-h-[85vh] flex flex-col">
           {isHistoryDialogOpen && (
             <>
               <DialogHeader><DialogTitle className="text-xl">History: {historyMember?.name}</DialogTitle></DialogHeader>
-              <div className="py-4">
+              <div className="py-4 overflow-y-auto flex-1">
                 <ScrollArea className="max-h-[60vh] h-auto pr-4">
                   <Table>
                     <TableHeader>
@@ -1256,7 +1286,7 @@ export default function RoundsPage() {
                   </Table>
                 </ScrollArea>
               </div>
-              <DialogFooter>
+              <DialogFooter className="shrink-0 pt-2 border-t mt-auto">
                 <Button variant="outline" className="gap-2 font-bold" onClick={() => window.print()}>
                   <Printer className="size-4" /> Print History
                 </Button>
@@ -1327,16 +1357,55 @@ export default function RoundsPage() {
 
       <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}>
         <DialogContent 
-          className="sm:max-w-[450px] p-0 overflow-hidden rounded-xl border-none shadow-2xl"
+          className="sm:max-w-[450px] p-0 overflow-hidden rounded-xl border-none shadow-2xl max-h-[85vh] flex flex-col"
         >
           {selectedPendingMember && (
             <>
-              <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b">
+              <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b shrink-0">
                 <DialogTitle className="text-xl font-bold tracking-tight text-primary">Isolated Audit Ledger</DialogTitle>
                 <DialogDescription className="text-xs font-medium text-muted-foreground">Active period payment status for {selectedPendingMember.name}.</DialogDescription>
               </DialogHeader>
               
-              <div className="p-0 bg-background">
+              <div className="p-0 bg-background overflow-y-auto flex-1">
+                {/* DUE DATE SETTER FOR MONTHLY ONLY */}
+                {(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Monthly' && (
+                  <div className="px-6 py-4 border-b bg-primary/5 flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">Group Due Date</span>
+                      <p className="text-xs font-bold text-foreground">
+                        {currentRound?.specificDueDate ? format(parseISO(currentRound.specificDueDate), 'dd MMM yyyy') : `Day ${currentRound?.dueDate || 5} (Default)`}
+                      </p>
+                    </div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 text-[10px] font-black uppercase tracking-widest gap-2 bg-white">
+                          <CalendarDays className="size-3.5 text-primary" /> Set Due Date
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="end">
+                        <CalendarPicker
+                          mode="single"
+                          selected={currentRound?.specificDueDate ? parseISO(currentRound.specificDueDate) : undefined}
+                          onSelect={async (date) => {
+                            if (date && currentRound) {
+                              const dateStr = format(date, 'yyyy-MM-dd');
+                              try {
+                                await updateDoc(doc(db, 'chitRounds', currentRound.id), {
+                                  specificDueDate: dateStr
+                                });
+                                await createAuditLog(db, user, `Updated Monthly Due Date for ${currentRound.name} to ${dateStr}`);
+                                toast({ title: "Due Date Updated", description: "Monthly overdue calculation adjusted." });
+                              } catch (e) {
+                                toast({ variant: "destructive", title: "Update Failed", description: "Could not save due date." });
+                              }
+                            }
+                          }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 p-4 bg-muted/20 border-b gap-4">
                   <div className="space-y-1">
                     <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Cycle Arrears</span>
@@ -1400,7 +1469,7 @@ export default function RoundsPage() {
                 </ScrollArea>
               </div>
               
-              <DialogFooter className="p-4 bg-muted/5 border-t">
+              <DialogFooter className="p-4 bg-muted/5 border-t shrink-0 mt-auto">
                 <Button 
                   onClick={() => setIsPendingDetailsOpen(false)} 
                   className="w-full h-11 font-black uppercase tracking-widest text-xs rounded-xl shadow-md"

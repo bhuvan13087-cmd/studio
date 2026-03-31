@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO, startOfDay, eachDayOfInterval, isBefore, max, isValid, differenceInDays, addDays } from "date-fns"
+import { format, isSameMonth, parseISO, startOfDay, eachDayOfInterval, isBefore, isAfter, max, isValid, differenceInDays, addDays } from "date-fns"
 import { cn } from "@/lib/utils"
 
 // STRICT SYSTEM START DATE
@@ -66,10 +66,9 @@ export default function DashboardPage() {
   const dashboardData = useMemo(() => {
     if (!mounted || membersLoading || paymentsLoading || roundsLoading) return null;
 
-    const now = new Date()
+    const now = startOfDay(new Date());
     const todayStr = format(now, 'yyyy-MM-dd')
-    const today = startOfDay(now);
-    const currentDayOfMonth = now.getDate();
+    const today = now;
 
     const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
     const getPDateStr = (p: any) => {
@@ -119,7 +118,7 @@ export default function DashboardPage() {
             const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
             const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
             
-            if (isBefore(effectiveStart, today.getTime() + 86400000)) {
+            if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) {
               const interval = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd });
               interval.forEach(day => {
                 const dStr = format(day, 'yyyy-MM-dd');
@@ -132,7 +131,6 @@ export default function DashboardPage() {
         memberStatus = mPayments.filter(p => getPDateStr(p) === todayStr).reduce((acc, p) => acc + getPAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
       } else {
         // Monthly logic (DUAL COLLECTION SYSTEM - ULTRA SAFE PATCH)
-        const dueDate = scheme?.dueDate || 5;
         const hasPaidThisCycle = mPayments.some(p => {
           const pDate = getPDateStr(p);
           return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
@@ -144,16 +142,29 @@ export default function DashboardPage() {
         } else {
           const cycleStart = parseISO(activeCycle.startDate);
           const cycleEnd = parseISO(activeCycle.endDate);
-          const isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > dueDate;
+          
+          const specificDueDate = scheme?.specificDueDate;
+          const numericDueDate = scheme?.dueDate || 5;
+          
+          let isPastDue = false;
+          let dueDateLimit: Date;
+
+          if (specificDueDate) {
+            dueDateLimit = parseISO(specificDueDate);
+            isPastDue = isAfter(today, dueDateLimit);
+          } else {
+            isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate;
+            dueDateLimit = startOfDay(addDays(cycleStart, numericDueDate - 1));
+          }
 
           if (!isPastDue) {
             memberStatus = 'waiting';
             pendingDaysCount = 0;
           } else {
             memberStatus = 'pending';
-            // Count days in cycle elapsed so far (respecting cycle boundaries)
             const rawJoinDate = parseISO(m.joinDate);
-            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
+            const countFrom = addDays(dueDateLimit, 1);
+            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart, countFrom]));
             const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
             
             if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) {

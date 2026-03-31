@@ -50,7 +50,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, doc, serverTimestamp, query, orderBy, updateDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, startOfDay, eachDayOfInterval, isBefore, max, isValid, isSameMonth, differenceInDays, addDays } from "date-fns"
+import { format, parseISO, startOfDay, eachDayOfInterval, isBefore, isAfter, max, isValid, isSameMonth, differenceInDays, addDays } from "date-fns"
 import { createAuditLog } from "@/firebase/logging"
 import { withTimeout } from "@/lib/utils"
 
@@ -87,10 +87,9 @@ export default function MembersPage() {
 
   const membersWithCalculatedStats = useMemo(() => {
     if (!members || !payments || !chitRounds || !allCycles) return [];
-    const now = new Date();
+    const now = startOfDay(new Date());
     const todayStr = format(now, 'yyyy-MM-dd');
-    const today = startOfDay(now);
-    const currentDayOfMonth = now.getDate();
+    const today = now;
 
     return members.map(m => {
       const activeCycle = (allCycles || []).find(c => c.name === m.chitGroup && c.status === 'active');
@@ -109,7 +108,6 @@ export default function MembersPage() {
         memberStatus = isPaidToday ? 'paid' : 'pending';
       } else {
         // Monthly logic (DUAL COLLECTION SYSTEM - ULTRA SAFE PATCH)
-        const dueDate = scheme?.dueDate || 5;
         const hasPaidThisCycle = mPayments.some(p => {
           const pDate = p.targetDate || (p.paymentDate?.toDate ? format(p.paymentDate.toDate(), 'yyyy-MM-dd') : null);
           return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
@@ -119,7 +117,15 @@ export default function MembersPage() {
           memberStatus = 'paid';
         } else {
           const cycleStart = parseISO(activeCycle.startDate);
-          const isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > dueDate;
+          const specificDueDate = scheme?.specificDueDate;
+          const numericDueDate = scheme?.dueDate || 5;
+          
+          let isPastDue = false;
+          if (specificDueDate) {
+            isPastDue = isAfter(today, parseISO(specificDueDate));
+          } else {
+            isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate;
+          }
           
           if (!isPastDue) {
             memberStatus = 'waiting'; // Rendered as "DUE"
