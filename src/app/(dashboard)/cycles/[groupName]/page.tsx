@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, ArrowRight, ChevronRight, Calendar, History, Clock, Pencil, Save } from "lucide-react"
+import { Loader2, ChevronLeft, ArrowRight, ChevronRight, Calendar, History, Clock, Pencil, Save, ShieldCheck, Archive } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, orderBy, doc, updateDoc } from "firebase/firestore"
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -26,7 +27,7 @@ import { createAuditLog } from "@/firebase/logging"
  * @fileOverview Refined Group-Specific Cycle Audit Page.
  * 
  * Displays a chronological list of cycle date ranges with a compact, professional UI.
- * Now includes the ability to edit start and end dates for historical precision.
+ * Now categorizes cycles into "Active" and "Past" states for better auditing flow.
  */
 export default function GroupCyclesPage({ params }: { params: Promise<{ groupName: string }> }) {
   const router = useRouter()
@@ -49,16 +50,23 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('startDate', 'desc')), [db])
   const { data: allCycles, isLoading } = useCollection(cyclesQuery)
 
-  // Data Sanitization - Map to ONLY specific fields
-  const safeCycles = React.useMemo(() => {
-    if (!Array.isArray(allCycles)) return []
-    return allCycles
+  // Data Sanitization - Categorize by Status
+  const { activeCycles, pastCycles } = React.useMemo(() => {
+    if (!Array.isArray(allCycles)) return { activeCycles: [], pastCycles: [] }
+    
+    const filtered = allCycles
       .filter((c) => String(c?.name || "").trim() === groupName)
       .map((c) => ({
         id: String(c?.id || ""),
         startDate: String(c?.startDate || "-"),
-        endDate: String(c?.endDate || "-")
+        endDate: String(c?.endDate || "-"),
+        status: c?.status || 'active'
       }))
+
+    return {
+      activeCycles: filtered.filter(c => c.status === 'active'),
+      pastCycles: filtered.filter(c => c.status !== 'active')
+    }
   }, [allCycles, groupName])
 
   if (!groupName) {
@@ -134,8 +142,73 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
     }
   }
 
+  const CycleItem = ({ cycle, isActive }: { cycle: any, isActive: boolean }) => (
+    <div 
+      onClick={() => handleCycleClick(cycle)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          handleCycleClick(cycle)
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      className={cn(
+        "group relative flex items-center justify-between w-full p-4 rounded-xl border transition-all duration-200 text-left active:scale-[0.99] overflow-hidden cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        isActive 
+          ? "border-primary/20 bg-primary/[0.02] hover:border-primary/40 hover:bg-primary/[0.04] shadow-sm" 
+          : "border-border/50 bg-card hover:border-primary/30 hover:shadow-sm"
+      )}
+    >
+      <div className={cn(
+        "absolute left-0 top-0 bottom-0 w-1 transition-colors",
+        isActive ? "bg-primary" : "bg-muted group-hover:bg-primary/40"
+      )} />
+      
+      <div className="flex items-center gap-6 pl-2">
+        <div className="flex items-center gap-4">
+          <div className="flex flex-col">
+            <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">Start</span>
+            <span className="text-xs font-bold tabular-nums text-foreground/80 group-hover:text-foreground transition-colors">
+              {formatDateLabel(cycle.startDate)}
+            </span>
+          </div>
+
+          <div className="h-px w-4 bg-border/60" />
+
+          <div className="flex flex-col">
+            <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">End</span>
+            <span className={cn("text-xs font-bold tabular-nums", isActive ? "text-primary" : "text-muted-foreground/80")}>
+              {formatDateLabel(cycle.endDate)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {isActive && (
+          <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-primary/20 text-primary bg-primary/5 h-5 px-1.5 hidden sm:flex">
+            Active
+          </Badge>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10 text-primary"
+          onClick={(e) => handleEditClick(e, cycle)}
+        >
+          <Pencil className="size-3.5" />
+        </Button>
+        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-primary/0 group-hover:text-primary/60 transition-all">
+          View
+        </span>
+        <ChevronRight className="size-4 text-muted-foreground/20 group-hover:text-primary transition-colors" />
+      </div>
+    </div>
+  )
+
   return (
-    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
+    <div className="max-w-2xl mx-auto space-y-10 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
       {/* Header Section */}
       <div className="flex items-center gap-4">
         <Button 
@@ -156,81 +229,58 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
         </div>
       </div>
 
-      {/* Cycle List Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground/80">
-            Audit Periods
-          </h3>
-          <span className="text-[9px] font-bold text-primary/40 uppercase tracking-widest">
-            {safeCycles.length} Records
-          </span>
-        </div>
-        
-        {safeCycles.length > 0 ? (
+      <div className="space-y-8">
+        {/* Active Cycles Section */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <ShieldCheck className="size-3 text-primary" />
+            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-primary">
+              Current Audit Period
+            </h3>
+            <div className="h-px flex-1 bg-primary/10" />
+          </div>
+          
           <div className="grid gap-2">
-            {safeCycles.map((cycle, i) => (
-              <div 
-                key={i} 
-                onClick={() => handleCycleClick(cycle)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    handleCycleClick(cycle)
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                className="group relative flex items-center justify-between w-full p-4 rounded-xl border border-border/50 bg-card hover:border-primary/30 hover:shadow-sm transition-all duration-200 text-left active:scale-[0.99] overflow-hidden cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                {/* Subtle Left Accent */}
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary/10 group-hover:bg-primary transition-colors" />
-                
-                <div className="flex items-center gap-6 pl-2">
-                  <div className="flex items-center gap-4">
-                    <div className="flex flex-col">
-                      <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">Start</span>
-                      <span className="text-xs font-bold tabular-nums text-foreground/80 group-hover:text-foreground transition-colors">
-                        {formatDateLabel(cycle.startDate)}
-                      </span>
-                    </div>
-
-                    <div className="h-px w-4 bg-border/60" />
-
-                    <div className="flex flex-col">
-                      <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">End</span>
-                      <span className="text-xs font-bold tabular-nums text-primary">
-                        {formatDateLabel(cycle.endDate)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10 text-primary"
-                    onClick={(e) => handleEditClick(e, cycle)}
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-primary/0 group-hover:text-primary/60 transition-all">
-                    View
-                  </span>
-                  <ChevronRight className="size-4 text-muted-foreground/20 group-hover:text-primary transition-colors" />
-                </div>
+            {activeCycles.length > 0 ? (
+              activeCycles.map((cycle) => (
+                <CycleItem key={cycle.id} cycle={cycle} isActive={true} />
+              ))
+            ) : (
+              <div className="p-8 text-center border-2 border-dashed rounded-2xl bg-muted/5 text-muted-foreground/40 italic">
+                <p className="text-[10px] font-bold uppercase tracking-widest">No active period detected</p>
               </div>
-            ))}
+            )}
           </div>
-        ) : (
-          <div className="p-16 text-center border-2 border-dashed rounded-3xl bg-muted/5 text-muted-foreground/40 space-y-3">
-            <History className="size-8 mx-auto opacity-20" />
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] italic">
-              No historical records
-            </p>
+        </div>
+
+        {/* Historical Cycles Section */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Archive className="size-3 text-muted-foreground/60" />
+            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground/80">
+              Historical Archives
+            </h3>
+            <div className="h-px flex-1 bg-muted" />
+            <span className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest">
+              {pastCycles.length} Records
+            </span>
           </div>
-        )}
+          
+          <div className="grid gap-2">
+            {pastCycles.length > 0 ? (
+              pastCycles.map((cycle) => (
+                <CycleItem key={cycle.id} cycle={cycle} isActive={false} />
+              ))
+            ) : (
+              <div className="p-12 text-center border-2 border-dashed rounded-3xl bg-muted/5 text-muted-foreground/40 space-y-3">
+                <History className="size-8 mx-auto opacity-20" />
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] italic">
+                  No historical records located
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Edit Dialog */}
