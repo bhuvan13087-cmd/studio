@@ -794,7 +794,7 @@ export default function RoundsPage() {
                     className="w-full h-7 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition-all rounded-lg"
                     onClick={() => setSelectedChitId(group.id)}
                   >
-                    Manage Registry
+                    View
                   </Button>
                 </CardFooter>
               </Card>
