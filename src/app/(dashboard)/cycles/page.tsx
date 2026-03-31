@@ -129,41 +129,41 @@ export default function CyclesPage() {
       </div>
 
       {/* Group Grid Section */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {groupNames.length > 0 ? (
           groupNames.map((name) => (
             <button
               key={name}
               onClick={() => handleGroupClick(name)}
-              className="group relative flex flex-col w-full p-6 rounded-2xl border border-border/60 bg-card hover:border-primary/30 hover:bg-muted/5 shadow-sm transition-all duration-300 text-left active:scale-[0.99] overflow-hidden"
+              className="group relative flex flex-col w-full p-4 rounded-xl border border-border/60 bg-card hover:border-primary/30 hover:bg-muted/5 shadow-sm transition-all duration-300 text-left active:scale-[0.99] overflow-hidden"
             >
-              <div className="flex items-start justify-between mb-6">
-                <div className="h-12 w-12 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/10 group-hover:scale-105 transition-transform duration-300">
-                  <FolderKanban className="size-6" />
+              <div className="flex items-start justify-between mb-4">
+                <div className="h-10 w-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-md shadow-primary/10 group-hover:scale-105 transition-transform duration-300">
+                  <FolderKanban className="size-5" />
                 </div>
-                <div className="h-8 w-8 rounded-lg border border-border/40 flex items-center justify-center group-hover:bg-primary group-hover:border-primary transition-all duration-300">
-                  <ChevronRight className="size-4 text-muted-foreground/40 group-hover:text-primary-foreground transition-colors" />
+                <div className="h-7 w-7 rounded-md border border-border/40 flex items-center justify-center group-hover:bg-primary group-hover:border-primary transition-all duration-300">
+                  <ChevronRight className="size-3.5 text-muted-foreground/40 group-hover:text-primary-foreground transition-colors" />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <span className="text-[9px] font-black tracking-[0.2em] uppercase text-muted-foreground/50">
+              <div className="space-y-0.5">
+                <span className="text-[8px] font-black tracking-[0.2em] uppercase text-muted-foreground/50">
                   Audit Unit
                 </span>
-                <span className="font-black text-xl sm:text-2xl text-primary block tracking-tighter uppercase leading-none">
+                <span className="font-black text-lg text-primary block tracking-tighter uppercase leading-tight">
                   {name}
                 </span>
-                <div className="pt-3 flex items-center gap-2">
+                <div className="pt-2 flex items-center gap-1.5">
                   <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[8px] font-black uppercase tracking-widest text-emerald-600/60">
+                  <span className="text-[7px] font-black uppercase tracking-widest text-emerald-600/60">
                     Ledger Linked
                   </span>
                 </div>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-border/40 flex items-center justify-between">
-                <span className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em]">Historical Log</span>
-                <History className="size-3.5 text-muted-foreground/20 group-hover:text-primary transition-colors" />
+              <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between">
+                <span className="text-[8px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em]">Historical Log</span>
+                <History className="size-3 text-muted-foreground/20 group-hover:text-primary transition-colors" />
               </div>
             </button>
           ))
