@@ -1,8 +1,7 @@
-
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
-import { Users, IndianRupee, Clock, CheckCircle2, Loader2, Info, ArrowRight, FolderKanban, User, CalendarDays, RefreshCcw, LayoutDashboard, ShieldCheck } from "lucide-react"
+import { Users, IndianRupee, Clock, CheckCircle2, Loader2, Info, ArrowRight, FolderKanban, User, CalendarDays, RefreshCcw, LayoutDashboard, ShieldCheck, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
   Table,
@@ -57,16 +56,12 @@ export default function DashboardPage() {
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db])
   const { data: rounds, isLoading: roundsLoading } = useCollection(roundsQuery)
 
+  const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db])
+  const { data: allCycles } = useCollection(cyclesQuery)
+
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  // Helper to clean and format group names
-  const getDisplayName = (name: string) => {
-    if (!name) return "";
-    const clean = name.replace(/Group/gi, '').trim();
-    return `Group ${clean}`;
-  };
 
   const dashboardData = useMemo(() => {
     if (!mounted || membersLoading || paymentsLoading || roundsLoading) return null;
@@ -74,12 +69,9 @@ export default function DashboardPage() {
     const now = new Date()
     const todayStr = format(now, 'yyyy-MM-dd')
     const today = startOfDay(now);
-    const currentMonthStr = format(now, 'MMMM yyyy');
     const currentDayOfMonth = now.getDate();
 
-    // Helper to extract amount resiliently
     const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
-    // Helper to extract date from record resiliently
     const getPDateStr = (p: any) => {
       if (p.targetDate && typeof p.targetDate === 'string') return p.targetDate;
       const raw = p.paymentDate || p.createdAt || p.date || p.paidDate;
@@ -103,12 +95,10 @@ export default function DashboardPage() {
     })
     
     const collectedThisMonth = currentMonthPayments.reduce((acc, p) => acc + getPAmount(p), 0)
-    
-    const collectedToday = (payments || []).filter(p => {
-      return getPDateStr(p) === todayStr && (p.status === 'paid' || p.status === 'success' || !p.status);
-    }).reduce((acc, p) => acc + getPAmount(p), 0)
+    const collectedToday = (payments || []).filter(p => getPDateStr(p) === todayStr && (p.status === 'paid' || p.status === 'success' || !p.status)).reduce((acc, p) => acc + getPAmount(p), 0)
 
     const membersWithCalculatedStats = (members || []).filter(m => m.status !== 'inactive').map(m => {
+      const activeCycle = (allCycles || []).find(c => c.name === m.chitGroup && c.status === 'active');
       const mPayments = (payments || []).filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid' || !p.status));
       const scheme = (rounds || []).find(r => r.name === m.chitGroup);
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
@@ -116,42 +106,49 @@ export default function DashboardPage() {
       let pendingDaysCount = 0;
       let memberStatus: 'paid' | 'pending' | 'waiting' = 'pending';
 
+      if (!activeCycle) {
+        return { ...m, calculatedPendingDays: 0, calculatedPendingAmount: 0, memberStatus: 'paid' };
+      }
+
       if (resolvedType === 'Daily') {
         if (m.joinDate) {
           try {
             const rawJoinDate = parseISO(m.joinDate);
-            const effectiveStart = startOfDay(max([rawJoinDate, CALCULATION_START_DATE]));
+            const cycleStart = parseISO(activeCycle.startDate);
+            const cycleEnd = parseISO(activeCycle.endDate);
+            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
+            const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
             
             if (isBefore(effectiveStart, today.getTime() + 86400000)) {
-              const interval = eachDayOfInterval({ start: effectiveStart, end: today });
+              const interval = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd });
               interval.forEach(day => {
                 const dStr = format(day, 'yyyy-MM-dd');
-                const dayPaymentSum = mPayments
-                  .filter(p => getPDateStr(p) === dStr)
-                  .reduce((acc, p) => acc + getPAmount(p), 0);
-                
-                if (dayPaymentSum < (m.monthlyAmount || 800)) {
-                  pendingDaysCount++;
-                }
+                const dayPaymentSum = mPayments.filter(p => getPDateStr(p) === dStr).reduce((acc, p) => acc + getPAmount(p), 0);
+                if (dayPaymentSum < (m.monthlyAmount || 800)) pendingDaysCount++;
               });
             }
           } catch {}
         }
         memberStatus = mPayments.filter(p => getPDateStr(p) === todayStr).reduce((acc, p) => acc + getPAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
       } else {
-        // Monthly logic
+        // Monthly logic (DUAL COLLECTION SYSTEM)
         const dueDate = scheme?.dueDate || 5;
-        const hasPaidThisMonth = mPayments.some(p => p.month === currentMonthStr);
+        const hasPaidThisCycle = mPayments.some(p => {
+          const pDate = getPDateStr(p);
+          return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
+        });
         
-        if (hasPaidThisMonth) {
+        if (hasPaidThisCycle) {
           memberStatus = 'paid';
           pendingDaysCount = 0;
-        } else if (currentDayOfMonth < dueDate) {
-          memberStatus = 'waiting';
-          pendingDaysCount = 0;
         } else {
-          memberStatus = 'pending';
-          pendingDaysCount = 1;
+          if (currentDayOfMonth <= dueDate) {
+            memberStatus = 'waiting';
+            pendingDaysCount = 0;
+          } else {
+            memberStatus = 'pending';
+            pendingDaysCount = currentDayOfMonth - dueDate;
+          }
         }
       }
 
@@ -163,51 +160,33 @@ export default function DashboardPage() {
       };
     });
 
-    const pendingMembersList = membersWithCalculatedStats.filter(m => m.memberStatus === 'pending');
+    const dailyPendingList = membersWithCalculatedStats.filter(m => m.memberStatus === 'pending' && (m.paymentType || (rounds || []).find(r => r.name === m.chitGroup)?.collectionType) === 'Daily');
+    const monthlyOverdueList = membersWithCalculatedStats.filter(m => m.memberStatus === 'pending' && (m.paymentType || (rounds || []).find(r => r.name === m.chitGroup)?.collectionType) === 'Monthly');
 
     const fixedGroupNames = ['A', 'B', 'C', 'D'];
     const schemeSummaries = fixedGroupNames.map(name => {
       const schemeInfo = (rounds || []).find(r => r.name === name) || { name, collectionType: 'Daily', monthlyAmount: 800, dueDate: 5 };
       const groupMembers = membersWithCalculatedStats.filter(m => m.chitGroup === name);
       const totalPendingDays = groupMembers.reduce((acc, m) => acc + m.calculatedPendingDays, 0);
-      
-      return {
-        ...schemeInfo,
-        totalPendingDays,
-        memberCount: groupMembers.length,
-        members: groupMembers
-      };
+      return { ...schemeInfo, totalPendingDays, memberCount: groupMembers.length, members: groupMembers };
     });
 
     return {
       activeMembersCount: members?.filter(m => m.status !== 'inactive').length || 0,
       collectedThisMonth,
       collectedToday,
-      pendingMembersList,
+      dailyPendingCount: dailyPendingList.length,
+      monthlyOverdueCount: monthlyOverdueList.length,
       schemeSummaries,
       recentPaymentsList: (payments || []).filter(p => p.status === 'paid' || p.status === 'success' || !p.status).slice(0, 5)
     }
-  }, [mounted, members, payments, rounds, membersLoading, paymentsLoading, roundsLoading])
+  }, [mounted, members, payments, rounds, allCycles, membersLoading, paymentsLoading, roundsLoading])
 
   if (!mounted || !dashboardData) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-primary" />
-      </div>
-    )
+    return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
   }
 
-  const { activeMembersCount, collectedThisMonth, collectedToday, pendingMembersList, schemeSummaries, recentPaymentsList } = dashboardData;
-
-  const handleGroupClick = (scheme: any) => {
-    setSelectedGroup(scheme);
-    setIsGroupDetailOpen(true);
-  }
-
-  const handleMemberArrearsClick = (member: any) => {
-    setSelectedMemberDebt(member);
-    setIsMemberArrearsOpen(true);
-  }
+  const { activeMembersCount, collectedThisMonth, collectedToday, dailyPendingCount, monthlyOverdueCount, schemeSummaries, recentPaymentsList } = dashboardData;
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700 pb-10 overflow-x-hidden">
@@ -215,7 +194,7 @@ export default function DashboardPage() {
         <div className="space-y-1.5">
           <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-primary font-headline uppercase">Financial Command Center</h2>
           <p className="text-sm sm:text-base text-muted-foreground font-medium flex items-center gap-2">
-            <ShieldCheck className="size-4 text-primary" /> Real-time monitoring for Groups A, B, C, and D.
+            <ShieldCheck className="size-4 text-primary" /> Dual Mode Monitoring: Daily + Monthly Isolation.
           </p>
         </div>
         <Button variant="outline" className="font-bold gap-2 h-11 px-6 shadow-sm border-border/60 hover:bg-muted/50 transition-all active:scale-95" onClick={() => window.location.reload()}>
@@ -270,9 +249,16 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="p-6 pt-0">
-            <div className="text-4xl font-black tracking-tighter text-destructive tabular-nums mb-1">{pendingMembersList.length}</div>
-            <div className="text-[11px] text-muted-foreground font-semibold mt-2 flex items-center gap-1.5 italic">
-               Unpaid Installments
+            <div className="flex items-end gap-4">
+              <div>
+                <div className="text-4xl font-black tracking-tighter text-destructive tabular-nums">{dailyPendingCount}</div>
+                <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Daily Pending</div>
+              </div>
+              <div className="h-10 w-px bg-border/60 mb-2" />
+              <div>
+                <div className="text-4xl font-black tracking-tighter text-amber-600 tabular-nums">{monthlyOverdueCount}</div>
+                <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Monthly Overdue</div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -284,27 +270,30 @@ export default function DashboardPage() {
             <Card 
               key={i} 
               className="group cursor-pointer hover:border-primary hover:shadow-xl transition-all border-border/60 overflow-hidden relative shadow-sm rounded-2xl"
-              onClick={() => handleGroupClick(scheme)}
+              onClick={() => { setSelectedGroup(scheme); setIsGroupDetailOpen(true); }}
             >
               <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
                 <ArrowRight className="size-4 text-primary" />
               </div>
               <CardHeader className="p-5 pb-2 bg-muted/10 border-b border-border/40">
-                <CardTitle className="text-[11px] font-black uppercase text-muted-foreground tracking-[0.3em] truncate">
-                  {getDisplayName(scheme.name)}
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-[11px] font-black uppercase text-muted-foreground tracking-[0.3em] truncate">
+                    {getDisplayName(scheme.name)}
+                  </CardTitle>
+                  <Badge variant="outline" className="text-[8px] font-black border-none bg-primary/5 text-primary/60">{scheme.collectionType}</Badge>
+                </div>
               </CardHeader>
               <CardContent className="p-5">
                 <div className="flex items-end justify-between">
                   <div>
                     <div className={cn(
                       "text-3xl font-black tabular-nums transition-colors flex items-center gap-3 mb-1",
-                      scheme.totalPendingDays > 0 ? "text-destructive" : "text-emerald-600"
+                      scheme.totalPendingDays > 0 ? (scheme.collectionType === 'Daily' ? "text-destructive" : "text-amber-600") : "text-emerald-600"
                     )}>
                       {scheme.totalPendingDays}
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1.5">
-                      <Clock className="size-3" /> {scheme.collectionType === 'Daily' ? 'Cumulative Arrears' : 'Pending Members'}
+                      <Clock className="size-3" /> {scheme.collectionType === 'Daily' ? 'Arrears Days' : 'Overdue Span'}
                     </p>
                   </div>
                   <div className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-widest">{scheme.memberCount} Seats</div>
@@ -324,7 +313,6 @@ export default function DashboardPage() {
             </CardTitle>
             <CardDescription className="text-xs font-medium">Verified automated collection logs.</CardDescription>
           </div>
-          <Button variant="ghost" size="sm" className="text-[10px] font-black uppercase tracking-widest hover:bg-muted">View Ledger</Button>
         </CardHeader>
         <CardContent className="p-6">
            {recentPaymentsList.length > 0 ? (
@@ -336,9 +324,7 @@ export default function DashboardPage() {
                    <div key={i} className="flex flex-col p-5 rounded-2xl bg-muted/20 hover:bg-muted/40 transition-all border border-transparent hover:border-border/60 group">
                       <div className="flex items-center justify-between mb-3">
                         <Badge className="bg-emerald-100 text-emerald-700 border-none text-[9px] font-black uppercase tracking-widest">Verified</Badge>
-                        <span className="text-[10px] text-muted-foreground font-bold tabular-nums">
-                          {pDateStr}
-                        </span>
+                        <span className="text-[10px] text-muted-foreground font-bold tabular-nums">{pDateStr}</span>
                       </div>
                       <span className="font-bold text-base truncate mb-1">{payment.memberName}</span>
                       <div className="flex items-center justify-between mt-auto">
@@ -350,14 +336,11 @@ export default function DashboardPage() {
                })}
              </div>
            ) : (
-             <div className="h-[120px] flex items-center justify-center text-muted-foreground italic text-xs font-medium border-2 border-dashed rounded-2xl">
-               No transaction logs captured in this session.
-             </div>
+             <div className="h-[120px] flex items-center justify-center text-muted-foreground italic text-xs font-medium border-2 border-dashed rounded-2xl">No transaction logs captured.</div>
            )}
         </CardContent>
       </Card>
 
-      {/* GROUP DETAIL DIALOG */}
       <Dialog open={isGroupDetailOpen} onOpenChange={setIsGroupDetailOpen}>
         <DialogContent className="sm:max-w-[650px] max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-2xl">
           {selectedGroup && (
@@ -368,36 +351,30 @@ export default function DashboardPage() {
                     <FolderKanban className="size-6" />
                   </div>
                   <div>
-                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">
-                      {getDisplayName(selectedGroup.name)} Registry
-                    </DialogTitle>
-                    <DialogDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70 mt-1">
-                      Automated Isolated Member Board
-                    </DialogDescription>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">{getDisplayName(selectedGroup.name)} Registry</DialogTitle>
+                    <DialogDescription className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70 mt-1">Mode: {selectedGroup.collectionType} Collection Board</DialogDescription>
                   </div>
                 </div>
               </DialogHeader>
-              
               <div className="flex-1 overflow-y-auto">
                 <Table>
                   <TableHeader className="bg-muted/30 sticky top-0 z-10">
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] pl-8 h-12">Participant</TableHead>
-                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Cycle Status</TableHead>
-                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] text-center h-12">Arrears Count</TableHead>
+                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Status Indicator</TableHead>
+                      <TableHead className="text-[10px] uppercase font-black tracking-[0.2em] text-center h-12">Arrears/Overdue</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedGroup.members.length > 0 ? selectedGroup.members.map((m: any) => {
                       const status = m.memberStatus;
+                      const isMonthly = (m.paymentType || selectedGroup.collectionType) === "Monthly";
                       return (
                         <TableRow key={m.id} className="hover:bg-muted/10 transition-colors border-b last:border-none">
                           <TableCell className="pl-8 py-5">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-sm font-bold tracking-tight">{m.name}</span>
-                              <span className="text-[10px] font-bold text-muted-foreground tracking-widest tabular-nums uppercase">
-                                {m.paymentType || selectedGroup?.collectionType}
-                              </span>
+                              <span className="text-[10px] font-bold text-muted-foreground tracking-widest tabular-nums uppercase">{m.paymentType || selectedGroup?.collectionType}</span>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -405,7 +382,7 @@ export default function DashboardPage() {
                               "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
                               status === 'paid' ? "bg-emerald-500 hover:bg-emerald-600" : (status === 'waiting' ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700")
                             )}>
-                              {status === 'paid' ? 'SUCCESS' : (status === 'waiting' ? 'WAITING' : 'PENDING')}
+                              {status === 'paid' ? 'SUCCESS' : (status === 'waiting' ? (isMonthly ? 'DUE' : 'WAITING') : (isMonthly ? 'OVERDUE' : 'PENDING'))}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center pr-8">
@@ -414,88 +391,50 @@ export default function DashboardPage() {
                                 "inline-flex items-center justify-center px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-90 shadow-sm border",
                                 m.calculatedPendingDays > 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-emerald-50 text-emerald-700 border-emerald-200"
                               )}
-                              onClick={() => handleMemberArrearsClick(m)}
+                              onClick={() => { setSelectedMemberDebt(m); setIsMemberArrearsOpen(true); }}
                             >
-                              {m.calculatedPendingDays} {selectedGroup?.collectionType === 'Daily' ? 'Days' : 'Month'}
+                              {m.calculatedPendingDays} {isMonthly ? 'Days Overdue' : 'Days Arrears'}
                             </button>
                           </TableCell>
                         </TableRow>
                       );
-                    }) : (
-                      <TableRow>
-                        <TableCell colSpan={3} className="h-48 text-center text-muted-foreground italic text-xs font-bold uppercase tracking-widest">
-                          No board participants available.
-                        </TableCell>
-                      </TableRow>
-                    )}
+                    }) : (<TableRow><TableCell colSpan={3} className="h-48 text-center text-muted-foreground italic text-xs font-bold uppercase tracking-widest">No participants available.</TableCell></TableRow>)}
                   </TableBody>
                 </Table>
               </div>
-
-              <DialogFooter className="p-4 border-t bg-muted/5">
-                <Button onClick={() => setIsGroupDetailOpen(false)} className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all">Close Board Registry</Button>
-              </DialogFooter>
+              <DialogFooter className="p-4 border-t bg-muted/5"><Button onClick={() => setIsGroupDetailOpen(false)} className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl">Close Board</Button></DialogFooter>
             </>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* MEMBER ARREARS POPUP 💬 */}
       <Dialog open={isMemberArrearsOpen} onOpenChange={setIsMemberArrearsOpen}>
         <DialogContent className="sm:max-w-[420px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
           {selectedMemberDebt && (
             <>
               <DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b">
                 <div className="flex items-center gap-4">
-                  <div className="h-14 w-14 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center font-black shadow-inner">
-                    <User className="size-7" />
-                  </div>
+                  <div className="h-14 w-14 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center font-black shadow-inner"><User className="size-7" /></div>
                   <div className="space-y-0.5">
-                    <DialogTitle className="text-xl font-black uppercase tracking-tight">Arrears Summary</DialogTitle>
-                    <DialogDescription className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">
-                      Financial Audit: {selectedMemberDebt.name}
-                    </DialogDescription>
+                    <DialogTitle className="text-xl font-black uppercase tracking-tight">Financial Audit</DialogTitle>
+                    <DialogDescription className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">{selectedMemberDebt.name}</DialogDescription>
                   </div>
                 </div>
               </DialogHeader>
-              
               <div className="p-6 space-y-6 bg-background">
                 <div className="flex flex-col items-center justify-center p-8 bg-destructive/5 rounded-3xl border border-dashed border-destructive/20 text-center relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-destructive/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-destructive/60 mb-3 relative z-10">Current Currency Deficit</p>
-                  <div className="text-5xl font-black text-destructive tabular-nums tracking-tighter relative z-10 mb-4">
-                    ₹{(selectedMemberDebt.calculatedPendingAmount || 0).toLocaleString()}
-                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-destructive/60 mb-3 relative z-10">Unpaid Cycle Debt</p>
+                  <div className="text-5xl font-black text-destructive tabular-nums tracking-tighter relative z-10 mb-4">₹{(selectedMemberDebt.calculatedPendingAmount || 0).toLocaleString()}</div>
                   <Badge className="bg-destructive text-destructive-foreground px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-destructive/20 relative z-10">
                     ⏳ {selectedMemberDebt.calculatedPendingDays || 0} {selectedMemberDebt.memberStatus === 'pending' ? 'Missed' : 'Pending'}
                   </Badge>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="p-4 bg-muted/30 rounded-2xl border border-border/40">
-                      <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest mb-1.5">Scheme Unit</p>
-                      <p className="text-lg font-black tracking-tight">₹{(selectedMemberDebt.monthlyAmount || 800).toLocaleString()}</p>
-                   </div>
-                   <div className="p-4 bg-muted/30 rounded-2xl border border-border/40">
-                      <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest mb-1.5">Audit Mode</p>
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="size-4 text-primary opacity-60" />
-                        <p className="text-sm font-bold tracking-tight uppercase">Real-Time Tracking</p>
-                      </div>
-                   </div>
-                </div>
-
                 <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-4">
                   <Info className="size-5 text-primary shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-muted-foreground leading-relaxed italic font-medium">
-                    Arrears are calculated based on scheme frequency and due dates. Daily tracking follows the strict April 2026 window.
-                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed italic font-medium">Calculated based on {selectedMemberDebt.paymentType} mode strict separation rules.</p>
                 </div>
               </div>
-              
-              <DialogFooter className="p-6 pt-0 bg-background">
-                <Button onClick={() => setIsMemberArrearsOpen(false)} className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all shadow-lg">Close Audit</Button>
-              </DialogFooter>
+              <DialogFooter className="p-6 pt-0 bg-background"><Button onClick={() => setIsMemberArrearsOpen(false)} className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 shadow-lg">Close Audit</Button></DialogFooter>
             </>
           )}
         </DialogContent>

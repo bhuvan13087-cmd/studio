@@ -349,10 +349,10 @@ export default function RoundsPage() {
   // ISOLATED DYNAMIC CALCULATIONS (RESPECTS ACTIVE CYCLE WINDOW ONLY)
   const membersWithCalculatedStats = useMemo(() => {
     if (!members || !allPayments || !chitSchemes) return [];
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const today = startOfDay(new Date());
-    const currentMonthStr = format(today, 'MMMM yyyy');
-    const currentDayOfMonth = today.getDate();
+    const now = new Date();
+    const todayStr = format(now, 'yyyy-MM-dd');
+    const today = startOfDay(now);
+    const currentDayOfMonth = now.getDate();
 
     return members.map(m => {
       const activeCycle = (allCycles || []).find(c => c.name === m.chitGroup && c.status === 'active');
@@ -369,7 +369,7 @@ export default function RoundsPage() {
           ...m,
           calculatedPendingDays: 0,
           calculatedPendingAmount: 0,
-          memberStatus: 'paid' as const // Board shows as clear if no period active
+          memberStatus: 'paid' as const
         };
       }
 
@@ -380,7 +380,6 @@ export default function RoundsPage() {
             const cycleStart = parseISO(activeCycle.startDate);
             const cycleEnd = parseISO(activeCycle.endDate);
             
-            // Limit tracking to the cycle's operational window
             const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
             const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
             
@@ -402,7 +401,7 @@ export default function RoundsPage() {
         }
         memberStatus = mPayments.filter(p => getRecordDate(p) === todayStr).reduce((acc, p) => acc + getPaymentAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
       } else {
-        // Monthly logic (Cycle Isolated)
+        // Monthly logic (DUAL COLLECTION SYSTEM - STRICT SEPARATION)
         const dueDate = scheme?.dueDate || 5;
         const hasPaidThisCycle = mPayments.some(p => {
           const pDate = getRecordDate(p);
@@ -412,12 +411,14 @@ export default function RoundsPage() {
         if (hasPaidThisCycle) {
           memberStatus = 'paid';
           pendingDaysCount = 0;
-        } else if (currentDayOfMonth < dueDate) {
-          memberStatus = 'waiting';
-          pendingDaysCount = 0;
         } else {
-          memberStatus = 'pending';
-          pendingDaysCount = 1;
+          if (currentDayOfMonth <= dueDate) {
+            memberStatus = 'waiting'; // Rendered as "DUE"
+            pendingDaysCount = 0;
+          } else {
+            memberStatus = 'pending'; // Rendered as "OVERDUE"
+            pendingDaysCount = currentDayOfMonth - dueDate;
+          }
         }
       }
 
@@ -643,7 +644,6 @@ export default function RoundsPage() {
     }
   }
 
-  // GET LOG OF ALL DATES FOR PENDING POPUP (STRICT CYCLE WINDOW)
   const memberDateLog = useMemo(() => {
     if (!selectedPendingMember || !allPayments) return [];
     try {
@@ -676,7 +676,7 @@ export default function RoundsPage() {
           amount: dayPaymentSum,
           label: format(day, 'dd MMM yyyy')
         };
-      }).reverse(); // Newest first
+      }).reverse();
     } catch (e) {
       return [];
     }
@@ -866,7 +866,6 @@ export default function RoundsPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Existing Chit Dialogs (Add/Edit/Delete) remain unchanged */}
         <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleAddChit}>
@@ -927,7 +926,6 @@ export default function RoundsPage() {
     )
   }
 
-  // REPURPOSED HELPERS FOR ISOLATION
   const getGroupMonthlyCollection = (groupName: string, monthStr?: string) => {
     if (!allPayments || !members) return 0;
     const targetMonth = monthStr || format(new Date(), 'MMMM yyyy');
@@ -943,7 +941,6 @@ export default function RoundsPage() {
   };
 
   const currentActiveCycle = (allCycles || []).find(c => c.name === currentRound?.name && c.status === 'active');
-  const todayGroupCollection = getGroupTodayCollection(currentRound?.name || "");
   const cycleGroupCollection = currentRound ? getGroupActiveCycleCollection(currentRound.name) : 0;
 
   return (
@@ -1038,6 +1035,7 @@ export default function RoundsPage() {
               {assignedMembers.length > 0 ? assignedMembers.map((m) => {
                 const status = m.memberStatus;
                 const pDays = m.calculatedPendingDays;
+                const isMonthly = (m.paymentType || currentRound?.collectionType) === "Monthly";
                 
                 return (
                   <TableRow key={m.id} className="hover:bg-muted/5 transition-colors group">
@@ -1066,7 +1064,7 @@ export default function RoundsPage() {
                           pDays > 0 ? "text-destructive font-bold" : "text-muted-foreground/40"
                         )}
                       >
-                        {pDays} {currentRound?.collectionType === 'Daily' ? 'Days' : 'Month'}
+                        {pDays} {isMonthly ? 'Days Post Due' : (currentRound?.collectionType === 'Daily' ? 'Days' : 'Month')}
                       </button>
                     </TableCell>
                     <TableCell>
@@ -1074,7 +1072,7 @@ export default function RoundsPage() {
                         "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm",
                         status === 'paid' ? "bg-emerald-500 hover:bg-emerald-600" : (status === 'waiting' ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700")
                       )}>
-                        {status === 'paid' ? 'SUCCESS' : (status === 'waiting' ? 'WAITING' : 'PENDING')}
+                        {status === 'paid' ? 'SUCCESS' : (status === 'waiting' ? 'DUE' : 'OVERDUE')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right pr-6">
@@ -1288,13 +1286,13 @@ export default function RoundsPage() {
                   <div className="space-y-1 text-right">
                     <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Unpaid Span</span>
                     <span className="text-lg font-black text-destructive tabular-nums tracking-tighter">
-                      {selectedPendingMember.calculatedPendingDays} {currentRound?.collectionType === 'Daily' ? 'Days' : 'Month'}
+                      {selectedPendingMember.calculatedPendingDays} {(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Monthly' ? 'Days Overdue' : 'Days'}
                     </span>
                   </div>
                 </div>
 
                 <ScrollArea className="h-[350px]">
-                  {currentRound?.collectionType === 'Daily' ? (
+                  {(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Daily' ? (
                     <Table>
                       <TableHeader className="bg-muted/30 sticky top-0 z-10">
                         <TableRow>
@@ -1327,7 +1325,7 @@ export default function RoundsPage() {
                     </Table>
                   ) : (
                     <div className="p-10 text-center text-muted-foreground italic text-xs">
-                      Date-wise audit ledger is optimized for Daily schemes.
+                      Date-wise audit ledger is optimized for Daily schemes. Monthly users follow a specific due-date window.
                     </div>
                   )}
                 </ScrollArea>
@@ -1400,7 +1398,6 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Member and Profile Dialogs remain unchanged */}
       <Dialog open={isAddMemberDialogOpen} onOpenChange={setIsAddMemberDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <form onSubmit={handleAddMemberToScheme}>
