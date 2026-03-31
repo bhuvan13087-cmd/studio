@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -355,9 +356,9 @@ export default function RoundsPage() {
     const currentDayOfMonth = now.getDate();
 
     return members.map(m => {
-      const activeCycle = (allCycles || []).find(c => c.name === m.chitGroup && c.status === 'active');
+      const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(m.chitGroup).trim() && c.status === 'active');
       const mPayments = allPayments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
-      const scheme = chitSchemes.find(r => r.name === m.chitGroup);
+      const scheme = chitSchemes.find(r => String(r.name).trim() === String(m.chitGroup).trim());
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
       
       let pendingDaysCount = 0;
@@ -432,7 +433,7 @@ export default function RoundsPage() {
   }, [members, allPayments, chitSchemes, allCycles]);
 
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
-  const assignedMembers = useMemo(() => membersWithCalculatedStats.filter(m => m.status !== 'inactive' && m.chitGroup === currentRound?.name), [membersWithCalculatedStats, currentRound])
+  const assignedMembers = useMemo(() => membersWithCalculatedStats.filter(m => m.status !== 'inactive' && String(m.chitGroup).trim() === String(currentRound?.name).trim()), [membersWithCalculatedStats, currentRound])
 
   const totalPaidByMember = useMemo(() => {
     const map = new Map<string, number>();
@@ -456,7 +457,7 @@ export default function RoundsPage() {
 
   const getGroupCollectionForDate = (groupName: string, dateStr: string) => {
     if (!allPayments || !members) return 0;
-    const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
+    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(groupName).trim()).map(m => m.id));
     return allPayments
       .filter(p => 
         groupMemberIds.has(p.memberId) && 
@@ -472,10 +473,10 @@ export default function RoundsPage() {
   };
 
   const getGroupActiveCycleCollection = (groupName: string) => {
-    const activeCycle = (allCycles || []).find(c => c.name === groupName && c.status === 'active');
+    const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(groupName).trim() && c.status === 'active');
     if (!activeCycle || !allPayments || !members) return 0;
     
-    const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
+    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(groupName).trim()).map(m => m.id));
     return allPayments
       .filter(p => {
         const pDate = getRecordDate(p);
@@ -647,7 +648,7 @@ export default function RoundsPage() {
   const memberDateLog = useMemo(() => {
     if (!selectedPendingMember || !allPayments) return [];
     try {
-      const activeCycle = (allCycles || []).find(c => c.name === selectedPendingMember.chitGroup && c.status === 'active');
+      const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(selectedPendingMember.chitGroup).trim() && c.status === 'active');
       if (!activeCycle) return [];
 
       const rawJoinDate = parseISO(selectedPendingMember.joinDate);
@@ -699,10 +700,13 @@ export default function RoundsPage() {
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {chitSchemes.map((group) => {
-            const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && m.chitGroup === group.name).length;
-            const groupPendingCount = membersWithCalculatedStats.filter(m => m.chitGroup === group.name && m.status !== 'inactive' && m.memberStatus === 'pending').length;
+            const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && String(m.chitGroup).trim() === String(group.name).trim()).length;
+            const groupPendingCount = membersWithCalculatedStats.filter(m => String(m.chitGroup).trim() === String(group.name).trim() && m.status !== 'inactive' && m.memberStatus === 'pending').length;
             const activeCycleCollection = getGroupActiveCycleCollection(group.name);
-            const latestGroupCycle = (allCycles || []).find(c => c.name === group.name);
+            
+            // Refined cycle lookup: Prioritize active cycle, otherwise get newest for that group
+            const groupCycles = (allCycles || []).filter(c => String(c.name).trim() === String(group.name).trim());
+            const latestGroupCycle = groupCycles.find(c => c.status === 'active') || groupCycles[0];
             
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
@@ -929,7 +933,7 @@ export default function RoundsPage() {
   const getGroupMonthlyCollection = (groupName: string, monthStr?: string) => {
     if (!allPayments || !members) return 0;
     const targetMonth = monthStr || format(new Date(), 'MMMM yyyy');
-    const groupMemberIds = new Set(members.filter(m => m.chitGroup === groupName).map(m => m.id));
+    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(groupName).trim()).map(m => m.id));
     return allPayments
       .filter(p => 
         groupMemberIds.has(p.memberId) && 
@@ -940,7 +944,7 @@ export default function RoundsPage() {
       .reduce((acc, p) => acc + getPaymentAmount(p), 0);
   };
 
-  const currentActiveCycle = (allCycles || []).find(c => c.name === currentRound?.name && c.status === 'active');
+  const currentActiveCycle = (allCycles || []).find(c => String(c.name).trim() === String(currentRound?.name).trim() && c.status === 'active');
   const cycleGroupCollection = currentRound ? getGroupActiveCycleCollection(currentRound.name) : 0;
 
   return (
