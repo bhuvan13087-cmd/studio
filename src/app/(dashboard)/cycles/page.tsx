@@ -1,30 +1,95 @@
 
 "use client"
 
+import { useState, useEffect } from "react"
 import { Loader2, FolderKanban, ChevronRight, History, ShieldCheck, Database, CalendarSearch } from "lucide-react"
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, orderBy } from "firebase/firestore"
+import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
+import { collection, query, orderBy, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp } from "firebase/firestore"
 import { useRouter } from "next/navigation"
+import { useRole } from "@/hooks/use-role"
 import { cn } from "@/lib/utils"
 
 /**
  * @fileOverview Refined Cycles Registry Dashboard
  * 
  * Provides a structured, professional entry point into the chronological audit system.
- * Designed for administrative precision and financial clarity.
+ * Includes a one-time safe backfill logic for legacy group history reconciliation.
  */
 export default function CyclesPage() {
   const router = useRouter()
   const db = useFirestore()
+  const { user } = useUser()
+  const { isAdmin } = useRole()
+  const [mounted, setMounted] = useState(false)
 
   // Fetch schemes to get unique group names
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('name', 'asc')), [db])
   const { data: rounds, isLoading: roundsLoading } = useCollection(roundsQuery)
 
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // ONE-TIME SAFE BACKFILL: LEGACY HISTORY RECONCILIATION
+  useEffect(() => {
+    const runBackfill = async () => {
+      if (!db || !rounds || roundsLoading || !user || !isAdmin) return;
+      
+      try {
+        // Idempotency Check: Look for a marker in systemMetadata
+        const backfillRef = doc(db, 'systemMetadata', 'backfill_v1');
+        const backfillSnap = await getDoc(backfillRef);
+        if (backfillSnap.exists() && backfillSnap.data().completed) return;
+
+        // Get all unique groups that need history
+        const uniqueGroups = Array.from(new Set(rounds.map(r => String(r?.name || "").trim()).filter(Boolean)));
+        
+        // Get all existing cycles to check coverage
+        const cyclesSnap = await getDocs(collection(db, 'cycles'));
+        const existingCycleGroups = new Set(cyclesSnap.docs.map(d => d.data().name));
+
+        let createdCount = 0;
+        for (const groupName of uniqueGroups) {
+          // Only create history if NO cycles exist for this group at all
+          if (!existingCycleGroups.has(groupName)) {
+            await addDoc(collection(db, 'cycles'), {
+              name: groupName,
+              startDate: "2026-03-15",
+              endDate: "2026-03-29",
+              status: "completed",
+              type: "backfilled",
+              createdAt: new Date().toISOString(),
+              completedAt: new Date().toISOString()
+            });
+            createdCount++;
+          }
+        }
+
+        // Mark backfill as complete globally
+        await setDoc(backfillRef, { 
+          completed: true, 
+          completedAt: serverTimestamp(),
+          admin: user.email,
+          recordsCreated: createdCount
+        }, { merge: true });
+
+        if (createdCount > 0) {
+          console.log(`Legacy cycle backfill completed: ${createdCount} records synchronized.`);
+        }
+      } catch (e) {
+        console.error("Backfill failed:", e);
+      }
+    };
+
+    if (mounted) {
+      runBackfill();
+    }
+  }, [db, rounds, roundsLoading, user, isAdmin, mounted]);
+
   // Extract unique group names safely
   const groupNames = Array.from(new Set((rounds || []).map(r => String(r?.name || "").trim()).filter(Boolean)))
 
-  if (roundsLoading) {
+  if (roundsLoading || !mounted) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
         <Loader2 className="size-8 animate-spin text-primary" />
