@@ -967,7 +967,7 @@ export default function RoundsPage() {
   };
 
   const currentActiveCycle = (allCycles || []).find(c => String(c.name).trim() === String(currentRound?.name).trim() && c.status === 'active');
-  const cycleGroupCollection = currentRound ? getGroupActiveCycleCollection(currentRound.name) : 0;
+  const todayGroupCollection = currentRound ? getGroupTodayCollection(currentRound.name) : 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
@@ -1022,7 +1022,7 @@ export default function RoundsPage() {
 
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl">
           <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between">
-            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Cycle Intake</CardTitle>
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle>
             <Button 
               variant="ghost" 
               size="icon" 
@@ -1033,7 +1033,7 @@ export default function RoundsPage() {
             </Button>
           </CardHeader>
           <CardContent className="p-2.5 pt-0">
-            <div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{cycleGroupCollection.toLocaleString()}</div>
+            <div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{todayGroupCollection.toLocaleString()}</div>
           </CardContent>
         </Card>
       </div>
@@ -1086,7 +1086,7 @@ export default function RoundsPage() {
                         }}
                         disabled={!currentActiveCycle}
                         className={cn(
-                          "px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest tabular-nums transition-all active:scale-95 tabular-nums hover:underline cursor-pointer hover:bg-muted/5 disabled:opacity-30 disabled:cursor-not-allowed",
+                          "px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest tabular-nums transition-all active:scale-90 tabular-nums hover:underline cursor-pointer hover:bg-muted/5 disabled:opacity-30 disabled:cursor-not-allowed",
                           pDays > 0 ? "text-destructive font-bold" : "text-muted-foreground/40"
                         )}
                       >
