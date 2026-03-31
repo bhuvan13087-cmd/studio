@@ -683,22 +683,25 @@ export default function RoundsPage() {
 
       const mPayments = allPayments.filter(p => p.memberId === selectedPendingMember.id && (p.status === 'success' || p.status === 'paid'));
       
-      return eachDayOfInterval({ start: effectiveStart, end: effectiveEnd }).map(day => {
-        const dStr = format(day, 'yyyy-MM-dd');
-        const dayPaymentSum = mPayments
-          .filter(p => getRecordDate(p) === dStr)
-          .reduce((acc, p) => acc + getPaymentAmount(p), 0);
-        
-        // Strict scheme amount verification
-        const isPaid = dayPaymentSum >= (selectedPendingMember.monthlyAmount || 800);
+      return eachDayOfInterval({ start: effectiveStart, end: effectiveEnd })
+        .map(day => {
+          const dStr = format(day, 'yyyy-MM-dd');
+          const dayPaymentSum = mPayments
+            .filter(p => getRecordDate(p) === dStr)
+            .reduce((acc, p) => acc + getPaymentAmount(p), 0);
+          
+          // Strict scheme amount verification
+          const isPaid = dayPaymentSum >= (selectedPendingMember.monthlyAmount || 800);
 
-        return {
-          date: dStr,
-          status: isPaid ? 'Paid' : 'Not Paid',
-          amount: dayPaymentSum,
-          label: format(day, 'dd MMM yyyy')
-        };
-      }).reverse();
+          return {
+            date: dStr,
+            status: isPaid ? 'Paid' : 'Not Paid',
+            amount: dayPaymentSum,
+            label: format(day, 'dd MMM yyyy')
+          };
+        })
+        .filter(log => log.status !== 'Paid') // Automatically remove paid dates from the pending list
+        .reverse();
     } catch (e) {
       return [];
     }
@@ -1349,25 +1352,33 @@ export default function RoundsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {memberDateLog.map((log, i) => (
-                          <TableRow key={i} className="hover:bg-muted/5 transition-colors border-b">
-                            <TableCell className="pl-6 py-3 font-semibold text-xs text-foreground/80">{log.label}</TableCell>
-                            <TableCell className="text-center">
-                              <Badge 
-                                variant="outline" 
-                                className={cn(
-                                  "text-[9px] font-black uppercase tracking-widest px-2 py-0.5",
-                                  log.status === 'Paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-destructive/5 text-destructive border-destructive/20"
-                                )}
-                              >
-                                {log.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right pr-6 font-bold text-xs tabular-nums">
-                              {log.amount > 0 ? `₹${log.amount.toLocaleString()}` : '-'}
+                        {memberDateLog.length > 0 ? (
+                          memberDateLog.map((log, i) => (
+                            <TableRow key={i} className="hover:bg-muted/5 transition-colors border-b">
+                              <TableCell className="pl-6 py-3 font-semibold text-xs text-foreground/80">{log.label}</TableCell>
+                              <TableCell className="text-center">
+                                <Badge 
+                                  variant="outline" 
+                                  className={cn(
+                                    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5",
+                                    log.status === 'Paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-destructive/5 text-destructive border-destructive/20"
+                                  )}
+                                >
+                                  {log.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right pr-6 font-bold text-xs tabular-nums">
+                                {log.amount > 0 ? `₹${log.amount.toLocaleString()}` : '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={3} className="h-32 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 italic">
+                              No pending installments found
                             </TableCell>
                           </TableRow>
-                        ))}
+                        )}
                       </TableBody>
                     </Table>
                   ) : (
