@@ -1376,7 +1376,7 @@ export default function RoundsPage() {
                         {currentRound?.specificDueDate ? format(parseISO(currentRound.specificDueDate), 'dd MMM yyyy') : `Day ${currentRound?.dueDate || 5} (Default)`}
                       </p>
                     </div>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" className="h-8 text-[10px] font-black uppercase tracking-widest gap-2 bg-white">
                           <CalendarDays className="size-3.5 text-primary" /> 
