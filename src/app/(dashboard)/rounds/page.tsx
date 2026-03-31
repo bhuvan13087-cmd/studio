@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -767,7 +766,7 @@ export default function RoundsPage() {
                       </div>
                     )}
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-amber-600 font-semibold">Active Arrears</span>
+                      <span className="text-amber-600 font-semibold">Pending</span>
                       <span className={cn("font-bold text-sm", groupPendingCount > 0 ? "text-amber-500" : "text-emerald-600")}>
                         {groupPendingCount}
                       </span>
@@ -989,7 +988,7 @@ export default function RoundsPage() {
 
         <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-xl">
           <CardHeader className="p-2.5 pb-1">
-            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Active Arrears</CardTitle>
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Pending</CardTitle>
           </CardHeader>
           <CardContent className="p-2.5 pt-0">
             <div className="text-lg font-bold tabular-nums text-amber-600 tracking-tight">
