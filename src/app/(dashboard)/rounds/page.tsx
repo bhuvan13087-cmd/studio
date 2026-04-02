@@ -261,6 +261,7 @@ export default function RoundsPage() {
   
   const [isCollectionPopupOpen, setIsCollectionPopupOpen] = useState(false)
   const [activePopupGroupName, setActivePopupGroupName] = useState<string | null>(null)
+  const [selectedReconciliationCycleId, setSelectedReconciliationCycleId] = useState<string | null>(null)
   
   const [isDailyAuditOpen, setIsDailyAuditOpen] = useState(false)
   const [auditDate, setAuditDate] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -295,6 +296,17 @@ export default function RoundsPage() {
   const { data: allCycles } = useCollection(cyclesQuery);
 
   useEffect(() => { setMounted(true) }, [])
+
+  // AUTO-DEFAULT RECONCILIATION CYCLE
+  useEffect(() => {
+    if (isCollectionPopupOpen && activePopupGroupName && allCycles) {
+      const groupCycles = allCycles.filter(c => String(c.name).trim() === String(activePopupGroupName).trim());
+      const active = groupCycles.find(c => c.status === 'active') || groupCycles[0];
+      if (active) {
+        setSelectedReconciliationCycleId(active.id);
+      }
+    }
+  }, [isCollectionPopupOpen, activePopupGroupName, allCycles]);
 
   useEffect(() => {
     const checkAndCloseCycles = async () => {
@@ -463,6 +475,43 @@ export default function RoundsPage() {
       .reduce((acc, p) => acc + getPaymentAmount(p), 0);
   };
 
+  // RECONCILIATION POPUP LOGIC
+  const reconciliationCycles = useMemo(() => {
+    if (!activePopupGroupName || !allCycles) return [];
+    return allCycles
+      .filter(c => String(c.name).trim() === String(activePopupGroupName).trim())
+      .filter(c => !viewYear || format(parseISO(c.startDate), 'yyyy') === viewYear)
+      .sort((a, b) => b.startDate.localeCompare(a.startDate));
+  }, [activePopupGroupName, allCycles, viewYear]);
+
+  const reconciliationTotal = useMemo(() => {
+    if (!activePopupGroupName || !selectedReconciliationCycleId || !allPayments || !members || !allCycles) return 0;
+    const cycle = allCycles.find(c => c.id === selectedReconciliationCycleId);
+    if (!cycle) return 0;
+    
+    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(activePopupGroupName).trim()).map(m => m.id));
+    
+    return allPayments
+      .filter(p => {
+        if (!groupMemberIds.has(p.memberId)) return false;
+        if (!(p.status === 'success' || p.status === 'paid')) return false;
+        const pDate = getRecordDate(p);
+        return pDate && pDate >= cycle.startDate && pDate <= cycle.endDate;
+      })
+      .reduce((acc, p) => acc + getPaymentAmount(p), 0);
+  }, [activePopupGroupName, selectedReconciliationCycleId, allPayments, members, allCycles]);
+
+  const formatCycleLabel = (cycle: any) => {
+    if (!cycle) return "";
+    try {
+      const start = format(parseISO(cycle.startDate), 'dd MMM yyyy');
+      const end = format(parseISO(cycle.endDate), 'dd MMM yyyy');
+      return `${start} → ${end}`;
+    } catch (e) {
+      return `${cycle.startDate} → ${cycle.endDate}`;
+    }
+  };
+
   const handleQuickPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
@@ -593,13 +642,6 @@ export default function RoundsPage() {
     } catch (e) { return []; }
   }, [selectedPendingMember, allPayments, allCycles, chitSchemes]);
 
-  const getGroupMonthlyCollection = (groupName: string, monthStr?: string) => {
-    if (!allPayments || !members) return 0;
-    const targetMonth = monthStr || format(new Date(), 'MMMM yyyy');
-    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(groupName).trim()).map(m => m.id));
-    return allPayments.filter(p => groupMemberIds.has(p.memberId) && (p.status === 'success' || p.status === 'paid') && getPaymentAmount(p) > 0 && p.month === targetMonth).reduce((acc, p) => acc + getPaymentAmount(p), 0);
-  };
-
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
   if (!selectedChitId) {
@@ -694,7 +736,8 @@ export default function RoundsPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <Dialog open={isCollectionPopupOpen} onOpenChange={(open) => { setIsCollectionPopupOpen(open); if (!open) { setViewMonth(format(new Date(), 'MMMM')); setViewYear(format(new Date(), 'yyyy')); setActivePopupGroupName(null); } }}>
+        {/* BOARD RECONCILIATION - CYCLE BASED */}
+        <Dialog open={isCollectionPopupOpen} onOpenChange={(open) => { setIsCollectionPopupOpen(open); if (!open) { setViewYear(format(new Date(), 'yyyy')); setActivePopupGroupName(null); setSelectedReconciliationCycleId(null); } }}>
           <DialogContent className="sm:max-w-[420px]">
             {activePopupGroupName && (
               <>
@@ -705,15 +748,27 @@ export default function RoundsPage() {
                 <div className="space-y-6 py-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Period Month</Label>
-                      <Select value={viewMonth} onValueChange={setViewMonth}><SelectTrigger className="h-10 text-xs font-bold"><SelectValue /></SelectTrigger><SelectContent>{MONTHS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select>
-                    </div>
-                    <div className="space-y-1.5">
                       <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Period Year</Label>
                       <Select value={viewYear} onValueChange={setViewYear}><SelectTrigger className="h-10 text-xs font-bold"><SelectValue /></SelectTrigger><SelectContent>{YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select>
                     </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Operational Cycle</Label>
+                      <Select value={selectedReconciliationCycleId || ""} onValueChange={setSelectedReconciliationCycleId}>
+                        <SelectTrigger className="h-10 text-xs font-bold"><SelectValue placeholder="Select Cycle" /></SelectTrigger>
+                        <SelectContent>
+                          {reconciliationCycles.length > 0 ? reconciliationCycles.map(c => (
+                            <SelectItem key={c.id} value={c.id} className="text-xs">{formatCycleLabel(c)}</SelectItem>
+                          )) : (
+                            <div className="p-4 text-center text-[10px] font-bold uppercase text-muted-foreground italic">No cycles found for {viewYear}</div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-3xl border border-dashed border-emerald-200 text-center"><p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Verified Monthly Total</p><div className="text-5xl font-black text-emerald-600 tabular-nums tracking-tighter">₹{getGroupMonthlyCollection(activePopupGroupName, `${viewMonth} ${viewYear}`).toLocaleString()}</div></div>
+                  <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-3xl border border-dashed border-emerald-200 text-center">
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Verified Cycle Total</p>
+                    <div className="text-5xl font-black text-emerald-600 tabular-nums tracking-tighter">₹{reconciliationTotal.toLocaleString()}</div>
+                  </div>
                 </div>
                 <DialogFooter><Button onClick={() => setIsCollectionPopupOpen(false)} className="w-full font-bold">Close Audit</Button></DialogFooter>
               </>
