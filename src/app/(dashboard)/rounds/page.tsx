@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -157,6 +156,7 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
         toast({ title: "New Cycle Started", description: "Fresh operational period initialized." });
       }
       setIsOpen(false);
+      document.body.style.pointerEvents = 'auto';
     } catch (error: any) {
       toast({ variant: "destructive", title: "Persistence Error", description: error.message || "Failed to save cycle." });
     } finally {
@@ -165,7 +165,7 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if(!open) document.body.style.pointerEvents = 'auto'; setIsOpen(open); }}>
       <DialogTrigger asChild>
         <Button 
           variant="ghost" 
@@ -271,7 +271,7 @@ export default function RoundsPage() {
   const [selectedProfileMember, setSelectedProfileMember] = useState<any>(null)
   const [selectedPendingMember, setSelectedPendingMember] = useState<any>(null)
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
-  const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
+  const [paymentData, setPaymentData] = INITIAL_PAYMENT_STATE ? useState(INITIAL_PAYMENT_STATE) : useState({ method: "Cash", amount: 0, date: format(new Date(), 'yyyy-MM-dd') });
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
   
   const [viewMonth, setViewMonth] = useState<string>(format(new Date(), 'MMMM'))
@@ -296,6 +296,14 @@ export default function RoundsPage() {
   const { data: allCycles } = useCollection(cyclesQuery);
 
   useEffect(() => { setMounted(true) }, [])
+
+  // UI Safety: Restore interaction on component change/unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.pointerEvents = 'auto';
+      document.body.style.overflow = 'auto';
+    };
+  }, []);
 
   // AUTO-DEFAULT RECONCILIATION CYCLE
   useEffect(() => {
@@ -556,6 +564,7 @@ export default function RoundsPage() {
       await createAuditLog(db, user, `Processed Payment ₹${paymentAmount} for ${selectedMemberForPayment.name} targeted for ${targetDateStr}`);
       setPaymentData(INITIAL_PAYMENT_STATE);
       setIsQuickPaymentDialogOpen(false);
+      document.body.style.pointerEvents = 'auto';
       toast({ title: "Payment Recorded", description: "Date marked as paid." });
     } catch (e: any) { toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record payment." }); } finally { setIsActionPending(false); }
   }
@@ -570,6 +579,7 @@ export default function RoundsPage() {
       await addDoc(collection(db, 'chitRounds'), chitData);
       await createAuditLog(db, user, `Created new scheme: ${newChit.name}`);
       setIsAddChitDialogOpen(false); 
+      document.body.style.pointerEvents = 'auto';
       setNewChit(INITIAL_CHIT_STATE);
       toast({ title: "Scheme Created", description: "The scheme has been added." });
     } catch (e: any) { toast({ variant: "destructive", title: "Error", description: e.message || "Failed to create scheme." }); } finally { setIsActionPending(false); }
@@ -584,6 +594,7 @@ export default function RoundsPage() {
       await updateDoc(chitRef, { name: chitToEdit.name, monthlyAmount: Number(chitToEdit.monthlyAmount), totalMembers: Number(chitToEdit.totalMembers), collectionType: chitToEdit.collectionType, dueDate: Number(chitToEdit.dueDate || 5) });
       await createAuditLog(db, user, `Updated scheme parameters: ${chitToEdit.name}`);
       setIsEditChitDialogOpen(false);
+      document.body.style.pointerEvents = 'auto';
       setChitToEdit(null);
       toast({ title: "Scheme Updated", description: "Changes saved." });
     } catch (e: any) { toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update scheme." }); } finally { setIsActionPending(false); }
@@ -596,6 +607,7 @@ export default function RoundsPage() {
       await deleteDoc(doc(db, 'chitRounds', chitToDelete.id));
       await createAuditLog(db, user, `Deleted scheme: ${chitToDelete.name}`);
       setIsDeleteChitDialogOpen(false);
+      document.body.style.pointerEvents = 'auto';
       setChitToDelete(null);
       toast({ title: "Scheme Deleted", description: "Record removed." });
     } catch (e: any) { toast({ variant: "destructive", title: "Error", description: e.message || "Failed to delete scheme." }); } finally { setIsActionPending(false); }
@@ -610,6 +622,7 @@ export default function RoundsPage() {
       await addDoc(collection(db, 'members'), memberData);
       await createAuditLog(db, user, `Registered ${newMember.name} to scheme ${currentRound.name}`);
       setIsAddMemberDialogOpen(false);
+      document.body.style.pointerEvents = 'auto';
       setNewMember(INITIAL_MEMBER_STATE);
       toast({ title: "Member Registered", description: `${newMember.name} joined.` });
     } catch (e: any) { toast({ variant: "destructive", title: "Error", description: e.message || "Failed to register member." }); } finally { setIsActionPending(false); }
@@ -626,6 +639,7 @@ export default function RoundsPage() {
       setIsEditMemberProfileOpen(false);
       setMemberProfileToEdit(null);
       setIsMemberProfileDialogOpen(false);
+      document.body.style.pointerEvents = 'auto';
       toast({ title: "Profile Updated", description: "Details saved successfully." });
     } catch (e: any) { toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update profile." }); } finally { setIsActionPending(false); }
   }
@@ -722,7 +736,7 @@ export default function RoundsPage() {
         </div>
 
         {/* Edit Scheme Dialog */}
-        <Dialog open={isEditChitDialogOpen} onOpenChange={setIsEditChitDialogOpen}>
+        <Dialog open={isEditChitDialogOpen} onOpenChange={(open) => { if(!open) { setChitToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditChitDialogOpen(open); }}>
           <DialogContent className="sm:max-w-[425px]">
             {chitToEdit && (
               <form onSubmit={handleUpdateChit}>
@@ -741,7 +755,7 @@ export default function RoundsPage() {
         </Dialog>
 
         {/* Delete Scheme Alert Dialog */}
-        <AlertDialog open={isDeleteChitDialogOpen} onOpenChange={setIsDeleteChitDialogOpen}>
+        <AlertDialog open={isDeleteChitDialogOpen} onOpenChange={(open) => { if(!open) { setChitToDelete(null); document.body.style.pointerEvents = 'auto'; } setIsDeleteChitDialogOpen(open); }}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle>
@@ -750,7 +764,7 @@ export default function RoundsPage() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel disabled={isActionPending} onClick={() => setIsDeleteChitDialogOpen(false)}>Cancel</AlertDialogCancel>
               <AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeleteChit} disabled={isActionPending}>
                 {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete Scheme
               </AlertDialogAction>
@@ -759,7 +773,7 @@ export default function RoundsPage() {
         </AlertDialog>
 
         {/* BOARD RECONCILIATION - CYCLE BASED WITH DEDUPLICATION */}
-        <Dialog open={isCollectionPopupOpen} onOpenChange={(open) => { setIsCollectionPopupOpen(open); if (!open) { setViewYear(format(new Date(), 'yyyy')); setActivePopupGroupName(null); setSelectedReconciliationCycleId(null); } }}>
+        <Dialog open={isCollectionPopupOpen} onOpenChange={(open) => { if (!open) { setViewYear(format(new Date(), 'yyyy')); setActivePopupGroupName(null); setSelectedReconciliationCycleId(null); document.body.style.pointerEvents = 'auto'; } setIsCollectionPopupOpen(open); }}>
           <DialogContent className="sm:max-w-[420px]">
             {activePopupGroupName && (
               <>
@@ -798,14 +812,14 @@ export default function RoundsPage() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={isAddChitDialogOpen} onOpenChange={setIsAddChitDialogOpen}>
+        <Dialog open={isAddChitDialogOpen} onOpenChange={(open) => { if(!open) document.body.style.pointerEvents = 'auto'; setIsAddChitDialogOpen(open); }}>
           <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleAddChit}>
               <DialogHeader><DialogTitle className="text-xl font-bold">New Scheme</DialogTitle><DialogDescription className="font-medium">Define a new chit fund scheme parameters.</DialogDescription></DialogHeader>
               <div className="grid gap-5 py-6">
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Scheme Name</Label><Input value={newChit.name ?? ""} onChange={e => setNewChit({...newChit, name: e.target.value})} required className="h-11 rounded-xl" placeholder="e.g. Group A" /></div>
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="800" /></div>
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label><Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="20" /></div>
+                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label><Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(newChit.totalMembers)})} required className="h-11 rounded-xl" placeholder="20" /></div>
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={newChit.collectionType ?? "Daily"} onValueChange={(v) => setNewChit({...newChit, collectionType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select frequency" /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
                 {newChit.collectionType === 'Monthly' && (<div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Due Date (Day 1-31)</Label><Input type="number" min="1" max="31" value={newChit.dueDate || ""} onChange={e => setNewChit({...newChit, dueDate: Number(e.target.value)})} required className="h-11 rounded-xl" placeholder="5" /></div>)}
               </div>
@@ -898,7 +912,7 @@ export default function RoundsPage() {
         </div>
       </div>
 
-      <Dialog open={isDailyAuditOpen} onOpenChange={setIsDailyAuditOpen}>
+      <Dialog open={isDailyAuditOpen} onOpenChange={(open) => { if(!open) document.body.style.pointerEvents = 'auto'; setIsDailyAuditOpen(open); }}>
         <DialogContent className="sm:max-w-[400px]">
           {currentRound && (
             <>
@@ -913,7 +927,7 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsHistoryDialogOpen(open); if (!open) setHistoryMember(null) } }}>
+      <Dialog open={isHistoryDialogOpen} onOpenChange={(open) => { if (!isActionPending) { if (!open) { setHistoryMember(null); document.body.style.pointerEvents = 'auto'; } setIsHistoryDialogOpen(open); } }}>
         <DialogContent className="w-fit min-w-[320px] max-w-[90vw] sm:max-w-xl flex flex-col max-h-[85vh]">
           {isHistoryDialogOpen && (
             <>
@@ -944,7 +958,7 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isMemberProfileDialogOpen} onOpenChange={setIsMemberProfileDialogOpen}>
+      <Dialog open={isMemberProfileDialogOpen} onOpenChange={(open) => { if (!open) { setSelectedProfileMember(null); document.body.style.pointerEvents = 'auto'; } setIsMemberProfileDialogOpen(open); }}>
         <DialogContent className="sm:max-w-[400px]">
           {selectedProfileMember && (
             <>
@@ -961,9 +975,9 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isPendingDetailsOpen} onOpenChange={setIsPendingDetailsOpen}><DialogContent className="sm:max-w-[450px] p-0 overflow-hidden rounded-xl border-none shadow-2xl flex flex-col max-h-[85vh]">{selectedPendingMember && (<><DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b shrink-0"><DialogTitle className="text-xl font-bold tracking-tight text-primary">Isolated Audit Ledger</DialogTitle><DialogDescription className="text-xs font-medium text-muted-foreground">Active period payment status for {selectedPendingMember.name}.</DialogDescription></DialogHeader><div className="p-0 bg-background overflow-y-auto flex-1">{(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Monthly' && (<div className="px-6 py-4 border-b bg-primary/5 flex items-center justify-between"><div className="space-y-0.5"><span className="text-[10px] font-black uppercase tracking-widest text-primary/60">Group Due Date</span><p className="text-xs font-bold text-foreground">{currentRound?.specificDueDate ? format(parseISO(currentRound.specificDueDate), 'dd MMM yyyy') : `Day ${currentRound?.dueDate || 5} (Default)`}</p></div><Popover modal={true}><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-8 text-[10px] font-black uppercase tracking-widest gap-2 bg-white"><CalendarDays className="size-3.5 text-primary" /> {currentRound?.specificDueDate ? format(parseISO(currentRound.specificDueDate), 'dd MMM yyyy') : 'Set Due Date'}</Button></PopoverTrigger><PopoverContent className="w-auto p-0" align="end" side="bottom"><CalendarPicker mode="single" selected={currentRound?.specificDueDate ? parseISO(currentRound.specificDueDate) : undefined} onSelect={async (date) => { if (date && currentRound) { const dateStr = format(date, 'yyyy-MM-dd'); try { await updateDoc(doc(db, 'chitRounds', currentRound.id), { specificDueDate: dateStr }); await createAuditLog(db, user, `Updated Monthly Due Date for ${currentRound.name} to ${dateStr}`); toast({ title: "Due Date Updated", description: "Monthly overdue calculation adjusted." }); } catch (e) { toast({ variant: "destructive", title: "Update Failed", description: "Could not save due date." }); } } }} /></PopoverContent></Popover></div>)}<div className="grid grid-cols-2 p-4 bg-muted/20 border-b gap-4"><div className="space-y-1"><span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Cycle Arrears</span><span className="text-lg font-black text-destructive tabular-nums tracking-tighter">₹{selectedPendingMember.calculatedPendingAmount.toLocaleString()}</span></div><div className="space-y-1 text-right"><span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Unpaid Span</span><span className="text-lg font-black text-destructive tabular-nums tracking-tighter">{selectedPendingMember.calculatedPendingDays} {(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Monthly' ? 'Days Overdue' : 'Days'}</span></div></div><ScrollArea className="h-full">{(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Daily' ? (<Table><TableHeader className="bg-muted/30 sticky top-0 z-10"><TableRow><TableHead className="text-[10px] font-black uppercase tracking-widest pl-6">Collection Date</TableHead><TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Status</TableHead></TableRow></TableHeader><TableBody>{memberDateLog.length > 0 ? (memberDateLog.map((log, i) => (<TableRow key={i} className="hover:bg-muted/5 transition-colors border-b"><TableCell className="pl-6 py-3 font-semibold text-xs text-foreground/80">{log.label}</TableCell><TableCell className="text-center"><Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5", log.status === 'Paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-destructive/5 text-destructive border-destructive/20")}>{log.status}</Badge></TableCell></TableRow>))) : (<TableRow><TableCell colSpan={2} className="h-32 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 italic">No pending installments found</TableCell></TableRow>)}</TableBody></Table>) : (<div className="p-10 text-center text-muted-foreground italic text-xs">Date-wise audit ledger is optimized for Daily schemes. Monthly users follow a specific due-date window.</div>)}</ScrollArea></div><DialogFooter className="p-4 bg-muted/5 border-t shrink-0 mt-auto"><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full h-11 font-black uppercase tracking-widest text-xs rounded-xl shadow-md">Close Audit</Button></DialogFooter></>)}</DialogContent></Dialog>
+      <Dialog open={isPendingDetailsOpen} onOpenChange={(open) => { if (!open) { setSelectedPendingMember(null); document.body.style.pointerEvents = 'auto'; } setIsPendingDetailsOpen(open); }}><DialogContent className="sm:max-w-[450px] p-0 overflow-hidden rounded-xl border-none shadow-2xl flex flex-col max-h-[85vh]">{selectedPendingMember && (<><DialogHeader className="p-6 bg-gradient-to-br from-muted/50 to-background border-b shrink-0"><DialogTitle className="text-xl font-bold tracking-tight text-primary">Isolated Audit Ledger</DialogTitle><DialogDescription className="text-xs font-medium text-muted-foreground">Active period payment status for {selectedPendingMember.name}.</DialogDescription></DialogHeader><div className="p-0 bg-background overflow-y-auto flex-1">{(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Monthly' && (<div className="px-6 py-4 border-b bg-primary/5 flex items-center justify-between"><div className="space-y-0.5"><span className="text-[10px] font-black uppercase tracking-widest text-primary/60">Group Due Date</span><p className="text-xs font-bold text-foreground">{currentRound?.specificDueDate ? format(parseISO(currentRound.specificDueDate), 'dd MMM yyyy') : `Day ${currentRound?.dueDate || 5} (Default)`}</p></div><Popover modal={true} onOpenChange={(open) => { if (!open) document.body.style.pointerEvents = 'auto'; }}><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-8 text-[10px] font-black uppercase tracking-widest gap-2 bg-white"><CalendarDays className="size-3.5 text-primary" /> {currentRound?.specificDueDate ? format(parseISO(currentRound.specificDueDate), 'dd MMM yyyy') : 'Set Due Date'}</Button></PopoverTrigger><PopoverContent className="w-auto p-0" align="end" side="bottom"><CalendarPicker mode="single" selected={currentRound?.specificDueDate ? parseISO(currentRound.specificDueDate) : undefined} onSelect={async (date) => { if (date && currentRound) { const dateStr = format(date, 'yyyy-MM-dd'); try { await updateDoc(doc(db, 'chitRounds', currentRound.id), { specificDueDate: dateStr }); await createAuditLog(db, user, `Updated Monthly Due Date for ${currentRound.name} to ${dateStr}`); toast({ title: "Due Date Updated", description: "Monthly overdue calculation adjusted." }); } catch (e) { toast({ variant: "destructive", title: "Update Failed", description: "Could not save due date." }); } } }} /></PopoverContent></Popover></div>)}<div className="grid grid-cols-2 p-4 bg-muted/20 border-b gap-4"><div className="space-y-1"><span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Cycle Arrears</span><span className="text-lg font-black text-destructive tabular-nums tracking-tighter">₹{selectedPendingMember.calculatedPendingAmount.toLocaleString()}</span></div><div className="space-y-1 text-right"><span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Unpaid Span</span><span className="text-lg font-black text-destructive tabular-nums tracking-tighter">{selectedPendingMember.calculatedPendingDays} {(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Monthly' ? 'Days Overdue' : 'Days'}</span></div></div><ScrollArea className="h-full">{(selectedPendingMember.paymentType || currentRound?.collectionType) === 'Daily' ? (<Table><TableHeader className="bg-muted/30 sticky top-0 z-10"><TableRow><TableHead className="text-[10px] font-black uppercase tracking-widest pl-6">Collection Date</TableHead><TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Status</TableHead></TableRow></TableHeader><TableBody>{memberDateLog.length > 0 ? (memberDateLog.map((log, i) => (<TableRow key={i} className="hover:bg-muted/5 transition-colors border-b"><TableCell className="pl-6 py-3 font-semibold text-xs text-foreground/80">{log.label}</TableCell><TableCell className="text-center"><Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5", log.status === 'Paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-destructive/5 text-destructive border-destructive/20")}>{log.status}</Badge></TableCell></TableRow>))) : (<TableRow><TableCell colSpan={2} className="h-32 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 italic">No pending installments found</TableCell></TableRow>)}</TableBody></Table>) : (<div className="p-10 text-center text-muted-foreground italic text-xs">Date-wise audit ledger is optimized for Daily schemes. Monthly users follow a specific due-date window.</div>)}</ScrollArea></div><DialogFooter className="p-4 bg-muted/5 border-t shrink-0 mt-auto"><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full h-11 font-black uppercase tracking-widest text-xs rounded-xl shadow-md">Close Audit</Button></DialogFooter></>)}</DialogContent></Dialog>
 
-      <Dialog open={isQuickPaymentDialogOpen} onOpenChange={setIsQuickPaymentDialogOpen}>
+      <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(open) => { if(!open) { setSelectedMemberForPayment(null); document.body.style.pointerEvents = 'auto'; } setIsQuickPaymentDialogOpen(open); }}>
         <DialogContent className="sm:max-w-[425px]">
           {selectedMemberForPayment && (
             <form onSubmit={handleQuickPayment}>
@@ -979,7 +993,7 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAddMemberDialogOpen} onOpenChange={setIsAddMemberDialogOpen}>
+      <Dialog open={isAddMemberDialogOpen} onOpenChange={(open) => { if(!open) document.body.style.pointerEvents = 'auto'; setIsAddMemberDialogOpen(open); }}>
         <DialogContent className="sm:max-w-[425px]">
           <form onSubmit={handleAddMemberToScheme}>
             <DialogHeader><DialogTitle className="text-xl font-bold">Register Participant</DialogTitle><DialogDescription className="font-medium">Enroll new member into {currentRound?.name} Board.</DialogDescription></DialogHeader>
@@ -995,7 +1009,7 @@ export default function RoundsPage() {
       </Dialog>
 
       {/* Profile Edit Dialog */}
-      <Dialog open={isEditMemberProfileOpen} onOpenChange={setIsEditMemberProfileOpen}>
+      <Dialog open={isEditMemberProfileOpen} onOpenChange={(open) => { if(!open) { setMemberProfileToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditMemberProfileOpen(open); }}>
         <DialogContent className="sm:max-w-[425px]">
           {memberProfileToEdit && (
             <form onSubmit={handleUpdateMemberProfile}>

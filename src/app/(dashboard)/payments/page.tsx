@@ -102,6 +102,14 @@ export default function PaymentsPage() {
   const heartsQuery = useMemoFirebase(() => collection(db, 'monthLocks'), [db]);
   const { data: monthLocks } = useCollection(heartsQuery);
 
+  // Global UI Interaction Cleanup
+  useEffect(() => {
+    return () => {
+      document.body.style.pointerEvents = 'auto';
+      document.body.style.overflow = 'auto';
+    };
+  }, []);
+
   const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
   const getPDateStr = (p: any) => {
     if (p.targetDate) return p.targetDate;
@@ -155,7 +163,6 @@ export default function PaymentsPage() {
         const newMember = members.find(m => m.id === correctionData.memberId);
         if (!newMember) throw new Error("Please select a valid member.");
         
-        // Remove from old
         batch.delete(originalPaymentRef);
         if (oldMember) {
           batch.update(doc(db, 'members', oldMember.id), { 
@@ -163,7 +170,6 @@ export default function PaymentsPage() {
           });
         }
         
-        // Add to new
         const newPaymentRef = doc(collection(db, 'payments'));
         const pDateStr = getPDateStr(paymentToCorrect) || format(new Date(), 'yyyy-MM-dd');
         batch.set(newPaymentRef, {
@@ -194,8 +200,10 @@ export default function PaymentsPage() {
       }
 
       await withTimeout(batch.commit());
-      setIsCorrectionOpen(false); 
-      setPaymentToCorrect(null); 
+      handleModalClose(setIsCorrectionOpen, () => {
+        setPaymentToCorrect(null);
+        setMemberSearchTerm("");
+      });
       toast({ title: "Payment Corrected", description: "Ledger updated successfully." });
     } catch (error: any) { 
       toast({ variant: "destructive", title: "Correction Failed", description: error.message || "An error occurred." }); 
@@ -215,7 +223,8 @@ export default function PaymentsPage() {
       if (member) { const memberRef = doc(db, 'members', member.id); await withTimeout(updateDoc(memberRef, { totalPaid: Math.max(0, (member.totalPaid || 0) - getPAmount(paymentToDelete)) })); }
       await withTimeout(deleteDoc(doc(db, 'payments', paymentToDelete.id)));
       await createAuditLog(db, user, `Deleted payment record of ₹${getPAmount(paymentToDelete)} for ${paymentToDelete.memberName}`);
-      setIsDeletePaymentDialogOpen(false); setPaymentToDelete(null); toast({ title: "Record Deleted", description: "Payment removed successfully." });
+      handleModalClose(setIsDeletePaymentDialogOpen, () => setPaymentToDelete(null));
+      toast({ title: "Record Deleted", description: "Payment removed successfully." });
     } catch (error: any) { toast({ variant: "destructive", title: "Error", description: error.message || "Failed to delete record." }); } finally { setIsActionPending(false); }
   }
 
@@ -223,7 +232,6 @@ export default function PaymentsPage() {
     if (!allCycles || !members) return [];
     let list = payments.filter(p => p.status === 'paid' || p.status === 'success' || p.status === 'corrected' || !p.status);
     
-    // CYCLE ISOLATION
     list = list.filter(p => {
       const member = members.find(m => m.id === p.memberId);
       if (!member) return false;
@@ -389,7 +397,7 @@ export default function PaymentsPage() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={isCorrectionOpen} onOpenChange={(o) => { if(!isActionPending) { setIsCorrectionOpen(o); if(!o) { setPaymentToCorrect(null); setMemberSearchTerm(""); } } }}>
+      <Dialog open={isCorrectionOpen} onOpenChange={(o) => { if(!isActionPending) { if(!o) { setPaymentToCorrect(null); setMemberSearchTerm(""); document.body.style.pointerEvents = 'auto'; } setIsCorrectionOpen(o); } }}>
         <DialogContent className="sm:max-w-[450px]">
           {paymentToCorrect && (
             <form onSubmit={handleCorrectPayment} className="space-y-6">
@@ -512,11 +520,11 @@ export default function PaymentsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAuditProfileOpen} onOpenChange={setIsAuditProfileOpen}>
+      <Dialog open={isAuditProfileOpen} onOpenChange={(open) => { if (!open) { setSelectedAuditMember(null); document.body.style.pointerEvents = 'auto'; } setIsAuditProfileOpen(open); }}>
         <DialogContent className="sm:max-w-[400px]"><DialogHeader><DialogTitle className="flex items-center gap-2"><User className="size-5 text-primary" /> Member Profile</DialogTitle></DialogHeader>{selectedAuditMember && (<div className="space-y-4 py-4"><div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Name</span><span className="font-bold text-sm">{selectedAuditMember.name}</span></div><div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Status</span><Badge variant={selectedAuditMember.status === 'active' ? 'default' : 'secondary'} className="uppercase font-bold text-[9px]">{selectedAuditMember.status}</Badge></div><div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg"><span className="text-xs font-bold uppercase text-emerald-600">Cycle Contribution</span><span className="font-bold text-sm text-emerald-700">₹{(totalPaidByMember.get(selectedAuditMember.id) || 0).toLocaleString()}</span></div>{selectedAuditMember.status === 'inactive' ? (<div className="p-4 border border-destructive/20 bg-destructive/5 rounded-lg space-y-2"><span className="text-[10px] font-bold uppercase text-destructive tracking-widest block">Active Period</span><div className="flex items-center gap-2 font-bold text-sm text-foreground">{selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}<span className="text-muted-foreground">→</span>{selectedAuditMember.deactivatedAt ? format(parseISO(selectedAuditMember.deactivatedAt), 'MMM dd, yyyy') : '-'}</div></div>) : (<div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Joined Date</span><span className="font-bold text-sm">{selectedAuditMember.joinDate ? format(parseISO(selectedAuditMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>)}</div>)}<DialogFooter><Button onClick={() => setIsAuditProfileOpen(false)} className="w-full sm:w-auto font-bold uppercase text-[10px] tracking-widest">Close</Button></DialogFooter></DialogContent>
       </Dialog>
 
-      <Dialog open={isHistoryOpen} onOpenChange={(open) => { setIsHistoryOpen(open); if (!open) setHistoryMember(null) }}>
+      <Dialog open={isHistoryOpen} onOpenChange={(open) => { if (!open) { setHistoryMember(null); document.body.style.pointerEvents = 'auto'; } setIsHistoryOpen(open); }}>
         <DialogContent className="sm:max-w-[500px]">
           {isHistoryOpen && (
             <>
@@ -549,8 +557,8 @@ export default function PaymentsPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={isDeletePaymentDialogOpen} onOpenChange={(open) => { if (!isActionPending) { setIsDeletePaymentDialogOpen(open); if (!open) setPaymentToDelete(null) } }}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Transaction?</AlertDialogTitle><AlertDialogDescription>Permanently remove this payment of <strong>₹{getPAmount(paymentToDelete || {}).toLocaleString()}</strong>? This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeletePayment} disabled={isActionPending}>{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      <AlertDialog open={isDeletePaymentDialogOpen} onOpenChange={(open) => { if (!open) { setPaymentToDelete(null); document.body.style.pointerEvents = 'auto'; } setIsDeletePaymentDialogOpen(open); }}>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Transaction?</AlertDialogTitle><AlertDialogDescription>Permanently remove this payment of <strong>₹{getPAmount(paymentToDelete || {}).toLocaleString()}</strong>? This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isActionPending} onClick={() => setIsDeletePaymentDialogOpen(false)}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeletePayment} disabled={isActionPending}>{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
     </div>
   )

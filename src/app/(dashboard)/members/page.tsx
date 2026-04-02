@@ -85,6 +85,14 @@ export default function MembersPage() {
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db]);
   const { data: allCycles } = useCollection(cyclesQuery);
 
+  // Global UI Interaction Cleanup
+  useEffect(() => {
+    return () => {
+      document.body.style.pointerEvents = 'auto';
+      document.body.style.overflow = 'auto';
+    };
+  }, []);
+
   const membersWithCalculatedStats = useMemo(() => {
     if (!members || !payments || !chitRounds || !allCycles) return [];
     const now = startOfDay(new Date());
@@ -139,6 +147,13 @@ export default function MembersPage() {
   }, [membersWithCalculatedStats, searchTerm])
 
   const visibleMembers = useMemo(() => filteredMembers.slice(0, displayLimit), [filteredMembers, displayLimit])
+
+  const handleModalClose = (setter: (v: boolean) => void, resetter: () => void) => {
+    setter(false);
+    resetter();
+    document.body.style.pointerEvents = 'auto';
+    document.body.style.overflow = 'auto';
+  };
 
   if (isRoleLoading) return (<div className="flex min-h-[400px] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
@@ -213,6 +228,28 @@ export default function MembersPage() {
           </Table>
         </div>
       </div>
+
+      <Dialog open={isProfileDialogOpen} onOpenChange={(open) => { if (!open) { setSelectedMember(null); document.body.style.pointerEvents = 'auto'; } setIsProfileDialogOpen(open); }}>
+        <DialogContent className="sm:max-w-[400px]">
+          {selectedMember && (
+            <div className="space-y-6">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><User className="size-5 text-primary" /> Member Profile</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{selectedMember.name}</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Phone</span><span className="font-bold text-sm tabular-nums">{selectedMember.phone}</span></div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Joined</span><span className="font-bold text-sm">{selectedMember.joinDate ? format(parseISO(selectedMember.joinDate), 'MMM dd, yyyy') : '-'}</span></div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"><span className="text-xs font-bold uppercase text-muted-foreground">Group</span><span className="font-bold text-sm text-primary">{selectedMember.chitGroup}</span></div>
+                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg"><span className="text-xs font-bold uppercase text-emerald-600">Cycle Paid</span><span className="font-bold text-sm text-emerald-700 tabular-nums">₹{selectedMember.totalPaidSum.toLocaleString()}</span></div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setIsProfileDialogOpen(false)} className="w-full font-black uppercase tracking-widest text-xs h-11 rounded-xl">Close Profile</Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
