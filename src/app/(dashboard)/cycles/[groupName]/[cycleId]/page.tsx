@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils"
  * 
  * Provides a granular, real-time view of a specific historical period.
  * Connects to existing database data for members and payments safely.
- * ISOLATION RULE: Once a cycle is completed, it remains immutable.
+ * FIX: Synchronized pending members calculation with high-integrity engine.
  */
 export default function CycleDetailsPage({ params }: { params: Promise<{ groupName: string, cycleId: string }> }) {
   const router = useRouter()
@@ -63,7 +63,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
   // Safe Members + Payments + Total Calculation
   const auditData = React.useMemo(() => {
-    if (!selectedCycle) return null
+    if (!selectedCycle || !membersData || !paymentsData) return null
 
     const startDate = selectedCycle.startDate || ""
     const endDate = selectedCycle.endDate || ""
@@ -127,8 +127,9 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
     // ULTRA SAFE: Calculate Pending Members for Completed Cycle
     const pendingMembersCount = groupMembers.filter(m => {
-      const scheme = (roundsData || []).find(r => r.name === groupName);
+      const scheme = (roundsData || []).find(r => String(r.name).trim() === groupName);
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
+      const schemeAmt = Number(m.monthlyAmount || scheme?.monthlyAmount || 800);
       
       if (resolvedType === 'Daily') {
         const start = startOfDay(max([parseISO(m.joinDate), parseISO(startDate)]));
@@ -141,7 +142,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
             const dayPaymentSum = cyclePayments
               .filter(p => p.memberId === m.id && getPDateStr(p) === dStr)
               .reduce((sum, p) => sum + getPAmount(p), 0);
-            return dayPaymentSum < (m.monthlyAmount || 800);
+            return dayPaymentSum < schemeAmt;
           });
         } catch(e) { return false; }
       } else {
@@ -230,7 +231,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
             className="bg-emerald-600 hover:bg-emerald-700 font-black uppercase tracking-[0.15em] text-[10px] h-10 px-6 rounded-xl shadow-lg active:scale-95 transition-all gap-2"
           >
             <Wallet className="size-3.5" />
-            Collect History Pending ({auditData.pendingMembersCount})
+            Settle Arrears ({auditData.pendingMembersCount})
           </Button>
         )}
       </div>
@@ -309,7 +310,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                           <TableCell className="text-center">
                             <Badge variant={m.paid ? "default" : "secondary"} className={cn(
                               "text-[8px] font-black uppercase tracking-tighter border-none px-2 py-0.5",
-                              m.paid ? "bg-emerald-500 hover:bg-emerald-600" : "bg-amber-100 text-amber-700"
+                              m.paid ? "bg-emerald-500 hover:bg-emerald-600 text-white" : "bg-amber-100 text-amber-700"
                             )}>
                               {m.paid ? "PAID" : "PENDING"}
                             </Badge>

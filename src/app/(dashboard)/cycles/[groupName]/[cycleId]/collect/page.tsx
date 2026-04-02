@@ -5,6 +5,7 @@ import * as React from "react"
 import { Loader2, ChevronLeft, Wallet, User, CalendarDays, CheckCircle2, IndianRupee } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, orderBy, addDoc, serverTimestamp, doc } from "firebase/firestore"
 import { useRouter } from "next/navigation"
@@ -29,6 +30,13 @@ import {
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 
+/**
+ * @fileOverview Refined Historical Arrears Collection Page.
+ * 
+ * FIX: Resolved "input is not defined" error.
+ * FIX: Corrected pending amount calculation to strictly use cycle interval.
+ * FIX: Filtered out members who have already paid within this cycle.
+ */
 export default function HistoryCollectionPage({ params }: { params: Promise<{ groupName: string, cycleId: string }> }) {
   const router = useRouter()
   const resolvedParams = React.use(params)
@@ -57,7 +65,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
   const { data: membersData, isLoading: membersLoading } = useCollection(membersQuery)
 
-  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments')), [db])
+  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db])
   const { data: paymentsData, isLoading: paymentsLoading } = useCollection(paymentsQuery)
 
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds')), [db])
@@ -91,6 +99,8 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
         );
 
         let pendingCount = 0;
+        const schemeAmt = Number(m.monthlyAmount || scheme?.monthlyAmount || 800);
+
         if (resolvedType === 'Daily') {
           const start = startOfDay(max([parseISO(m.joinDate), parseISO(startDate)]));
           const end = parseISO(endDate);
@@ -100,7 +110,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
               pendingCount = interval.filter(day => {
                 const dStr = format(day, 'yyyy-MM-dd');
                 const dayPaid = mPayments.filter(p => getPDateStr(p) === dStr).reduce((s, p) => s + (p.amountPaid || 0), 0);
-                return dayPaid < (m.monthlyAmount || 800);
+                return dayPaid < schemeAmt;
               }).length;
             } catch {}
           }
@@ -111,7 +121,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
         return {
           ...m,
           resolvedType,
-          pendingAmount: pendingCount * (m.monthlyAmount || 800),
+          pendingAmount: pendingCount * schemeAmt,
           pendingCount
         }
       })
@@ -121,8 +131,8 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
   const handleOpenPayment = (member: any) => {
     setSelectedMember(member)
     setPaymentData({
-      amount: member.monthlyAmount || 800,
-      date: selectedCycle.startDate, // Default to cycle start for history
+      amount: member.pendingAmount,
+      date: selectedCycle.startDate, 
       method: "Cash"
     })
     setIsPaymentOpen(true)
@@ -130,7 +140,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
 
   const handleCollect = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!db || !selectedMember || isActionPending) return
+    if (!db || !selectedMember || !selectedCycle || isActionPending) return
 
     setIsActionPending(true)
     try {
@@ -151,7 +161,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
       await addDoc(collection(db, 'payments'), paymentRecord)
       await createAuditLog(db, user, `Settled Historical Pending ₹${paymentData.amount} for ${selectedMember.name} in ${groupName} (${selectedCycle.startDate} Cycle)`)
 
-      toast({ title: "Payment Recorded", description: "Arrears settled for selected date." })
+      toast({ title: "Payment Recorded", description: "Arrears settled for historical record." })
       setIsPaymentOpen(false)
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message || "Failed to record settlement." })
@@ -167,10 +177,10 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
   return (
     <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full"><ChevronLeft className="size-6" /></Button>
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full transition-all active:scale-90"><ChevronLeft className="size-6" /></Button>
         <div className="space-y-0.5">
-          <h2 className="text-xl font-black uppercase tracking-tight text-primary font-headline">Pending Settlement</h2>
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">{groupName} • {selectedCycle?.startDate} History</p>
+          <h2 className="text-xl font-black uppercase tracking-tight text-primary font-headline">History Settlement</h2>
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">{groupName} • {selectedCycle?.startDate} Window</p>
         </div>
       </div>
 
@@ -179,7 +189,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
           <TableHeader className="bg-muted/30">
             <TableRow>
               <TableHead className="text-[10px] uppercase font-black tracking-widest pl-6 h-12">Member</TableHead>
-              <TableHead className="text-[10px] uppercase font-black tracking-widest h-12">Pending Amount</TableHead>
+              <TableHead className="text-[10px] uppercase font-black tracking-widest h-12">Total Arrears</TableHead>
               <TableHead className="w-[100px] pr-6"></TableHead>
             </TableRow>
           </TableHeader>
@@ -189,7 +199,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
                 <TableCell className="pl-6 py-4">
                   <div className="flex flex-col">
                     <span className="text-sm font-bold tracking-tight">{m.name}</span>
-                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{m.resolvedType}</span>
+                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{m.resolvedType} Mode</span>
                   </div>
                 </TableCell>
                 <TableCell>
@@ -200,16 +210,16 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
                     size="sm" 
                     variant="outline" 
                     onClick={() => handleOpenPayment(m)}
-                    className="h-8 text-[9px] font-black uppercase tracking-widest border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                    className="h-8 text-[9px] font-black uppercase tracking-widest border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 shadow-sm"
                   >
-                    Collect
+                    Settle
                   </Button>
                 </TableCell>
               </TableRow>
             )) : (
               <TableRow>
                 <TableCell colSpan={3} className="h-40 text-center text-muted-foreground italic text-xs font-bold uppercase tracking-widest">
-                  All pending arrears settled.
+                  All historical arrears verified and settled.
                 </TableCell>
               </TableRow>
             )}
@@ -222,8 +232,8 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
           {selectedMember && (
             <form onSubmit={handleCollect} className="space-y-6">
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2"><Wallet className="size-5 text-primary" /> History Settlement</DialogTitle>
-                <DialogDescription>Process arrears for {selectedMember.name} in {selectedCycle?.startDate} cycle.</DialogDescription>
+                <DialogTitle className="flex items-center gap-2 font-headline uppercase tracking-tight"><Wallet className="size-5 text-primary" /> Arrears Processing</DialogTitle>
+                <DialogDescription className="text-xs font-medium">Finalizing payment for {selectedMember.name} in legacy registry.</DialogDescription>
               </DialogHeader>
 
               <div className="grid gap-4">
@@ -238,7 +248,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Target Audit Date</Label>
+                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Target Registry Date</Label>
                   <Input 
                     type="date" 
                     value={paymentData.date} 
