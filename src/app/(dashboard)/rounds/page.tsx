@@ -592,6 +592,13 @@ export default function RoundsPage() {
     } catch (e) { return []; }
   }, [selectedPendingMember, allPayments, allCycles, chitSchemes]);
 
+  const getGroupMonthlyCollection = (groupName: string, monthStr?: string) => {
+    if (!allPayments || !members) return 0;
+    const targetMonth = monthStr || format(new Date(), 'MMMM yyyy');
+    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(groupName).trim()).map(m => m.id));
+    return allPayments.filter(p => groupMemberIds.has(p.memberId) && (p.status === 'success' || p.status === 'paid') && getPaymentAmount(p) > 0 && p.month === targetMonth).reduce((acc, p) => acc + getPaymentAmount(p), 0);
+  };
+
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
   if (!selectedChitId) {
@@ -621,9 +628,9 @@ export default function RoundsPage() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => { setChitToEdit(group); setIsEditChitDialogOpen(true); }}><Pencil className="size-4 mr-2" /> Edit Scheme</DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setChitToEdit(group); setIsEditChitDialogOpen(true); }}><Pencil className="size-4 mr-2" /> Edit Scheme</DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive" onClick={() => { setChitToDelete(group); setIsDeleteChitDialogOpen(true); }}><Trash2 className="size-4 mr-2" /> Delete Scheme</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); setChitToDelete(group); setIsDeleteChitDialogOpen(true); }}><Trash2 className="size-4 mr-2" /> Delete Scheme</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors" onClick={(e) => { e.stopPropagation(); setActivePopupGroupName(group.name); setIsCollectionPopupOpen(true); }}><Wallet className="size-4" /></Button>
@@ -648,6 +655,44 @@ export default function RoundsPage() {
             );
           })}
         </div>
+
+        {/* Edit Scheme Dialog */}
+        <Dialog open={isEditChitDialogOpen} onOpenChange={setIsEditChitDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            {chitToEdit && (
+              <form onSubmit={handleUpdateChit}>
+                <DialogHeader><DialogTitle className="text-xl font-bold">Edit Scheme</DialogTitle><DialogDescription className="font-medium">Modify chit fund scheme parameters.</DialogDescription></DialogHeader>
+                <div className="grid gap-5 py-6">
+                  <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Scheme Name</Label><Input value={chitToEdit.name ?? ""} onChange={e => setChitToEdit({...chitToEdit, name: e.target.value})} required className="h-11 rounded-xl" /></div>
+                  <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label><Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" /></div>
+                  <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label><Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" /></div>
+                  <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={chitToEdit.collectionType ?? "Daily"} onValueChange={(v) => setChitToEdit({...chitToEdit, collectionType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
+                  {chitToEdit.collectionType === 'Monthly' && (<div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Due Date (Day 1-31)</Label><Input type="number" min="1" max="31" value={chitToEdit.dueDate || ""} onChange={e => setChitToEdit({...chitToEdit, dueDate: Number(e.target.value)})} required className="h-11 rounded-xl" /></div>)}
+                  <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label><Input type="date" value={chitToEdit.startDate ?? ""} onChange={e => setChitToEdit({...chitToEdit, startDate: e.target.value})} required className="h-11 rounded-xl" /></div><div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label><Input type="date" value={chitToEdit.endDate ?? ""} onChange={e => setChitToEdit({...chitToEdit, endDate: e.target.value})} required className="h-11 rounded-xl" /></div></div>
+                </div>
+                <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold text-base shadow-lg active:scale-[0.98] transition-all">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Save Changes</Button></DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Scheme Alert Dialog */}
+        <AlertDialog open={isDeleteChitDialogOpen} onOpenChange={setIsDeleteChitDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{chitToDelete?.name}</strong>? This will remove all associated member assignments and ledger history. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeleteChit} disabled={isActionPending}>
+                {isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete Scheme
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <Dialog open={isCollectionPopupOpen} onOpenChange={(open) => { setIsCollectionPopupOpen(open); if (!open) { setViewMonth(format(new Date(), 'MMMM')); setViewYear(format(new Date(), 'yyyy')); setActivePopupGroupName(null); } }}>
           <DialogContent className="sm:max-w-[420px]">
@@ -695,13 +740,6 @@ export default function RoundsPage() {
       </div>
     )
   }
-
-  const getGroupMonthlyCollection = (groupName: string, monthStr?: string) => {
-    if (!allPayments || !members) return 0;
-    const targetMonth = monthStr || format(new Date(), 'MMMM yyyy');
-    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(groupName).trim()).map(m => m.id));
-    return allPayments.filter(p => groupMemberIds.has(p.memberId) && (p.status === 'success' || p.status === 'paid') && getPaymentAmount(p) > 0 && p.month === targetMonth).reduce((acc, p) => acc + getPaymentAmount(p), 0);
-  };
 
   const currentActiveCycle = (allCycles || []).find(c => String(c.name).trim() === String(currentRound?.name).trim() && c.status === 'active');
   const todayGroupCollection = currentRound ? getGroupTodayCollection(currentRound.name) : 0;
@@ -877,6 +915,24 @@ export default function RoundsPage() {
             </div>
             <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Register Member</Button></DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Profile Edit Dialog */}
+      <Dialog open={isEditMemberProfileOpen} onOpenChange={setIsEditMemberProfileOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          {memberProfileToEdit && (
+            <form onSubmit={handleUpdateMemberProfile}>
+              <DialogHeader><DialogTitle className="text-xl font-bold">Edit Member Profile</DialogTitle><DialogDescription className="font-medium">Update enrollment details for {memberProfileToEdit.name}.</DialogDescription></DialogHeader>
+              <div className="grid gap-5 py-6">
+                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label><Input value={memberProfileToEdit.name ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} required className="h-11 rounded-xl" /></div>
+                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label><Input value={memberProfileToEdit.phone ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} required className="h-11 rounded-xl" /></div>
+                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={memberProfileToEdit.paymentType} onValueChange={(v) => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
+                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label><Input type="date" value={memberProfileToEdit.joinDate ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} required className="h-11 rounded-xl" /></div>
+              </div>
+              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold shadow-lg active:scale-95 transition-all">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Save Profile</Button></DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>
