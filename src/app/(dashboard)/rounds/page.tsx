@@ -475,12 +475,34 @@ export default function RoundsPage() {
       .reduce((acc, p) => acc + getPaymentAmount(p), 0);
   };
 
-  // RECONCILIATION POPUP LOGIC
+  // RECONCILIATION POPUP LOGIC - WITH DEDUPLICATION
   const reconciliationCycles = useMemo(() => {
     if (!activePopupGroupName || !allCycles) return [];
-    return allCycles
+    
+    // Deduplicate cycles by startDate + endDate
+    const uniqueMap = new Map<string, any>();
+    
+    allCycles
       .filter(c => String(c.name).trim() === String(activePopupGroupName).trim())
-      .filter(c => !viewYear || format(parseISO(c.startDate), 'yyyy') === viewYear)
+      .forEach(c => {
+        const start = String(c?.startDate || "-");
+        const end = String(c?.endDate || "-");
+        const key = `${start}_${end}`;
+        
+        const existing = uniqueMap.get(key);
+        // Strategy: Keep 'active' over 'completed' for the same period
+        if (!existing || (c.status === 'active' && existing.status !== 'active')) {
+          uniqueMap.set(key, c);
+        }
+      });
+
+    return Array.from(uniqueMap.values())
+      .filter(c => {
+        if (!viewYear) return true;
+        try {
+          return format(parseISO(c.startDate), 'yyyy') === viewYear;
+        } catch { return true; }
+      })
       .sort((a, b) => b.startDate.localeCompare(a.startDate));
   }, [activePopupGroupName, allCycles, viewYear]);
 
@@ -559,7 +581,7 @@ export default function RoundsPage() {
     setIsActionPending(true);
     try {
       const chitRef = doc(db, 'chitRounds', chitToEdit.id);
-      await updateDoc(chitRef, { name: chitToEdit.name, monthlyAmount: Number(chitToEdit.monthlyAmount), totalMembers: Number(chitToEdit.totalMembers), collectionType: chitToEdit.collectionType, dueDate: Number(chitToEdit.dueDate || 5), startDate: chitToEdit.startDate, endDate: chitToEdit.endDate });
+      await updateDoc(chitRef, { name: chitToEdit.name, monthlyAmount: Number(chitToEdit.monthlyAmount), totalMembers: Number(chitToEdit.totalMembers), collectionType: chitToEdit.collectionType, dueDate: Number(chitToEdit.dueDate || 5) });
       await createAuditLog(db, user, `Updated scheme parameters: ${chitToEdit.name}`);
       setIsEditChitDialogOpen(false);
       setChitToEdit(null);
@@ -736,7 +758,7 @@ export default function RoundsPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* BOARD RECONCILIATION - CYCLE BASED */}
+        {/* BOARD RECONCILIATION - CYCLE BASED WITH DEDUPLICATION */}
         <Dialog open={isCollectionPopupOpen} onOpenChange={(open) => { setIsCollectionPopupOpen(open); if (!open) { setViewYear(format(new Date(), 'yyyy')); setActivePopupGroupName(null); setSelectedReconciliationCycleId(null); } }}>
           <DialogContent className="sm:max-w-[420px]">
             {activePopupGroupName && (
