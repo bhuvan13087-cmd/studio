@@ -225,7 +225,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
                 <TableCell className="pl-6 py-4">
                   <div className="flex flex-col">
                     <span className="text-sm font-bold tracking-tight">{m.name}</span>
-                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{m.resolvedType} Mode</span>
+                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{m.resolvedType}</span>
                   </div>
                 </TableCell>
                 <TableCell>
