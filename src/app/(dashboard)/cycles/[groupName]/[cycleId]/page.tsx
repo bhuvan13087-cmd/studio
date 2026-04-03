@@ -21,7 +21,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 /**
  * @fileOverview Specialized Cycle Audit Details Page.
@@ -333,39 +332,37 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                 </p>
               </div>
 
-              <div className="flex-1 overflow-hidden py-4">
-                <ScrollArea className="h-full pr-4">
-                  <Table>
-                    <TableHeader className="bg-muted/30">
+              <div className="flex-1 overflow-y-auto py-4 pr-2 custom-scrollbar">
+                <Table>
+                  <TableHeader className="bg-muted/30">
+                    <TableRow>
+                      <TableHead className="text-[9px] font-black uppercase tracking-widest h-8">Date</TableHead>
+                      <TableHead className="text-[9px] font-black uppercase tracking-widest h-8">Amount</TableHead>
+                      <TableHead className="text-[9px] font-black uppercase tracking-widest h-8 text-right">Method</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedHistoryMember.cyclePayments.length > 0 ? (
+                      selectedHistoryMember.cyclePayments.map((p: any, i: number) => {
+                        const pAmt = Number(p.amountPaid || p.amount || 0);
+                        const pDate = p.targetDate || (p.paymentDate?.toDate ? format(p.paymentDate.toDate(), 'yyyy-MM-dd') : format(new Date(p.paymentDate), 'yyyy-MM-dd'));
+                        return (
+                          <TableRow key={i} className="hover:bg-muted/5 border-b last:border-none">
+                            <TableCell className="text-[10px] font-bold tabular-nums py-3">{pDate}</TableCell>
+                            <TableCell className="text-[10px] font-black text-emerald-600 tabular-nums py-3">₹{pAmt.toLocaleString()}</TableCell>
+                            <TableCell className="text-[10px] font-bold text-muted-foreground text-right py-3 uppercase">{p.method || 'Cash'}</TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
                       <TableRow>
-                        <TableHead className="text-[9px] font-black uppercase tracking-widest h-8">Date</TableHead>
-                        <TableHead className="text-[9px] font-black uppercase tracking-widest h-8">Amount</TableHead>
-                        <TableHead className="text-[9px] font-black uppercase tracking-widest h-8 text-right">Method</TableHead>
+                        <TableCell colSpan={3} className="h-32 text-center text-[10px] font-bold uppercase text-muted-foreground/40 italic">
+                          No contributions recorded for this period.
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedHistoryMember.cyclePayments.length > 0 ? (
-                        selectedHistoryMember.cyclePayments.map((p: any, i: number) => {
-                          const pAmt = Number(p.amountPaid || p.amount || 0);
-                          const pDate = p.targetDate || (p.paymentDate?.toDate ? format(p.paymentDate.toDate(), 'yyyy-MM-dd') : format(new Date(p.paymentDate), 'yyyy-MM-dd'));
-                          return (
-                            <TableRow key={i} className="hover:bg-muted/5 border-b last:border-none">
-                              <TableCell className="text-[10px] font-bold tabular-nums py-3">{pDate}</TableCell>
-                              <TableCell className="text-[10px] font-black text-emerald-600 tabular-nums py-3">₹{pAmt.toLocaleString()}</TableCell>
-                              <TableCell className="text-[10px] font-bold text-muted-foreground text-right py-3 uppercase">{p.method || 'Cash'}</TableCell>
-                            </TableRow>
-                          );
-                        })
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={3} className="h-32 text-center text-[10px] font-bold uppercase text-muted-foreground/40 italic">
-                            No contributions recorded for this period.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
 
               <DialogFooter className="border-t pt-4">
