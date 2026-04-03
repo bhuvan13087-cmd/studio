@@ -123,20 +123,45 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
     const membersWithStatus = groupMembers.map(m => {
       const mCyclePayments = cyclePayments.filter(p => String(p?.memberId || "") === String(m?.id || ""))
-      const dayPayment = filteredPayments.find(p => String(p?.memberId || "") === String(m?.id || ""))
+      const mFilteredPayments = filteredPayments.filter(p => String(p?.memberId || "") === String(m?.id || ""))
+      
+      const totalAmountInFilter = mFilteredPayments.reduce((sum, p) => sum + getPAmount(p), 0)
+      const totalCycleContribution = mCyclePayments.reduce((sum, p) => sum + getPAmount(p), 0)
       
       const scheme = (roundsData || []).find(r => 
         String(r.name).trim().toLowerCase() === groupName.toLowerCase() ||
         String(r.name).replace(/Group/gi, '').trim().toLowerCase() === groupName.replace(/Group/gi, '').trim().toLowerCase()
       );
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
+      const schemeAmt = Number(m.monthlyAmount || scheme?.monthlyAmount || 800);
+
+      // HIGH-INTEGRITY STATUS CALCULATION
+      let isPaid = false;
+      if (selectedDate) {
+        if (resolvedType === 'Daily') {
+          // Daily: Paid if covered the daily amount for this specific date
+          isPaid = totalAmountInFilter >= schemeAmt;
+        } else {
+          // Monthly: Paid if they have fulfilled their whole cycle obligation
+          isPaid = totalCycleContribution >= schemeAmt;
+        }
+      } else {
+        // Overall Cycle Audit View
+        if (resolvedType === 'Daily') {
+          // PAID if at least one daily installment is met in this context
+          isPaid = totalCycleContribution >= schemeAmt;
+        } else {
+          // Monthly: Paid if total cycle contribution >= scheme amount
+          isPaid = totalCycleContribution >= schemeAmt;
+        }
+      }
 
       return {
         ...m,
-        paid: !!dayPayment,
-        amount: dayPayment ? getPAmount(dayPayment) : 0,
+        paid: isPaid,
+        amount: totalAmountInFilter,
         cyclePayments: mCyclePayments,
-        totalCycleContribution: mCyclePayments.reduce((sum, p) => sum + getPAmount(p), 0),
+        totalCycleContribution,
         resolvedType
       }
     })
@@ -258,7 +283,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">Daily Intake</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">{selectedDate ? 'Daily Intake' : 'Verified Total'}</p>
                     <p className="text-3xl font-black text-primary tabular-nums tracking-tighter">₹{auditData.dailyCollection.toLocaleString()}</p>
                   </div>
                 </div>
