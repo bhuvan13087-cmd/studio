@@ -318,11 +318,21 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                 <DialogTitle className="flex items-center gap-2 font-headline uppercase tracking-tight">
                   <History className="size-5 text-primary" /> Payment Ledger
                 </DialogTitle>
-                <DialogDescription className="text-xs font-medium">
-                  Contribution history for {selectedHistoryMember.name} within this cycle.
+                <DialogDescription className="text-xs font-bold text-primary/70 uppercase tracking-widest">
+                  Period: {auditData.startDate} → {auditData.endDate}
                 </DialogDescription>
               </DialogHeader>
               
+              <div className="mt-4 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/60">Total Cycle Payments</p>
+                  <p className="text-xs font-bold text-emerald-700">{selectedHistoryMember.name}</p>
+                </div>
+                <p className="text-2xl font-black text-emerald-600 tabular-nums">
+                  ₹{(selectedHistoryMember.cyclePayments.reduce((sum: number, p: any) => sum + Number(p.amountPaid || p.amount || 0), 0)).toLocaleString()}
+                </p>
+              </div>
+
               <div className="flex-1 overflow-hidden py-4">
                 <ScrollArea className="h-full pr-4">
                   <Table>
