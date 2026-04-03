@@ -38,6 +38,9 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
   const [selectedDate, setSelectedDate] = React.useState("")
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false)
   const [selectedHistoryMember, setSelectedHistoryMember] = React.useState<any>(null)
+  
+  const [isProfileOpen, setIsProfileOpen] = React.useState(false)
+  const [selectedProfileMember, setSelectedProfileMember] = React.useState<any>(null)
 
   const db = useFirestore()
 
@@ -126,7 +129,8 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
         ...m,
         paid: !!dayPayment,
         amount: dayPayment ? getPAmount(dayPayment) : 0,
-        cyclePayments: mCyclePayments
+        cyclePayments: mCyclePayments,
+        totalCycleContribution: mCyclePayments.reduce((sum, p) => sum + getPAmount(p), 0)
       }
     })
 
@@ -176,6 +180,11 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
   const handleOpenHistory = (member: any) => {
     setSelectedHistoryMember(member)
     setIsHistoryOpen(true)
+  }
+
+  const handleOpenProfile = (member: any) => {
+    setSelectedProfileMember(member)
+    setIsProfileOpen(true)
   }
 
   if (cyclesLoading || membersLoading || paymentsLoading) {
@@ -263,10 +272,10 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                       auditData.membersWithStatus.map((m) => (
                         <TableRow key={m.id} className="hover:bg-muted/5 transition-colors border-b last:border-none">
                           <TableCell className="pl-8 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-full bg-secondary text-primary flex items-center justify-center font-black text-[10px] uppercase">{m.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}</div>
+                            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => handleOpenProfile(m)}>
+                              <div className="h-8 w-8 rounded-full bg-secondary text-primary flex items-center justify-center font-black text-[10px] uppercase transition-colors group-hover:bg-primary group-hover:text-white">{m.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}</div>
                               <div className="flex flex-col">
-                                <span className="text-xs font-bold tracking-tight">{m.name}</span>
+                                <span className="text-xs font-bold tracking-tight group-hover:text-primary transition-colors">{m.name}</span>
                                 <span className="text-[9px] font-bold text-muted-foreground tabular-nums">{m.phone}</span>
                               </div>
                             </div>
@@ -307,6 +316,44 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
           </div>
         </div>
       </div>
+
+      {/* Member Profile Dialog */}
+      <Dialog open={isProfileOpen} onOpenChange={(open) => { if (!open) { setSelectedProfileMember(null); document.body.style.pointerEvents = 'auto'; } setIsProfileOpen(open); }}>
+        <DialogContent className="sm:max-w-[400px]">
+          {selectedProfileMember && (
+            <div className="space-y-6">
+              <DialogHeader>
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xl shadow-inner uppercase">{selectedProfileMember.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}</div>
+                  <div className="space-y-0.5">
+                    <DialogTitle className="text-xl font-black uppercase tracking-tight">{selectedProfileMember.name}</DialogTitle>
+                    <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-primary/20 text-primary/70">{selectedProfileMember.paymentType || "Daily"}</Badge>
+                  </div>
+                </div>
+              </DialogHeader>
+              
+              <div className="grid gap-4 py-4">
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-xl">
+                  <span className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2"><User className="size-3.5" /> Phone</span>
+                  <span className="font-bold text-sm tabular-nums">{selectedProfileMember.phone}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-xl">
+                  <span className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2"><CalendarDays className="size-3.5" /> Joined</span>
+                  <span className="font-bold text-sm">{selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : '-'}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                  <span className="text-xs font-bold uppercase text-emerald-600 flex items-center gap-2"><IndianRupee className="size-3.5" /> Cycle Paid</span>
+                  <span className="font-black text-emerald-700 tabular-nums text-base">₹{selectedProfileMember.totalCycleContribution.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button onClick={() => setIsProfileOpen(false)} className="w-full font-black uppercase tracking-widest text-xs h-11 rounded-xl">Close Profile</Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Payment History Dialog */}
       <Dialog open={isHistoryOpen} onOpenChange={(open) => { if (!open) { setSelectedHistoryMember(null); document.body.style.pointerEvents = 'auto'; } setIsHistoryOpen(open); }}>
