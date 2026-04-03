@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -57,9 +58,9 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Calendar as CalendarPicker } from "@/components/ui/calendar"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc, addDoc } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc, addDoc, where, getDocs, limit } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isSameMonth, eachDayOfInterval, isBefore, isAfter, startOfDay, endOfDay, differenceInDays, addDays, max, isValid } from "date-fns"
+import { format, parseISO, isSameMonth, eachDayOfInterval, isBefore, isAfter, startOfDay, endOfDay, differenceInDays, addDays, max, isValid, subDays } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
@@ -134,27 +135,49 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
 
     setIsSaving(true);
     try {
+      const batch = writeBatch(db);
+
+      // CONTINUITY FIX: Find immediate predecessor to adjust timeline
+      const prevCyclesQuery = query(
+        collection(db, 'cycles'),
+        where('name', '==', group.name),
+        where('startDate', '<', startDate),
+        orderBy('startDate', 'desc'),
+        limit(1)
+      );
+      const prevSnap = await getDocs(prevCyclesQuery);
+      
+      if (!prevSnap.empty) {
+        const prevDoc = prevSnap.docs[0];
+        const expectedEndDate = format(subDays(parseISO(startDate), 1), 'yyyy-MM-dd');
+        if (prevDoc.data().endDate !== expectedEndDate) {
+          batch.update(prevDoc.ref, { endDate: expectedEndDate });
+        }
+      }
+
       if (isLatestActive) {
         const cycleRef = doc(db, 'cycles', latestCycle.id);
-        await withTimeout(updateDoc(cycleRef, {
+        batch.update(cycleRef, {
           startDate,
           endDate,
           updatedAt: new Date().toISOString()
-        }));
-        await createAuditLog(db, user, `Updated active cycle for ${group.name}: ${startDate} to ${endDate}`);
-        toast({ title: "Cycle Updated", description: "Active period modified." });
+        });
+        await createAuditLog(db, user, `Updated active cycle for ${group.name}: ${startDate} to ${endDate}. Timeline auto-adjusted.`);
       } else {
-        const cycleRef = collection(db, 'cycles');
-        await withTimeout(addDoc(cycleRef, {
+        const cycleRef = doc(collection(db, 'cycles'));
+        batch.set(cycleRef, {
+          id: cycleRef.id,
           name: group.name,
           startDate,
           endDate,
           status: 'active',
           createdAt: new Date().toISOString()
-        }));
-        await createAuditLog(db, user, `Started fresh audit cycle for ${group.name}: ${startDate} to ${endDate}`);
-        toast({ title: "New Cycle Started", description: "Fresh operational period initialized." });
+        });
+        await createAuditLog(db, user, `Started fresh audit cycle for ${group.name}: ${startDate} to ${endDate}. Timeline auto-adjusted.`);
       }
+
+      await withTimeout(batch.commit());
+      toast({ title: "Timeline Synchronized", description: "Audit period saved and predecessor adjusted." });
       setIsOpen(false);
       document.body.style.pointerEvents = 'auto';
     } catch (error: any) {
@@ -187,8 +210,8 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
           </DialogTitle>
           <DialogDescription>
             {isLatestActive 
-              ? `Modify the current operational window for ${group.name}.`
-              : `Initialize a fresh audit period for ${group.name}. All existing collection data will be moved to history.`}
+              ? `Modify the current operational window for ${group.name}. Timeline continuity will be maintained.`
+              : `Initialize a fresh audit period for ${group.name}. Immediate predecessor end date will be adjusted.`}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-6">
@@ -233,7 +256,7 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
             className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all shadow-lg"
           >
             {isSaving ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />}
-            {isLatestActive ? 'Apply Changes' : 'Launch New Cycle'}
+            {isLatestActive ? 'Apply & Sync' : 'Launch & Sync'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1025,7 +1048,7 @@ export default function RoundsPage() {
             <div className="grid gap-5 py-6">
               <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label><input className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" value={newMember.name ?? ""} onChange={e => setNewMember({...newMember, name: e.target.value})} required /></div>
               <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label><input className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" value={newMember.phone ?? ""} onChange={e => setNewMember({...newMember, phone: e.target.value})} required /></div>
-              <div className="grid gap-2"><Label className="text-[10px) font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={newMember.paymentType || (currentRound?.collectionType || "Daily")} onValueChange={(v) => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select><p className="text-[9px] text-muted-foreground italic ml-1">Leave empty to use scheme default ({currentRound?.collectionType}).</p></div>
+              <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={newMember.paymentType || (currentRound?.collectionType || "Daily")} onValueChange={(v) => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select><p className="text-[9px] text-muted-foreground italic ml-1">Leave empty to use scheme default ({currentRound?.collectionType}).</p></div>
               <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label><input type="date" className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" value={newMember.joinDate ?? ""} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required /></div>
             </div>
             <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Register Member</Button></DialogFooter>
@@ -1043,7 +1066,7 @@ export default function RoundsPage() {
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label><Input value={memberProfileToEdit.name ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} required className="h-11 rounded-xl" /></div>
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label><Input value={memberProfileToEdit.phone ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} required className="h-11 rounded-xl" /></div>
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={memberProfileToEdit.paymentType} onValueChange={(v) => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label><Input type="date" value={memberProfileToEdit.joinDate ?? ""} onChange={setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} required className="h-11 rounded-xl" /></div>
+                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label><Input type="date" value={memberProfileToEdit.joinDate ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} required className="h-11 rounded-xl" /></div>
               </div>
               <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold shadow-lg active:scale-95 transition-all">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Save Profile</Button></DialogFooter>
             </form>

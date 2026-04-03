@@ -2,12 +2,12 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, ArrowRight, ChevronRight, Calendar, History, Clock, Pencil, Save, ShieldCheck, Archive, RefreshCcw } from "lucide-react"
+import { Loader2, ChevronLeft, ArrowRight, ChevronRight, Calendar, History, Clock, Pencil, Save, ShieldCheck, Archive, RefreshCcw, MoreVertical, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, orderBy, doc, updateDoc, addDoc } from "firebase/firestore"
+import { collection, query, orderBy, doc, updateDoc, addDoc, writeBatch, where, getDocs, limit, deleteDoc } from "firebase/firestore"
 import { useRouter } from "next/navigation"
-import { format, parseISO, isValid } from "date-fns"
+import { format, parseISO, isValid, subDays } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import {
   Dialog,
@@ -17,6 +17,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -26,9 +43,9 @@ import { createAuditLog } from "@/firebase/logging"
 /**
  * @fileOverview Refined Group-Specific Cycle Audit Page.
  * 
- * Displays a chronological list of cycle date ranges with a compact, professional UI.
- * Now categorizes cycles into "Active" and "Past" states for better auditing flow.
- * includes high-integrity deduplication for overlapping or duplicate date records.
+ * Displays a chronological list of cycle date ranges.
+ * FIX: Deduplicates records logically by startDate to prevent visual duplicates.
+ * FIX: Implements timeline continuity logic on update.
  */
 export default function GroupCyclesPage({ params }: { params: Promise<{ groupName: string }> }) {
   const router = useRouter()
@@ -36,43 +53,43 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
   const { toast } = useToast()
   const { user } = useUser()
   
-  // Safe Param Handling
   const rawGroupName = resolvedParams?.groupName || ""
   const groupName = decodeURIComponent(rawGroupName).trim()
 
   const db = useFirestore()
 
-  // Edit State
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = React.useState(false)
   const [isActionPending, setIsActionPending] = React.useState(false)
   const [editingCycle, setEditingCycle] = React.useState<{id: string, startDate: string, endDate: string} | null>(null)
+  const [cycleToDelete, setCycleToDelete] = React.useState<any>(null)
 
-  // Fetch all cycles safely
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('startDate', 'desc')), [db])
   const { data: allCycles, isLoading } = useCollection(cyclesQuery)
 
-  // Data Sanitization - Categorize by Status & Deduplicate
   const { activeCycles, pastCycles } = React.useMemo(() => {
     if (!Array.isArray(allCycles)) return { activeCycles: [], pastCycles: [] }
     
-    // Map to track unique periods: key = startDate + endDate
+    // Map to track unique logical periods: key = startDate
     const uniqueMap = new Map<string, any>()
 
     allCycles
       .filter((c) => String(c?.name || "").trim() === groupName)
+      // Sort by status so 'active' records are prioritized during deduplication
+      .sort((a, b) => {
+        if (a.status === 'active' && b.status !== 'active') return -1
+        if (a.status !== 'active' && b.status === 'active') return 1
+        return 0
+      })
       .forEach((c) => {
         const start = String(c?.startDate || "-")
-        const end = String(c?.endDate || "-")
-        const key = `${start}_${end}`
         
-        // Strategy: Keep 'active' over 'completed' for the same period
-        // Otherwise keep the first one encountered (Firestore orderBy handled this)
-        const existing = uniqueMap.get(key)
-        if (!existing || (c.status === 'active' && existing.status !== 'active')) {
-          uniqueMap.set(key, {
+        // Strategy: Only keep the most relevant record per Start Date
+        if (!uniqueMap.has(start)) {
+          uniqueMap.set(start, {
             id: String(c?.id || ""),
             startDate: start,
-            endDate: end,
+            endDate: String(c?.endDate || "-"),
             status: c?.status || 'active'
           })
         }
@@ -106,16 +123,8 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
   const handleCycleClick = (cycle: { id: string, startDate: string }) => {
     const safeGroupName = String(groupName || "")
     const safeCycleId = String(cycle?.id || cycle?.startDate || "")
-
     if (!safeGroupName || !safeCycleId) return
-
     router.push(`/cycles/${encodeURIComponent(safeGroupName)}/${encodeURIComponent(safeCycleId)}`)
-  }
-
-  const handleEditClick = (e: React.MouseEvent, cycle: any) => {
-    e.stopPropagation()
-    setEditingCycle({ ...cycle })
-    setIsEditDialogOpen(true)
   }
 
   const handleUpdateCycle = async (e: React.FormEvent) => {
@@ -129,16 +138,37 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
 
     setIsActionPending(true)
     try {
+      const batch = writeBatch(db)
+      
+      // CONTINUITY FIX: Adjust predecessor
+      const prevCyclesQuery = query(
+        collection(db, 'cycles'),
+        where('name', '==', groupName),
+        where('startDate', '<', editingCycle.startDate),
+        orderBy('startDate', 'desc'),
+        limit(1)
+      )
+      const prevSnap = await getDocs(prevCyclesQuery)
+      
+      if (!prevSnap.empty) {
+        const prevDoc = prevSnap.docs[0]
+        const expectedEndDate = format(subDays(parseISO(editingCycle.startDate), 1), 'yyyy-MM-dd')
+        if (prevDoc.data().endDate !== expectedEndDate) {
+          batch.update(prevDoc.ref, { endDate: expectedEndDate })
+        }
+      }
+
       const cycleRef = doc(db, 'cycles', editingCycle.id)
-      await withTimeout(updateDoc(cycleRef, {
+      batch.update(cycleRef, {
         startDate: editingCycle.startDate,
         endDate: editingCycle.endDate,
         updatedAt: new Date().toISOString()
-      }))
+      })
 
-      await createAuditLog(db, user, `Updated cycle dates for ${groupName}: ${editingCycle.startDate} to ${editingCycle.endDate}`)
+      await withTimeout(batch.commit())
+      await createAuditLog(db, user, `Updated cycle dates for ${groupName}: ${editingCycle.startDate} to ${editingCycle.endDate}. Timeline synchronized.`)
       
-      toast({ title: "Cycle Updated", description: "The period dates have been corrected." })
+      toast({ title: "Cycle Updated", description: "Operational period and timeline synchronized." })
       setIsEditDialogOpen(false)
       setEditingCycle(null)
     } catch (error: any) {
@@ -148,27 +178,17 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
     }
   }
 
-  const handleReconcileHistory = async () => {
-    if (!db || !user || isActionPending) return
-
+  const handleDeleteCycle = async () => {
+    if (!db || !cycleToDelete || isActionPending) return
     setIsActionPending(true)
     try {
-      const cycleRef = collection(db, 'cycles')
-      await addDoc(cycleRef, {
-        name: groupName,
-        startDate: "2026-03-15",
-        endDate: "2026-03-29",
-        status: "completed",
-        type: "recovered",
-        createdAt: new Date().toISOString(),
-        completedAt: new Date().toISOString()
-      })
-
-      await createAuditLog(db, user, `Reconciled legacy history for ${groupName}: 2026-03-15 to 2026-03-29`)
-      
-      toast({ title: "History Restored", description: "Legacy operational window has been archived." })
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to restore history." })
+      await withTimeout(deleteDoc(doc(db, 'cycles', cycleToDelete.id)))
+      await createAuditLog(db, user, `Deleted logical duplicate audit window for ${groupName}: ${cycleToDelete.startDate}`)
+      toast({ title: "Record Deleted", description: "Historical window removed from ledger." })
+      setIsDeleteAlertOpen(false)
+      setCycleToDelete(null)
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message || "Deletion failed." })
     } finally {
       setIsActionPending(false)
     }
@@ -187,19 +207,10 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
 
   const CycleItem = ({ cycle, isActive }: { cycle: any, isActive: boolean }) => (
     <div 
-      onClick={() => handleCycleClick(cycle)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          handleCycleClick(cycle)
-        }
-      }}
-      role="button"
-      tabIndex={0}
       className={cn(
-        "group relative flex items-center justify-between w-full p-4 rounded-xl border transition-all duration-200 text-left active:scale-[0.99] overflow-hidden cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        "group relative flex items-center justify-between w-full p-4 rounded-xl border transition-all duration-200 text-left overflow-hidden outline-none",
         isActive 
-          ? "border-emerald-200 bg-emerald-50/40 hover:border-emerald-300 hover:bg-emerald-50/60 shadow-sm" 
+          ? "border-emerald-200 bg-emerald-50/40 shadow-sm" 
           : "border-border/50 bg-card hover:border-primary/30 hover:shadow-sm"
       )}
     >
@@ -208,7 +219,7 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
         isActive ? "bg-emerald-500" : "bg-muted group-hover:bg-primary/40"
       )} />
       
-      <div className="flex items-center gap-6 pl-2">
+      <div className="flex items-center gap-6 pl-2 flex-1 cursor-pointer" onClick={() => handleCycleClick(cycle)}>
         <div className="flex items-center gap-4">
           <div className="flex flex-col">
             <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">Start</span>
@@ -216,9 +227,7 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
               {formatDateLabel(cycle.startDate)}
             </span>
           </div>
-
           <div className="h-px w-4 bg-border/60" />
-
           <div className="flex flex-col">
             <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">End</span>
             <span className={cn("text-xs font-bold tabular-nums", isActive ? "text-emerald-700" : "text-muted-foreground/80")}>
@@ -228,37 +237,35 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 pr-1">
         {isActive && (
           <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-emerald-200 text-emerald-700 bg-emerald-50 h-5 px-1.5 hidden sm:flex">
             Active
           </Badge>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-100 text-emerald-700"
-          onClick={(e) => handleEditClick(e, cycle)}
-        >
-          <Pencil className="size-3.5" />
-        </Button>
-        <span className={cn(
-          "text-[8px] font-black uppercase tracking-[0.2em] transition-all",
-          isActive ? "text-emerald-600/0 group-hover:text-emerald-600/60" : "text-primary/0 group-hover:text-primary/60"
-        )}>
-          View
-        </span>
-        <ChevronRight className={cn(
-          "size-4 text-muted-foreground/20 transition-colors",
-          isActive ? "group-hover:text-emerald-600" : "group-hover:text-primary"
-        )} />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-primary transition-colors">
+              <MoreVertical className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem onClick={() => { setEditingCycle({...cycle}); setIsEditDialogOpen(true); }}>
+              <Pencil className="size-3.5 mr-2" /> Edit Period
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setCycleToDelete(cycle); setIsDeleteAlertOpen(true); }}>
+              <Trash2 className="size-3.5 mr-2" /> Delete Record
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <ChevronRight className="size-4 text-muted-foreground/20 group-hover:text-primary transition-colors" />
       </div>
     </div>
   )
 
   return (
     <div className="max-w-2xl mx-auto space-y-10 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
-      {/* Header Section */}
       <div className="flex items-center gap-4">
         <Button 
           variant="ghost" 
@@ -269,9 +276,7 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
           <ChevronLeft className="size-6" />
         </Button>
         <div className="space-y-0.5">
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-primary font-headline uppercase">
-            {groupName}
-          </h2>
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-primary font-headline uppercase">{groupName}</h2>
           <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1.5">
             <History className="size-2.5" /> Registry History
           </p>
@@ -279,16 +284,12 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
       </div>
 
       <div className="space-y-8">
-        {/* Active Cycles Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <ShieldCheck className="size-3 text-emerald-500" />
-            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-emerald-600">
-              Current Audit Period
-            </h3>
+            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-emerald-600">Current Audit Period</h3>
             <div className="h-px flex-1 bg-emerald-100" />
           </div>
-          
           <div className="grid gap-2">
             {activeCycles.length > 0 ? (
               activeCycles.map((cycle) => (
@@ -302,19 +303,13 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
           </div>
         </div>
 
-        {/* Historical Cycles Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <Archive className="size-3 text-muted-foreground/60" />
-            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground/80">
-              Historical Archives
-            </h3>
+            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground/80">Historical Archives</h3>
             <div className="h-px flex-1 bg-muted" />
-            <span className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest">
-              {pastCycles.length} Records
-            </span>
+            <span className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest">{pastCycles.length} Records</span>
           </div>
-          
           <div className="grid gap-2">
             {pastCycles.length > 0 ? (
               pastCycles.map((cycle) => (
@@ -324,80 +319,58 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
               <div className="p-12 text-center border-2 border-dashed rounded-3xl bg-muted/5 space-y-4">
                 <div className="space-y-2">
                   <History className="size-8 mx-auto text-muted-foreground/20" />
-                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 italic">
-                    No historical records located
-                  </p>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 italic">No historical records located</p>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  disabled={isActionPending}
-                  onClick={handleReconcileHistory}
-                  className="h-9 px-4 rounded-xl font-black uppercase text-[8px] tracking-[0.15em] border-primary/20 text-primary hover:bg-primary/5"
-                >
-                  {isActionPending ? <Loader2 className="size-3 mr-2 animate-spin" /> : <RefreshCcw className="size-3 mr-2" />}
-                  Restore Legacy Archive (Mar 15 - Mar 29)
-                </Button>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
           {editingCycle && (
             <form onSubmit={handleUpdateCycle} className="space-y-6">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <Pencil className="size-5 text-primary" />
-                  Edit Audit Period
+                  <Pencil className="size-5 text-primary" /> Edit Audit Period
                 </DialogTitle>
-                <DialogDescription>
-                  Modify the operational start and end dates for this cycle in {groupName}.
-                </DialogDescription>
+                <DialogDescription>Modify dates for this cycle. Preceding cycle end date will auto-adjust.</DialogDescription>
               </DialogHeader>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
-                  <Input 
-                    type="date" 
-                    value={editingCycle.startDate} 
-                    onChange={e => setEditingCycle({...editingCycle, startDate: e.target.value})}
-                    className="h-11 rounded-xl font-bold"
-                    required
-                    disabled={isActionPending}
-                  />
+                  <Input type="date" value={editingCycle.startDate} onChange={e => setEditingCycle({...editingCycle, startDate: e.target.value})} className="h-11 rounded-xl font-bold" required disabled={isActionPending} />
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
-                  <Input 
-                    type="date" 
-                    value={editingCycle.endDate} 
-                    onChange={e => setEditingCycle({...editingCycle, endDate: e.target.value})}
-                    className="h-11 rounded-xl font-bold"
-                    required
-                    disabled={isActionPending}
-                  />
+                  <Input type="date" value={editingCycle.endDate} onChange={e => setEditingCycle({...editingCycle, endDate: e.target.value})} className="h-11 rounded-xl font-bold" required disabled={isActionPending} />
                 </div>
               </div>
-
               <DialogFooter>
-                <Button 
-                  type="submit" 
-                  disabled={isActionPending}
-                  className="w-full h-12 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all"
-                >
-                  {isActionPending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />}
-                  Save Period Changes
+                <Button type="submit" disabled={isActionPending} className="w-full h-12 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all">
+                  {isActionPending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />} Save Changes
                 </Button>
               </DialogFooter>
             </form>
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive uppercase tracking-tight font-headline">Delete Archive Record?</AlertDialogTitle>
+            <AlertDialogDescription>This will remove this specific cycle window from history. It does NOT delete payment records, but they will no longer be visible in this audit context.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCycle} disabled={isActionPending} className="bg-destructive hover:bg-destructive/90 font-bold uppercase tracking-widest text-xs h-10 px-6">
+              {isActionPending ? <Loader2 className="size-3 mr-2 animate-spin" /> : null} Confirm Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
