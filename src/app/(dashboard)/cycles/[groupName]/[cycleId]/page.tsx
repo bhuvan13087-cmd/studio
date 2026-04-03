@@ -61,7 +61,8 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
     const allCycles = Array.isArray(cyclesData) ? cyclesData : []
     return allCycles.find(
       (c) =>
-        String(c?.name || "").trim().toLowerCase() === groupName.toLowerCase() &&
+        (String(c?.name || "").trim().toLowerCase() === groupName.toLowerCase() || 
+         String(c?.name || "").trim().toLowerCase() === groupName.replace(/Group/gi, '').trim().toLowerCase()) &&
         (String(c?.id || "") === cycleId || String(c?.startDate || "") === cycleId)
     )
   }, [cyclesData, groupName, cycleId])
@@ -206,8 +207,8 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.push(`/cycles/${encodeURIComponent(groupName)}`)} className="rounded-full h-10 w-10 hover:bg-primary/10 text-primary transition-all active:scale-90"><ChevronLeft className="size-6" /></Button>
           <div className="space-y-0.5">
-            <h2 className="text-2xl font-black tracking-tight text-primary font-headline uppercase">Audit Board</h2>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">{groupName} Registry Detail</p>
+            <h2 className="text-2xl font-black tracking-tight text-primary font-headline uppercase">{groupName}</h2>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Registry Audit Detail</p>
           </div>
         </div>
 
@@ -356,7 +357,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
       {/* Payment History Dialog */}
       <Dialog open={isHistoryOpen} onOpenChange={(open) => { if (!open) { setSelectedHistoryMember(null); document.body.style.pointerEvents = 'auto'; } setIsHistoryOpen(open); }}>
-        <DialogContent className="sm:max-w-[500px] flex flex-col max-h-[85vh]">
+        <DialogContent className="sm:max-w-[500px] flex flex-col h-[80vh] max-h-[85vh]">
           {selectedHistoryMember && (
             <>
               <DialogHeader>
@@ -368,7 +369,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                 </DialogDescription>
               </DialogHeader>
               
-              <div className="flex-1 overflow-y-auto py-4 pr-2 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto py-4 pr-2 custom-scrollbar min-h-0">
                 <Table>
                   <TableHeader className="bg-muted/30">
                     <TableRow>
