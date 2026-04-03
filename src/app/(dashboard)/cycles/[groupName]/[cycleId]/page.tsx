@@ -125,12 +125,19 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
       const mCyclePayments = cyclePayments.filter(p => String(p?.memberId || "") === String(m?.id || ""))
       const dayPayment = filteredPayments.find(p => String(p?.memberId || "") === String(m?.id || ""))
       
+      const scheme = (roundsData || []).find(r => 
+        String(r.name).trim().toLowerCase() === groupName.toLowerCase() ||
+        String(r.name).replace(/Group/gi, '').trim().toLowerCase() === groupName.replace(/Group/gi, '').trim().toLowerCase()
+      );
+      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
+
       return {
         ...m,
         paid: !!dayPayment,
         amount: dayPayment ? getPAmount(dayPayment) : 0,
         cyclePayments: mCyclePayments,
-        totalCycleContribution: mCyclePayments.reduce((sum, p) => sum + getPAmount(p), 0)
+        totalCycleContribution: mCyclePayments.reduce((sum, p) => sum + getPAmount(p), 0),
+        resolvedType
       }
     })
 
@@ -276,7 +283,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                               <div className="h-8 w-8 rounded-full bg-secondary text-primary flex items-center justify-center font-black text-[10px] uppercase transition-colors group-hover:bg-primary group-hover:text-white">{m.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}</div>
                               <div className="flex flex-col">
                                 <span className="text-xs font-bold tracking-tight group-hover:text-primary transition-colors">{m.name}</span>
-                                <span className="text-[9px] font-bold text-muted-foreground tabular-nums">{m.phone}</span>
+                                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{m.resolvedType}</span>
                               </div>
                             </div>
                           </TableCell>
@@ -327,7 +334,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                   <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xl shadow-inner uppercase">{selectedProfileMember.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}</div>
                   <div className="space-y-0.5">
                     <DialogTitle className="text-xl font-black uppercase tracking-tight">{selectedProfileMember.name}</DialogTitle>
-                    <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-primary/20 text-primary/70">{selectedProfileMember.paymentType || "Daily"}</Badge>
+                    <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-primary/20 text-primary/70">{selectedProfileMember.resolvedType}</Badge>
                   </div>
                 </div>
               </DialogHeader>
