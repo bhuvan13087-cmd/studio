@@ -254,99 +254,87 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="border-border/60 shadow-lg rounded-3xl overflow-hidden bg-card">
-            <CardHeader className="bg-muted/10 border-b border-border/40 p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-inner"><CalendarDays className="size-6" /></div>
-                  <div>
-                    <CardTitle className="text-lg font-black uppercase tracking-tight">Period Summary</CardTitle>
-                    <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-primary/70">{auditData.startDate} → {auditData.endDate}</CardDescription>
-                  </div>
-                </div>
-                <div className="bg-emerald-50 px-4 py-2 rounded-2xl border border-emerald-100">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600/70 mb-0.5">Cycle Collection</p>
-                  <p className="text-xl font-black text-emerald-600 tabular-nums">₹{auditData.totalCollection.toLocaleString()}</p>
+      <div className="space-y-6">
+        <Card className="border-border/60 shadow-lg rounded-3xl overflow-hidden bg-card">
+          <CardHeader className="bg-muted/10 border-b border-border/40 p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-inner"><CalendarDays className="size-6" /></div>
+                <div>
+                  <CardTitle className="text-lg font-black uppercase tracking-tight">Period Summary</CardTitle>
+                  <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-primary/70">{auditData.startDate} → {auditData.endDate}</CardDescription>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="p-6 border-b bg-muted/5">
-                <div className="flex flex-col sm:flex-row sm:items-between justify-between gap-4">
-                  <div className="space-y-1.5 flex-1 max-w-xs">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Select Audit Date</label>
-                    <div className="relative">
-                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-primary/50 pointer-events-none" />
-                      <Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} min={auditData.startDate} max={auditData.endDate} className="h-10 pl-9 rounded-xl font-bold text-xs" />
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">{selectedDate ? 'Daily Intake' : 'Verified Total'}</p>
-                    <p className="text-3xl font-black text-primary tabular-nums tracking-tighter">₹{auditData.dailyCollection.toLocaleString()}</p>
-                  </div>
-                </div>
+              <div className="bg-emerald-50 px-4 py-2 rounded-2xl border border-emerald-100">
+                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600/70 mb-0.5">Cycle Collection</p>
+                <p className="text-xl font-black text-emerald-600 tabular-nums">₹{auditData.totalCollection.toLocaleString()}</p>
               </div>
-
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-muted/30">
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="text-[9px] uppercase font-black tracking-widest pl-8 h-10">Participant</TableHead>
-                      <TableHead className="text-[9px] uppercase font-black tracking-widest h-10 text-center">Status</TableHead>
-                      <TableHead className="text-[9px] uppercase font-black tracking-widest h-10 text-right">Amount</TableHead>
-                      <TableHead className="w-[100px] pr-8"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {auditData.membersWithStatus.length > 0 ? (
-                      auditData.membersWithStatus.map((m) => (
-                        <TableRow key={m.id} className="hover:bg-muted/5 transition-colors border-b last:border-none">
-                          <TableCell className="pl-8 py-4">
-                            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => handleOpenProfile(m)}>
-                              <div className="h-8 w-8 rounded-full bg-secondary text-primary flex items-center justify-center font-black text-[10px] uppercase transition-colors group-hover:bg-primary group-hover:text-white">{m.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}</div>
-                              <div className="flex flex-col">
-                                <span className="text-xs font-bold tracking-tight group-hover:text-primary transition-colors">{m.name}</span>
-                                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{m.resolvedType}</span>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant={m.paid ? "default" : "secondary"} className={cn("text-[8px] font-black uppercase tracking-tighter border-none px-2 py-0.5", m.paid ? "bg-emerald-500 text-white" : "bg-amber-100 text-amber-700")}>
-                              {m.paid ? "PAID" : "PENDING"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-black text-xs tabular-nums text-foreground/80">{m.amount > 0 ? `₹${m.amount.toLocaleString()}` : "-"}</TableCell>
-                          <TableCell className="text-right pr-8">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 rounded-lg hover:bg-primary/5 text-muted-foreground transition-all active:scale-90"
-                              onClick={() => handleOpenHistory(m)}
-                            >
-                              <History className="size-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 italic">No group participants located</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <div className="p-6 rounded-3xl bg-primary/5 border border-primary/10 flex items-start gap-4">
-            <Clock className="size-5 text-primary/40 shrink-0 mt-0.5" />
-            <div className="space-y-2">
-              <p className="text-[10px] text-muted-foreground font-medium italic leading-relaxed">Calculations are strictly isolated to this operational interval.</p>
-              {isCompleted && <div className="flex items-center gap-2 text-amber-700 font-black text-[9px] uppercase tracking-wider"><Lock className="size-3" /> Historical Record Locked</div>}
             </div>
-          </div>
-        </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="p-6 border-b bg-muted/5">
+              <div className="flex flex-col sm:flex-row sm:items-between justify-between gap-4">
+                <div className="space-y-1.5 flex-1 max-w-xs">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Select Audit Date</label>
+                  <div className="relative">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-primary/50 pointer-events-none" />
+                    <Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} min={auditData.startDate} max={auditData.endDate} className="h-10 pl-9 rounded-xl font-bold text-xs" />
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">{selectedDate ? 'Daily Intake' : 'Verified Total'}</p>
+                  <p className="text-3xl font-black text-primary tabular-nums tracking-tighter">₹{auditData.dailyCollection.toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="text-[9px] uppercase font-black tracking-widest pl-8 h-10">Participant</TableHead>
+                    <TableHead className="text-[9px] uppercase font-black tracking-widest h-10 text-center">Status</TableHead>
+                    <TableHead className="text-[9px] uppercase font-black tracking-widest h-10 text-right">Amount</TableHead>
+                    <TableHead className="w-[100px] pr-8"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {auditData.membersWithStatus.length > 0 ? (
+                    auditData.membersWithStatus.map((m) => (
+                      <TableRow key={m.id} className="hover:bg-muted/5 transition-colors border-b last:border-none">
+                        <TableCell className="pl-8 py-4">
+                          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => handleOpenProfile(m)}>
+                            <div className="h-8 w-8 rounded-full bg-secondary text-primary flex items-center justify-center font-black text-[10px] uppercase transition-colors group-hover:bg-primary group-hover:text-white">{m.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}</div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold tracking-tight group-hover:text-primary transition-colors">{m.name}</span>
+                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{m.resolvedType}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={m.paid ? "default" : "secondary"} className={cn("text-[8px] font-black uppercase tracking-tighter border-none px-2 py-0.5", m.paid ? "bg-emerald-500 text-white" : "bg-amber-100 text-amber-700")}>
+                            {m.paid ? "PAID" : "PENDING"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-black text-xs tabular-nums text-foreground/80">{m.amount > 0 ? `₹${m.amount.toLocaleString()}` : "-"}</TableCell>
+                        <TableCell className="text-right pr-8">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 rounded-lg hover:bg-primary/5 text-muted-foreground transition-all active:scale-90"
+                            onClick={() => handleOpenHistory(m)}
+                          >
+                            <History className="size-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 italic">No group participants located</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Member Profile Dialog */}
