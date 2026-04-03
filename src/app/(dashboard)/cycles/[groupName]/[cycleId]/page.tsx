@@ -69,7 +69,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
         const mGroup = String(m?.chitGroup || "").trim().toLowerCase();
         const gName = groupName.toLowerCase();
         const gNameClean = groupName.replace(/Group/gi, '').trim().toLowerCase();
-        return mGroup === gName || mGroup === gNameClean;
+        return (mGroup === gName || mGroup === gNameClean);
       })
 
     const memberIds = new Set(groupMembers.map(m => m.id))
@@ -192,7 +192,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
             onClick={() => router.push(`/cycles/${encodeURIComponent(groupName)}/${encodeURIComponent(cycleId)}/collect`)}
             className="bg-emerald-600 hover:bg-emerald-700 font-black uppercase tracking-[0.15em] text-[10px] h-10 px-6 rounded-xl shadow-lg active:scale-95 transition-all gap-2"
           >
-            <Wallet className="size-3.5" /> Settle Arrears ({auditData.pendingMembersCount})
+            <Wallet className="size-3.5" /> Pending Members ({auditData.pendingMembersCount})
           </Button>
         )}
       </div>
