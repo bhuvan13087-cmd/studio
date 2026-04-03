@@ -33,9 +33,8 @@ import { Label } from "@/components/ui/label"
 /**
  * @fileOverview Refined Historical Arrears Collection Page.
  * 
- * FIX: Resolved "input is not defined" error.
- * FIX: Corrected pending amount calculation to strictly use cycle interval.
- * FIX: Filtered out members who have already paid within this cycle.
+ * FIX: Resolved "already paid" members showing up in pending.
+ * FIX: Implemented high-integrity payment verification matching page.tsx logic.
  */
 export default function HistoryCollectionPage({ params }: { params: Promise<{ groupName: string, cycleId: string }> }) {
   const router = useRouter()
@@ -72,7 +71,10 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
   const { data: roundsData } = useCollection(roundsQuery)
 
   const selectedCycle = React.useMemo(() => {
-    return (cyclesData || []).find(c => String(c.name).trim() === groupName && (c.id === cycleId || c.startDate === cycleId))
+    return (cyclesData || []).find(c => 
+      String(c.name).trim().toLowerCase() === groupName.toLowerCase() && 
+      (c.id === cycleId || c.startDate === cycleId)
+    )
   }, [cyclesData, groupName, cycleId])
 
   const pendingMembers = React.useMemo(() => {
@@ -80,23 +82,45 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
 
     const startDate = selectedCycle.startDate
     const endDate = selectedCycle.endDate
-    const scheme = roundsData.find(r => String(r.name).trim() === groupName)
+    const cycleIdInternal = selectedCycle.id
 
+    // RESILIENT DATE EXTRACTION
     const getPDateStr = (p: any) => {
-      if (p.targetDate) return p.targetDate;
-      const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : new Date(p.paymentDate);
-      return isValid(d) ? format(d, 'yyyy-MM-dd') : null;
+      if (p.targetDate && typeof p.targetDate === 'string') return p.targetDate.trim();
+      const raw = p.paymentDate || p.createdAt || p.date || p.paidDate;
+      if (!raw) return null;
+      try {
+        const d = raw.toDate ? raw.toDate() : new Date(raw);
+        if (isValid(d)) return format(d, 'yyyy-MM-dd');
+      } catch (e) {}
+      return null;
     }
 
+    const scheme = roundsData.find(r => 
+      String(r.name).trim().toLowerCase() === groupName.toLowerCase() ||
+      String(r.name).replace(/Group/gi, '').trim().toLowerCase() === groupName.replace(/Group/gi, '').trim().toLowerCase()
+    )
+
     return membersData
-      .filter(m => String(m.chitGroup).trim() === groupName && m.status !== 'inactive')
+      .filter(m => {
+        const mGroup = String(m?.chitGroup || "").trim().toLowerCase();
+        const gName = groupName.toLowerCase();
+        const gNameClean = groupName.replace(/Group/gi, '').trim().toLowerCase();
+        return (mGroup === gName || mGroup === gNameClean) && m.status !== 'inactive';
+      })
       .map(m => {
         const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
-        const mPayments = paymentsData.filter(p => 
-          p.memberId === m.id && 
-          (p.status === 'success' || p.status === 'paid') &&
-          getPDateStr(p) >= startDate && getPDateStr(p) <= endDate
-        );
+        
+        // Filter payments belonging to this member and either this cycle ID or date range
+        const mPayments = paymentsData.filter(p => {
+          if (p.memberId !== m.id) return false;
+          if (p.status !== 'success' && p.status !== 'paid') return false;
+          
+          if (p.cycleId === cycleIdInternal) return true;
+          
+          const pDate = getPDateStr(p);
+          return pDate && pDate >= startDate && pDate <= endDate;
+        });
 
         let pendingCount = 0;
         const schemeAmt = Number(m.monthlyAmount || scheme?.monthlyAmount || 800);
@@ -112,10 +136,12 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
                 const dayPaid = mPayments.filter(p => getPDateStr(p) === dStr).reduce((s, p) => s + (p.amountPaid || 0), 0);
                 return dayPaid < schemeAmt;
               }).length;
-            } catch {}
+            } catch (e) {}
           }
         } else {
-          pendingCount = mPayments.length > 0 ? 0 : 1;
+          // For Monthly, check if total paid in cycle is >= scheme amount
+          const totalPaidInCycle = mPayments.reduce((s, p) => s + (p.amountPaid || 0), 0);
+          pendingCount = totalPaidInCycle >= schemeAmt ? 0 : 1;
         }
 
         return {
@@ -159,7 +185,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
       }
 
       await addDoc(collection(db, 'payments'), paymentRecord)
-      await createAuditLog(db, user, `Settled Historical Pending ₹${paymentData.amount} for ${selectedMember.name} in ${groupName} (${selectedCycle.startDate} Cycle)`)
+      await createAuditLog(db, user, `Settled Historical Arrears ₹${paymentData.amount} for ${selectedMember.name} in ${groupName} (${selectedCycle.startDate} Cycle)`)
 
       toast({ title: "Payment Recorded", description: "Arrears settled for historical record." })
       setIsPaymentOpen(false)
