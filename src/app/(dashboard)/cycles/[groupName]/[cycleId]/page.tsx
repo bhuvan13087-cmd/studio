@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, CalendarDays, IndianRupee, History, Search, Filter, CheckCircle2, Clock, User, Lock, Wallet } from "lucide-react"
+import { Loader2, ChevronLeft, CalendarDays, IndianRupee, History, Search, Filter, CheckCircle2, Clock, User, Lock, Wallet, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -13,12 +13,21 @@ import { collection, query, orderBy } from "firebase/firestore"
 import { useRouter } from "next/navigation"
 import { format, parseISO, isWithinInterval, startOfDay, endOfDay, isValid, eachDayOfInterval, isAfter, max } from "date-fns"
 import { cn } from "@/lib/utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 /**
  * @fileOverview Specialized Cycle Audit Details Page.
  * 
  * Provides a granular, real-time view of a specific historical period.
- * FIX: Synchronized pending calculation with high-integrity engine to remove "already paid" errors.
+ * Includes a payment history view for each participant.
  */
 export default function CycleDetailsPage({ params }: { params: Promise<{ groupName: string, cycleId: string }> }) {
   const router = useRouter()
@@ -28,6 +37,8 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
   const cycleId = decodeURIComponent(resolvedParams?.cycleId || "").trim()
 
   const [selectedDate, setSelectedDate] = React.useState("")
+  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false)
+  const [selectedHistoryMember, setSelectedHistoryMember] = React.useState<any>(null)
 
   const db = useFirestore()
 
@@ -109,13 +120,14 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
     const dailyCollection = filteredPayments.reduce((sum, p) => sum + getPAmount(p), 0)
 
     const membersWithStatus = groupMembers.map(m => {
+      const mCyclePayments = cyclePayments.filter(p => String(p?.memberId || "") === String(m?.id || ""))
       const dayPayment = filteredPayments.find(p => String(p?.memberId || "") === String(m?.id || ""))
+      
       return {
-        id: m.id,
-        name: m?.name || "Anonymous Participant",
-        phone: m?.phone || "-",
+        ...m,
         paid: !!dayPayment,
-        amount: dayPayment ? getPAmount(dayPayment) : 0
+        amount: dayPayment ? getPAmount(dayPayment) : 0,
+        cyclePayments: mCyclePayments
       }
     })
 
@@ -161,6 +173,11 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
       pendingMembersCount
     }
   }, [selectedCycle, membersData, paymentsData, roundsData, groupName, selectedDate])
+
+  const handleOpenHistory = (member: any) => {
+    setSelectedHistoryMember(member)
+    setIsHistoryOpen(true)
+  }
 
   if (cyclesLoading || membersLoading || paymentsLoading) {
     return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
@@ -217,7 +234,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
             </CardHeader>
             <CardContent className="p-0">
               <div className="p-6 border-b bg-muted/5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-between justify-between gap-4">
                   <div className="space-y-1.5 flex-1 max-w-xs">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Select Audit Date</label>
                     <div className="relative">
@@ -238,7 +255,8 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="text-[9px] uppercase font-black tracking-widest pl-8 h-10">Participant</TableHead>
                       <TableHead className="text-[9px] uppercase font-black tracking-widest h-10 text-center">Status</TableHead>
-                      <TableHead className="text-[9px] uppercase font-black tracking-widest h-10 text-right pr-8">Amount</TableHead>
+                      <TableHead className="text-[9px] uppercase font-black tracking-widest h-10 text-right">Amount</TableHead>
+                      <TableHead className="w-[100px] pr-8"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -247,8 +265,11 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                         <TableRow key={m.id} className="hover:bg-muted/5 transition-colors border-b last:border-none">
                           <TableCell className="pl-8 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-full bg-secondary text-primary flex items-center justify-center font-black text-[10px] uppercase">{m.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
-                              <div className="flex flex-col"><span className="text-xs font-bold tracking-tight">{m.name}</span><span className="text-[9px] font-bold text-muted-foreground tabular-nums">{m.phone}</span></div>
+                              <div className="h-8 w-8 rounded-full bg-secondary text-primary flex items-center justify-center font-black text-[10px] uppercase">{m.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}</div>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-bold tracking-tight">{m.name}</span>
+                                <span className="text-[9px] font-bold text-muted-foreground tabular-nums">{m.phone}</span>
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
@@ -256,10 +277,20 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                               {m.paid ? "PAID" : "PENDING"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right pr-8 font-black text-xs tabular-nums text-foreground/80">{m.amount > 0 ? `₹${m.amount.toLocaleString()}` : "-"}</TableCell>
+                          <TableCell className="text-right font-black text-xs tabular-nums text-foreground/80">{m.amount > 0 ? `₹${m.amount.toLocaleString()}` : "-"}</TableCell>
+                          <TableCell className="text-right pr-8">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 rounded-lg hover:bg-primary/5 text-muted-foreground transition-all active:scale-90"
+                              onClick={() => handleOpenHistory(m)}
+                            >
+                              <History className="size-3.5" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))
-                    ) : <TableRow><TableCell colSpan={3} className="h-32 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 italic">No group participants located</TableCell></TableRow>}
+                    ) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 italic">No group participants located</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </div>
@@ -277,6 +308,68 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
           </div>
         </div>
       </div>
+
+      {/* Payment History Dialog */}
+      <Dialog open={isHistoryOpen} onOpenChange={(open) => { if (!open) { setSelectedHistoryMember(null); document.body.style.pointerEvents = 'auto'; } setIsHistoryOpen(open); }}>
+        <DialogContent className="sm:max-w-[500px] flex flex-col max-h-[85vh]">
+          {selectedHistoryMember && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 font-headline uppercase tracking-tight">
+                  <History className="size-5 text-primary" /> Payment Ledger
+                </DialogTitle>
+                <DialogDescription className="text-xs font-medium">
+                  Contribution history for {selectedHistoryMember.name} within this cycle.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="flex-1 overflow-hidden py-4">
+                <ScrollArea className="h-full pr-4">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        <TableHead className="text-[9px] font-black uppercase tracking-widest h-8">Date</TableHead>
+                        <TableHead className="text-[9px] font-black uppercase tracking-widest h-8">Amount</TableHead>
+                        <TableHead className="text-[9px] font-black uppercase tracking-widest h-8 text-right">Method</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedHistoryMember.cyclePayments.length > 0 ? (
+                        selectedHistoryMember.cyclePayments.map((p: any, i: number) => {
+                          const pAmt = Number(p.amountPaid || p.amount || 0);
+                          const pDate = p.targetDate || (p.paymentDate?.toDate ? format(p.paymentDate.toDate(), 'yyyy-MM-dd') : format(new Date(p.paymentDate), 'yyyy-MM-dd'));
+                          return (
+                            <TableRow key={i} className="hover:bg-muted/5 border-b last:border-none">
+                              <TableCell className="text-[10px] font-bold tabular-nums py-3">{pDate}</TableCell>
+                              <TableCell className="text-[10px] font-black text-emerald-600 tabular-nums py-3">₹{pAmt.toLocaleString()}</TableCell>
+                              <TableCell className="text-[10px] font-bold text-muted-foreground text-right py-3 uppercase">{p.method || 'Cash'}</TableCell>
+                            </TableRow>
+                          );
+                        })
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={3} className="h-32 text-center text-[10px] font-bold uppercase text-muted-foreground/40 italic">
+                            No contributions recorded for this period.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </div>
+
+              <DialogFooter className="border-t pt-4">
+                <Button variant="outline" size="sm" className="h-10 text-[10px] font-black uppercase tracking-widest gap-2" onClick={() => window.print()}>
+                  <Printer className="size-3.5" /> Print Ledger
+                </Button>
+                <Button size="sm" className="h-10 text-[10px] font-black uppercase tracking-widest ml-auto px-6" onClick={() => setIsHistoryOpen(false)}>
+                  Close Audit
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
