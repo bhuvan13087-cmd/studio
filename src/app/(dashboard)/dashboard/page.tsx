@@ -87,6 +87,25 @@ export default function DashboardPage() {
       return null;
     }
 
+    // High-Integrity Intake Date Extraction (Priority: createdAt -> paymentDate)
+    const getIntakeDateStr = (p: any) => {
+      const cAt = p.createdAt;
+      if (cAt) {
+        try {
+          const d = cAt.toDate ? cAt.toDate() : new Date(cAt);
+          if (isValid(d)) return format(d, 'yyyy-MM-dd');
+        } catch (e) {}
+      }
+      const pDt = p.paymentDate;
+      if (pDt) {
+        try {
+          const d = pDt.toDate ? pDt.toDate() : new Date(pDt);
+          if (isValid(d)) return format(d, 'yyyy-MM-dd');
+        } catch (e) {}
+      }
+      return getPDateStr(p);
+    };
+
     const collectedThisCycle = (payments || []).reduce((acc, p) => {
       if (p.status !== 'paid' && p.status !== 'success' && p.status !== undefined) return acc;
       const member = members?.find(m => m.id === p.memberId);
@@ -100,11 +119,16 @@ export default function DashboardPage() {
 
     const collectedToday = (payments || []).reduce((acc, p) => {
       if (p.status !== 'paid' && p.status !== 'success' && p.status !== undefined) return acc;
-      if (getPDateStr(p) !== todayStr) return acc;
+      
+      const intakeDate = getIntakeDateStr(p);
+      if (intakeDate !== todayStr) return acc;
+
       const member = members?.find(m => m.id === p.memberId);
       if (!member) return acc;
       const activeCycle = (allCycles || []).find(c => c.name === member.chitGroup && c.status === 'active');
       if (!activeCycle) return acc;
+      
+      // Only count if physically received during the active window
       if (todayStr >= activeCycle.startDate && todayStr <= activeCycle.endDate) { return acc + getPAmount(p); }
       return acc;
     }, 0);

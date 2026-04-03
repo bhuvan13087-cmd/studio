@@ -115,6 +115,25 @@ export default function ReportsPage() {
     const yesterday = subDays(focusDate, 1);
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
+    // Intake Logic for Real-time Monitoring (Priority: createdAt -> paymentDate)
+    const getIntakeDateStr = (p: any) => {
+      const cAt = p.createdAt;
+      if (cAt) {
+        try {
+          const d = cAt.toDate ? cAt.toDate() : new Date(cAt);
+          if (isValid(d)) return format(d, 'yyyy-MM-dd');
+        } catch (e) {}
+      }
+      const pDt = p.paymentDate;
+      if (pDt) {
+        try {
+          const d = pDt.toDate ? pDt.toDate() : new Date(pDt);
+          if (isValid(d)) return format(d, 'yyyy-MM-dd');
+        } catch (e) {}
+      }
+      return getPDateStr(p);
+    };
+
     const targetMembers = members.filter(m => {
       if (m.status === 'inactive') return false;
       const scheme = rounds.find(r => r.name === m.chitGroup);
@@ -152,12 +171,16 @@ export default function ReportsPage() {
 
     const focusDatePayments = payments.filter(p => {
       if (p.status && p.status !== 'paid' && p.status !== 'success') return false;
-      const pDate = getPDateStr(p);
-      if (pDate !== focusDateStr) return false;
+      
+      const pIntakeDate = getIntakeDateStr(p);
+      if (pIntakeDate !== focusDateStr) return false;
+
       const member = members.find(m => m.id === p.memberId);
       if (!member) return false;
       const activeCycle = allCycles.find(c => c.name === member.chitGroup && c.status === 'active');
       if (!activeCycle) return false;
+      
+      // Ensure the physical day matches the operational window
       return focusDateStr >= activeCycle.startDate && focusDateStr <= activeCycle.endDate;
     });
 
@@ -167,15 +190,15 @@ export default function ReportsPage() {
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthLabel = MONTHS_MASTER.find(m => m.value === i.toString())?.label || "";
       const monthPayments = payments.filter(p => {
-        const recordDateStr = getPDateStr(p);
-        if (!recordDateStr) return false;
-        const d = parseISO(recordDateStr);
+        const intakeDateStr = getIntakeDateStr(p);
+        if (!intakeDateStr) return false;
+        const d = parseISO(intakeDateStr);
         if (!( (p.status === 'paid' || p.status === 'success' || !p.status) && targetIds.has(p.memberId) && getYear(d).toString() === selectedYear && getMonth(d) === i )) return false;
         const member = members.find(m => m.id === p.memberId);
         if (!member) return false;
         const activeCycle = allCycles.find(c => c.name === member.chitGroup && c.status === 'active');
         if (!activeCycle) return false;
-        return recordDateStr >= activeCycle.startDate && recordDateStr <= activeCycle.endDate;
+        return intakeDateStr >= activeCycle.startDate && intakeDateStr <= activeCycle.endDate;
       });
       return { month: `${monthLabel} ${selectedYear}`, amount: monthPayments.reduce((acc, p) => acc + getPAmount(p), 0) };
     }).filter(row => row.month.startsWith(MONTHS_MASTER.find(m => m.value === selectedMonth)?.label || ""));

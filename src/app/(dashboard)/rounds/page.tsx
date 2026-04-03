@@ -333,6 +333,26 @@ export default function RoundsPage() {
   }, [allCycles, db, isAdmin, mounted, isRoundsLoading, user]);
 
   const getPaymentAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
+  
+  // High-Integrity Intake Date Extraction (Priority: createdAt -> paymentDate)
+  const getIntakeDateStr = (p: any) => {
+    const cAt = p.createdAt;
+    if (cAt) {
+      try {
+        const d = cAt.toDate ? cAt.toDate() : new Date(cAt);
+        if (isValid(d)) return format(d, 'yyyy-MM-dd');
+      } catch (e) {}
+    }
+    const pDt = p.paymentDate;
+    if (pDt) {
+      try {
+        const d = pDt.toDate ? pDt.toDate() : new Date(pDt);
+        if (isValid(d)) return format(d, 'yyyy-MM-dd');
+      } catch (e) {}
+    }
+    return getRecordDate(p);
+  };
+
   const getRecordDate = (p: any) => {
     if (p.targetDate) return p.targetDate;
     if (p.paymentDate) {
@@ -463,7 +483,12 @@ export default function RoundsPage() {
     if (dateStr < activeCycle.startDate || dateStr > activeCycle.endDate) return 0;
     const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(groupName).trim()).map(m => m.id));
     return allPayments
-      .filter(p => groupMemberIds.has(p.memberId) && (p.status === 'success' || p.status === 'paid') && getPaymentAmount(p) > 0 && getRecordDate(p) === dateStr)
+      .filter(p => {
+        if (!groupMemberIds.has(p.memberId)) return false;
+        if (p.status !== 'success' && p.status !== 'paid') return false;
+        const intakeDate = getIntakeDateStr(p);
+        return intakeDate === dateStr;
+      })
       .reduce((acc, p) => acc + getPaymentAmount(p), 0);
   };
 
@@ -1000,7 +1025,7 @@ export default function RoundsPage() {
             <div className="grid gap-5 py-6">
               <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label><input className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" value={newMember.name ?? ""} onChange={e => setNewMember({...newMember, name: e.target.value})} required /></div>
               <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label><input className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" value={newMember.phone ?? ""} onChange={e => setNewMember({...newMember, phone: e.target.value})} required /></div>
-              <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={newMember.paymentType || (currentRound?.collectionType || "Daily")} onValueChange={(v) => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select><p className="text-[9px] text-muted-foreground italic ml-1">Leave empty to use scheme default ({currentRound?.collectionType}).</p></div>
+              <div className="grid gap-2"><Label className="text-[10px) font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={newMember.paymentType || (currentRound?.collectionType || "Daily")} onValueChange={(v) => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select><p className="text-[9px] text-muted-foreground italic ml-1">Leave empty to use scheme default ({currentRound?.collectionType}).</p></div>
               <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label><input type="date" className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" value={newMember.joinDate ?? ""} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required /></div>
             </div>
             <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Register Member</Button></DialogFooter>
@@ -1018,7 +1043,7 @@ export default function RoundsPage() {
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label><Input value={memberProfileToEdit.name ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} required className="h-11 rounded-xl" /></div>
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label><Input value={memberProfileToEdit.phone ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} required className="h-11 rounded-xl" /></div>
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={memberProfileToEdit.paymentType} onValueChange={(v) => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label><Input type="date" value={memberProfileToEdit.joinDate ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} required className="h-11 rounded-xl" /></div>
+                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label><Input type="date" value={memberProfileToEdit.joinDate ?? ""} onChange={setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} required className="h-11 rounded-xl" /></div>
               </div>
               <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold shadow-lg active:scale-95 transition-all">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Save Profile</Button></DialogFooter>
             </form>
