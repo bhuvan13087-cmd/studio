@@ -122,43 +122,53 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
   }, [isOpen, latestCycle, isLatestActive])
 
   const handleSave = async () => {
-    if (!startDate || !endDate) {
-      toast({ variant: "destructive", title: "Validation Error", description: "Both dates are required." });
-      return;
-    }
-
-    if (new Date(startDate) > new Date(endDate)) {
-      toast({ variant: "destructive", title: "Validation Error", description: "Start Date cannot be after End Date." });
-      return;
-    }
-
+    // CRITICAL: Removed strict blocking validations to allow force creation
     setIsSaving(true);
     try {
+      const now = new Date();
+      
+      // Step 3: Safe Default Values
+      let finalStart = startDate || format(now, 'yyyy-MM-dd');
+      let finalEnd = endDate;
+      
+      if (!finalEnd) {
+        // Step 3: set endDate = startDate + 5 days
+        finalEnd = format(addDays(parseISO(finalStart), 5), 'yyyy-MM-dd');
+      }
+
+      // Final logic-level validation: Start cannot be after End
+      if (isAfter(parseISO(finalStart), parseISO(finalEnd))) {
+        finalEnd = format(addDays(parseISO(finalStart), 5), 'yyyy-MM-dd');
+      }
+
       if (isLatestActive) {
         const cycleRef = doc(db, 'cycles', latestCycle.id);
         await withTimeout(updateDoc(cycleRef, {
-          startDate,
-          endDate,
+          startDate: finalStart,
+          endDate: finalEnd,
           updatedAt: new Date().toISOString()
         }));
-        await createAuditLog(db, user, `Updated active cycle for ${group.name}: ${startDate} to ${endDate}`);
+        await createAuditLog(db, user, `Updated active cycle for ${group.name}: ${finalStart} to ${finalEnd}`);
         toast({ title: "Cycle Updated", description: "Active period modified." });
       } else {
+        // Step 1: Allow force creation
         const cycleRef = collection(db, 'cycles');
         await withTimeout(addDoc(cycleRef, {
           name: group.name,
-          startDate,
-          endDate,
+          startDate: finalStart,
+          endDate: finalEnd,
           status: 'active',
           createdAt: new Date().toISOString()
         }));
-        await createAuditLog(db, user, `Started fresh audit cycle for ${group.name}: ${startDate} to ${endDate}`);
+        await createAuditLog(db, user, `Started fresh audit cycle for ${group.name}: ${finalStart} to ${finalEnd}`);
         toast({ title: "New Cycle Started", description: "Fresh operational period initialized." });
       }
       setIsOpen(false);
       document.body.style.pointerEvents = 'auto';
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Persistence Error", description: error.message || "Failed to save cycle." });
+      // Step 5: Error Handling
+      console.error("CRITICAL CYCLE CREATION FAILURE:", error);
+      toast({ variant: "destructive", title: "Persistence Error", description: "Emergency save failed. Contact admin." });
     } finally {
       setIsSaving(false);
     }
@@ -271,7 +281,7 @@ export default function RoundsPage() {
   const [selectedProfileMember, setSelectedProfileMember] = useState<any>(null)
   const [selectedPendingMember, setSelectedPendingMember] = useState<any>(null)
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
-  const [paymentData, setPaymentData] = INITIAL_PAYMENT_STATE ? useState(INITIAL_PAYMENT_STATE) : useState({ method: "Cash", amount: 0, date: format(new Date(), 'yyyy-MM-dd') });
+  const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
   
   const [viewMonth, setViewMonth] = useState<string>(format(new Date(), 'MMMM'))
@@ -512,15 +522,18 @@ export default function RoundsPage() {
   const reconciliationCycles = useMemo(() => {
     if (!activePopupGroupName || !allCycles) return [];
     
-    // Deduplicate cycles by startDate + endDate
+    // Deduplicate cycles by startDate
     const uniqueMap = new Map<string, any>();
     
     allCycles
-      .filter(c => String(c.name).trim() === String(activePopupGroupName).trim())
+      .filter(c => {
+        const mGroup = String(c?.name || "").trim().toLowerCase();
+        const gName = activePopupGroupName.toLowerCase();
+        return mGroup === gName;
+      })
       .forEach(c => {
         const start = String(c?.startDate || "-");
-        const end = String(c?.endDate || "-");
-        const key = `${start}_${end}`;
+        const key = start;
         
         const existing = uniqueMap.get(key);
         // Strategy: Keep 'active' over 'completed' for the same period
@@ -1025,7 +1038,7 @@ export default function RoundsPage() {
             <div className="grid gap-5 py-6">
               <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label><input className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" value={newMember.name ?? ""} onChange={e => setNewMember({...newMember, name: e.target.value})} required /></div>
               <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label><input className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" value={newMember.phone ?? ""} onChange={e => setNewMember({...newMember, phone: e.target.value})} required /></div>
-              <div className="grid gap-2"><Label className="text-[10px) font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={newMember.paymentType || (currentRound?.collectionType || "Daily")} onValueChange={(v) => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select><p className="text-[9px] text-muted-foreground italic ml-1">Leave empty to use scheme default ({currentRound?.collectionType}).</p></div>
+              <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={newMember.paymentType || (currentRound?.collectionType || "Daily")} onValueChange={(v) => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select><p className="text-[9px] text-muted-foreground italic ml-1">Leave empty to use scheme default ({currentRound?.collectionType}).</p></div>
               <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label><input type="date" className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" value={newMember.joinDate ?? ""} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required /></div>
             </div>
             <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Register Member</Button></DialogFooter>
@@ -1043,7 +1056,7 @@ export default function RoundsPage() {
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Participant Name</Label><Input value={memberProfileToEdit.name ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} required className="h-11 rounded-xl" /></div>
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label><Input value={memberProfileToEdit.phone ?? ""} onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} required className="h-11 rounded-xl" /></div>
                 <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={memberProfileToEdit.paymentType} onValueChange={(v) => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label><Input type="date" value={memberProfileToEdit.joinDate ?? ""} onChange={setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} required className="h-11 rounded-xl" /></div>
+                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Enrollment Date</Label><Input type="date" value={memberProfileToEdit.joinDate ?? ""} onChange={(e) => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} required className="h-11 rounded-xl" /></div>
               </div>
               <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold shadow-lg active:scale-95 transition-all">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Save Profile</Button></DialogFooter>
             </form>

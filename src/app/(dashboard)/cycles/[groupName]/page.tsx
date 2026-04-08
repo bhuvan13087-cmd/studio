@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -51,28 +50,33 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('startDate', 'desc')), [db])
   const { data: allCycles, isLoading } = useCollection(cyclesQuery)
 
-  // Data Sanitization - Categorize by Status & Deduplicate
+  // Data Sanitization - Categorize by Status & Deduplicate by Start Date
   const { activeCycles, pastCycles } = React.useMemo(() => {
     if (!Array.isArray(allCycles)) return { activeCycles: [], pastCycles: [] }
     
-    // Map to track unique periods: key = startDate + endDate
+    // Map to track unique periods: key = startDate (Ensure only one record per start date)
     const uniqueMap = new Map<string, any>()
 
     allCycles
-      .filter((c) => String(c?.name || "").trim() === groupName)
+      .filter((c) => {
+        const mGroup = String(c?.name || "").trim().toLowerCase();
+        const gName = groupName.toLowerCase();
+        const gNameClean = groupName.replace(/Group/gi, '').trim().toLowerCase();
+        return (mGroup === gName || mGroup === gNameClean);
+      })
       .forEach((c) => {
         const start = String(c?.startDate || "-")
-        const end = String(c?.endDate || "-")
-        const key = `${start}_${end}`
+        const key = start
         
-        // Strategy: Keep 'active' over 'completed' for the same period
-        // Otherwise keep the first one encountered (Firestore orderBy handled this)
+        // Priority Strategy: 
+        // 1. Prefer 'active' status over others.
+        // 2. Otherwise prefer the first record encountered (usually most recent due to orderBy)
         const existing = uniqueMap.get(key)
         if (!existing || (c.status === 'active' && existing.status !== 'active')) {
           uniqueMap.set(key, {
             id: String(c?.id || ""),
             startDate: start,
-            endDate: end,
+            endDate: String(c?.endDate || "-"),
             status: c?.status || 'active'
           })
         }
