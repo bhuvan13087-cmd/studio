@@ -258,7 +258,7 @@ export default function RoundsPage() {
   const [selectedProfileMember, setSelectedProfileMember] = useState<any>(null)
   const [selectedPendingMember, setSelectedPendingMember] = useState<any>(null)
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
-  const [paymentData, setPaymentData] = INITIAL_PAYMENT_STATE ? useState(INITIAL_PAYMENT_STATE) : useState({ method: "Cash", amount: 0, date: format(new Date(), 'yyyy-MM-dd') })
+  const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
   
   const [viewYear, setViewYear] = useState<string>(format(new Date(), 'yyyy'))
@@ -429,6 +429,50 @@ export default function RoundsPage() {
     });
     return map;
   }, [allPayments, members, allCycles]);
+
+  const missedDatesForSelectedMember = useMemo(() => {
+    if (!selectedPendingMember || !allPayments || !allCycles || !chitSchemes) return [];
+    
+    const m = selectedPendingMember;
+    const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(m.chitGroup).trim() && c.status === 'active');
+    if (!activeCycle) return [];
+
+    const scheme = chitSchemes.find(r => String(r.name).trim() === String(m.chitGroup).trim());
+    const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
+    const mPayments = allPayments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+    
+    const missed: string[] = [];
+    const today = startOfDay(new Date());
+
+    if (resolvedType === 'Daily') {
+      if (m.joinDate && m.status !== 'inactive') {
+        try {
+          const rawJoinDate = parseISO(m.joinDate);
+          const cycleStart = parseISO(activeCycle.startDate);
+          const cycleEnd = parseISO(activeCycle.endDate);
+          const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
+          const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
+          
+          if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) {
+            const interval = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd });
+            interval.forEach(day => {
+              const dStr = format(day, 'yyyy-MM-dd');
+              const dayPaymentSum = mPayments.filter(p => getRecordDate(p) === dStr).reduce((acc, p) => acc + getPaymentAmount(p), 0);
+              if (dayPaymentSum < (m.monthlyAmount || 800)) {
+                missed.push(dStr);
+              }
+            });
+          }
+        } catch (e) {}
+      }
+    } else {
+      if (m.memberStatus === 'pending') {
+        missed.push(activeCycle.startDate);
+      }
+    }
+    
+    return missed;
+  }, [selectedPendingMember, allPayments, allCycles, chitSchemes]);
 
   const getDisplayName = (name: string) => {
     if (!name) return "";
@@ -773,26 +817,20 @@ export default function RoundsPage() {
                 <h4 className="text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground ml-1">Recorded Arrears Log</h4>
                 <ScrollArea className="h-[150px] rounded-xl border border-border/50 bg-muted/5 p-2">
                   <div className="space-y-1.5">
-                    {(allPayments || [])
-                      .filter(p => p.memberId === selectedPendingMember.id && (p.status === 'pending' || p.status === 'unpaid' || getPaymentAmount(p) === 0))
-                      .sort((a, b) => {
-                        const da = getRecordDate(a) || "";
-                        const db = getRecordDate(b) || "";
-                        return da.localeCompare(db);
-                      })
-                      .map((p, idx) => (
+                    {missedDatesForSelectedMember.length > 0 ? (
+                      missedDatesForSelectedMember.map((dateStr, idx) => (
                         <div key={idx} className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border shadow-sm group hover:border-destructive/30 transition-all">
                           <div className="flex items-center gap-2">
                             <CalendarDays className="size-3 text-muted-foreground/40 group-hover:text-destructive/40 transition-colors" />
-                            <span className="text-[11px] font-bold tabular-nums text-foreground/80">{getRecordDate(p)}</span>
+                            <span className="text-[11px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
                           </div>
-                          <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 h-4">Unpaid</Badge>
+                          <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 h-4">Missed</Badge>
                         </div>
-                      ))}
-                    {(allPayments || []).filter(p => p.memberId === selectedPendingMember.id && (p.status === 'pending' || p.status === 'unpaid' || getPaymentAmount(p) === 0)).length === 0 && (
+                      ))
+                    ) : (
                       <div className="h-24 flex flex-col items-center justify-center space-y-1.5">
                         <AlertCircle className="size-5 text-muted-foreground/20" />
-                        <p className="text-[9px] font-bold uppercase text-muted-foreground/40 tracking-widest italic">No specific dates logged</p>
+                        <p className="text-[9px] font-bold uppercase text-muted-foreground/40 tracking-widest italic">All contributions captured</p>
                       </div>
                     )}
                   </div>
