@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -24,8 +25,7 @@ import {
 /**
  * @fileOverview Specialized Cycle Audit Details Page.
  * 
- * Provides a granular, real-time view of a specific historical period.
- * Includes a payment history view for each participant.
+ * Providing aggregate pending logic (Expected vs Paid) across the audit view.
  */
 export default function CycleDetailsPage({ params }: { params: Promise<{ groupName: string, cycleId: string }> }) {
   const router = useRouter()
@@ -106,9 +106,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
       .filter(p => {
         if (!memberIds.has(p.memberId)) return false
         if (p.status && !['success', 'paid', 'verified'].includes(p.status.toLowerCase())) return false
-        
         if (p.cycleId === cycleIdInternal) return true;
-        
         const recordDate = getPDateStr(p);
         return recordDate && recordDate >= startDate && recordDate <= endDate;
       })
@@ -135,67 +133,35 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
       const schemeAmt = Number(m.monthlyAmount || scheme?.monthlyAmount || 800);
 
-      // HIGH-INTEGRITY STATUS CALCULATION
-      let isPaid = false;
-      if (selectedDate) {
-        if (resolvedType === 'Daily') {
-          // Daily: Paid if covered the daily amount for this specific date
-          isPaid = totalAmountInFilter >= schemeAmt;
-        } else {
-          // Monthly: Paid if they have fulfilled their whole cycle obligation
-          isPaid = totalCycleContribution >= schemeAmt;
+      // AGGREGATE EXPECTED CALCULATION (Independent of Payment Dates)
+      let expectedAmount = 0;
+      if (resolvedType === 'Daily') {
+        const join = m.joinDate ? parseISO(m.joinDate) : parseISO(startDate);
+        const start = parseISO(startDate);
+        const end = parseISO(endDate);
+        const effectiveStart = startOfDay(max([join, start]));
+        if (!isAfter(effectiveStart, end)) {
+          expectedAmount = eachDayOfInterval({ start: effectiveStart, end }).length * schemeAmt;
         }
       } else {
-        // Overall Cycle Audit View
-        if (resolvedType === 'Daily') {
-          // PAID if at least one daily installment is met in this context
-          isPaid = totalCycleContribution >= schemeAmt;
-        } else {
-          // Monthly: Paid if total cycle contribution >= scheme amount
-          isPaid = totalCycleContribution >= schemeAmt;
-        }
+        expectedAmount = schemeAmt;
       }
+
+      // Status is strictly Paid vs Pending based on aggregate contribution
+      const isPaid = totalCycleContribution >= expectedAmount;
 
       return {
         ...m,
         paid: isPaid,
-        amount: totalAmountInFilter,
+        amount: totalAmountInFilter, // Displayed amount for the current filter/date
         cyclePayments: mCyclePayments,
         totalCycleContribution,
-        resolvedType
+        resolvedType,
+        expectedAmount
       }
     })
 
-    // Calculate Pending Members using identical logic to settlement page
-    const pendingMembersCount = groupMembers.filter(m => {
-      const scheme = (roundsData || []).find(r => 
-        String(r.name).trim().toLowerCase() === groupName.toLowerCase() ||
-        String(r.name).replace(/Group/gi, '').trim().toLowerCase() === groupName.replace(/Group/gi, '').trim().toLowerCase()
-      );
-      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
-      const schemeAmt = Number(m.monthlyAmount || scheme?.monthlyAmount || 800);
-      
-      const mCyclePayments = cyclePayments.filter(p => p.memberId === m.id);
-
-      if (resolvedType === 'Daily') {
-        const start = startOfDay(max([parseISO(m.joinDate), parseISO(startDate)]));
-        const end = parseISO(endDate);
-        if (isAfter(start, end)) return false;
-        try {
-          const interval = eachDayOfInterval({ start, end });
-          return interval.some(day => {
-            const dStr = format(day, 'yyyy-MM-dd');
-            const dayPaymentSum = mCyclePayments
-              .filter(p => getPDateStr(p) === dStr)
-              .reduce((sum, p) => sum + getPAmount(p), 0);
-            return dayPaymentSum < schemeAmt;
-          });
-        } catch(e) { return false; }
-      } else {
-        const totalPaidInCycle = mCyclePayments.reduce((s, p) => s + getPAmount(p), 0);
-        return totalPaidInCycle < schemeAmt;
-      }
-    }).length;
+    const pendingMembersCount = membersWithStatus.filter(m => !m.paid).length;
 
     return {
       groupMembers,

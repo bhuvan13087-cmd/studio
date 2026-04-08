@@ -33,8 +33,8 @@ import { Label } from "@/components/ui/label"
 /**
  * @fileOverview Refined Historical Arrears Collection Page.
  * 
- * FIX: Resolved "already paid" members showing up in pending.
- * FIX: Implemented high-integrity payment verification matching page.tsx logic.
+ * FIX: Implemented aggregate pending logic (Expected vs Paid).
+ * ONLY displays members with pendingAmount > 0.
  */
 export default function HistoryCollectionPage({ params }: { params: Promise<{ groupName: string, cycleId: string }> }) {
   const router = useRouter()
@@ -110,45 +110,41 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
       })
       .map(m => {
         const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
+        const schemeAmt = Number(m.monthlyAmount || scheme?.monthlyAmount || 800);
         
         // Filter payments belonging to this member and either this cycle ID or date range
         const mPayments = paymentsData.filter(p => {
           if (p.memberId !== m.id) return false;
           if (p.status !== 'success' && p.status !== 'paid') return false;
-          
           if (p.cycleId === cycleIdInternal) return true;
-          
           const pDate = getPDateStr(p);
           return pDate && pDate >= startDate && pDate <= endDate;
         });
 
-        let pendingCount = 0;
-        const schemeAmt = Number(m.monthlyAmount || scheme?.monthlyAmount || 800);
-
+        const totalPaidInCycle = mPayments.reduce((s, p) => s + (p.amountPaid || 0), 0);
+        
+        let expectedAmount = 0;
         if (resolvedType === 'Daily') {
-          const start = startOfDay(max([parseISO(m.joinDate), parseISO(startDate)]));
+          const join = m.joinDate ? parseISO(m.joinDate) : parseISO(startDate);
+          const start = parseISO(startDate);
           const end = parseISO(endDate);
-          if (!isAfter(start, end)) {
-            try {
-              const interval = eachDayOfInterval({ start, end });
-              pendingCount = interval.filter(day => {
-                const dStr = format(day, 'yyyy-MM-dd');
-                const dayPaid = mPayments.filter(p => getPDateStr(p) === dStr).reduce((s, p) => s + (p.amountPaid || 0), 0);
-                return dayPaid < schemeAmt;
-              }).length;
-            } catch (e) {}
+          const effectiveStart = startOfDay(max([join, start]));
+          if (!isAfter(effectiveStart, end)) {
+            const interval = eachDayOfInterval({ start: effectiveStart, end });
+            expectedAmount = interval.length * schemeAmt;
           }
         } else {
-          // For Monthly, check if total paid in cycle is >= scheme amount
-          const totalPaidInCycle = mPayments.reduce((s, p) => s + (p.amountPaid || 0), 0);
-          pendingCount = totalPaidInCycle >= schemeAmt ? 0 : 1;
+          expectedAmount = schemeAmt; // Monthly is 1 unit per cycle round
         }
+
+        const pendingAmount = Math.max(0, expectedAmount - totalPaidInCycle);
 
         return {
           ...m,
           resolvedType,
-          pendingAmount: pendingCount * schemeAmt,
-          pendingCount
+          pendingAmount,
+          totalPaidInCycle,
+          expectedAmount
         }
       })
       .filter(m => m.pendingAmount > 0)
