@@ -211,18 +211,18 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
           {isLatestActive ? <CalendarDays className="size-4" /> : <Plus className="size-4" />}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[360px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><CalendarDays className="size-5 text-primary" />{isLatestActive ? 'Update Period' : 'Start New Cycle'}</DialogTitle>
-          <DialogDescription>The system will automatically adjust previous cycle boundaries to maintain timeline consistency.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2 text-base"><CalendarDays className="size-4 text-primary" />{isLatestActive ? 'Update Period' : 'Start New Cycle'}</DialogTitle>
+          <DialogDescription className="text-[11px]">Timeline will auto-adjust predecessor boundaries.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground ml-0.5">Start Date</Label><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 rounded-xl" disabled={isSaving} /></div>
-            <div className="space-y-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground ml-0.5">End Date</Label><Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 rounded-xl" disabled={isSaving} /></div>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Start</Label><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 text-xs rounded-lg" disabled={isSaving} /></div>
+            <div className="space-y-1"><Label className="text-[10px] font-bold uppercase text-muted-foreground">End</Label><Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 text-xs rounded-lg" disabled={isSaving} /></div>
           </div>
         </div>
-        <DialogFooter><Button onClick={handleSave} disabled={isSaving} className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all shadow-lg">{isSaving ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />}{isLatestActive ? 'Apply & Sync' : 'Launch & Sync'}</Button></DialogFooter>
+        <DialogFooter><Button onClick={handleSave} disabled={isSaving} className="w-full font-black uppercase tracking-[0.1em] h-10 rounded-xl active:scale-95 transition-all shadow-sm">{isSaving ? <Loader2 className="size-3 mr-2 animate-spin" /> : <Save className="size-3 mr-2" />}{isLatestActive ? 'Apply' : 'Launch'}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -258,7 +258,7 @@ export default function RoundsPage() {
   const [selectedProfileMember, setSelectedProfileMember] = useState<any>(null)
   const [selectedPendingMember, setSelectedPendingMember] = useState<any>(null)
   const [newMember, setNewMember] = useState(INITIAL_MEMBER_STATE)
-  const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
+  const [paymentData, setPaymentData] = INITIAL_PAYMENT_STATE ? useState(INITIAL_PAYMENT_STATE) : useState({ method: "Cash", amount: 0, date: format(new Date(), 'yyyy-MM-dd') })
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
   
   const [viewYear, setViewYear] = useState<string>(format(new Date(), 'yyyy'))
@@ -635,59 +635,59 @@ export default function RoundsPage() {
         </div>
 
         <Dialog open={isCollectionPopupOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsCollectionPopupOpen(o); }}>
-          <DialogContent className="sm:max-w-[420px]">
+          <DialogContent className="sm:max-w-[360px]">
             {activePopupGroupName && (
               <>
-                <DialogHeader><DialogTitle className="flex items-center gap-2"><Wallet className="size-5 text-primary" />Board Reconciliation</DialogTitle><DialogDescription>Summary for {getDisplayName(activePopupGroupName)}.</DialogDescription></DialogHeader>
-                <div className="space-y-6 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5"><Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Year</Label><Select value={viewYear} onValueChange={setViewYear}><SelectTrigger className="h-10 text-xs font-bold"><SelectValue /></SelectTrigger><SelectContent>{YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-1.5"><Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Cycle</Label><Select value={selectedReconciliationCycleId || ""} onValueChange={setSelectedReconciliationCycleId}><SelectTrigger className="h-10 text-xs font-bold"><SelectValue placeholder="Select Cycle" /></SelectTrigger><SelectContent>{reconciliationCycles.length > 0 ? reconciliationCycles.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.startDate} → {c.endDate}</SelectItem>) : <div className="p-4 text-center text-[10px] font-bold uppercase text-muted-foreground italic">No cycles found</div>}</SelectContent></Select></div>
+                <DialogHeader><DialogTitle className="flex items-center gap-2 text-base"><Wallet className="size-4 text-primary" />Board Reconciliation</DialogTitle><DialogDescription className="text-[11px]">Summary for {getDisplayName(activePopupGroupName)}.</DialogDescription></DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-muted-foreground">Year</Label><Select value={viewYear} onValueChange={setViewYear}><SelectTrigger className="h-9 text-xs font-bold"><SelectValue /></SelectTrigger><SelectContent>{YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-muted-foreground">Cycle</Label><Select value={selectedReconciliationCycleId || ""} onValueChange={setSelectedReconciliationCycleId}><SelectTrigger className="h-9 text-xs font-bold"><SelectValue placeholder="Select Cycle" /></SelectTrigger><SelectContent>{reconciliationCycles.length > 0 ? reconciliationCycles.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.startDate} → {c.endDate}</SelectItem>) : <div className="p-4 text-center text-[10px] font-bold uppercase text-muted-foreground italic">No cycles found</div>}</SelectContent></Select></div>
                   </div>
-                  <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-3xl border border-dashed border-emerald-200 text-center"><p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Verified Cycle Total</p><div className="text-5xl font-black text-emerald-600 tabular-nums tracking-tighter">₹{reconciliationTotal.toLocaleString()}</div></div>
+                  <div className="flex flex-col items-center justify-center p-6 bg-emerald-50 rounded-2xl border border-dashed border-emerald-200 text-center"><p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-2">Verified Total</p><div className="text-4xl font-black text-emerald-600 tabular-nums tracking-tighter">₹{reconciliationTotal.toLocaleString()}</div></div>
                 </div>
-                <DialogFooter><Button onClick={() => setIsCollectionPopupOpen(false)} className="w-full font-bold">Close Audit</Button></DialogFooter>
+                <DialogFooter><Button onClick={() => setIsCollectionPopupOpen(false)} className="w-full font-bold h-10 rounded-xl">Close Audit</Button></DialogFooter>
               </>
             )}
           </DialogContent>
         </Dialog>
 
         <Dialog open={isAddChitDialogOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsAddChitDialogOpen(o); }}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[380px]">
             <form onSubmit={handleAddChit}>
-              <DialogHeader><DialogTitle className="text-xl font-bold">New Scheme</DialogTitle></DialogHeader>
-              <div className="grid gap-5 py-6">
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Scheme Name</Label><Input value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required className="h-11 rounded-xl" placeholder="e.g. Group A" /></div>
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" /></div>
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Max Members</Label><Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" /></div>
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Collection Type</Label><Select value={newChit.collectionType} onValueChange={(v) => setNewChit({...newChit, collectionType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
+              <DialogHeader><DialogTitle className="text-lg font-bold">New Scheme</DialogTitle></DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Scheme Name</Label><Input value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required className="h-10 rounded-xl text-sm" placeholder="e.g. Group A" /></div>
+                <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required className="h-10 rounded-xl text-sm" /></div>
+                <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Max Members</Label><Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required className="h-10 rounded-xl text-sm" /></div>
+                <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Collection Type</Label><Select value={newChit.collectionType} onValueChange={(v) => setNewChit({...newChit, collectionType: v})}><SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
               </div>
-              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold text-base shadow-lg active:scale-[0.98] transition-all">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Create Scheme</Button></DialogFooter>
+              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-10 font-bold text-sm shadow-md active:scale-[0.98] transition-all">{isActionPending ? <Loader2 className="mr-2 size-3 animate-spin" /> : null}Create Scheme</Button></DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
 
         <Dialog open={isEditChitDialogOpen} onOpenChange={(o) => { if(!o) { setChitToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditChitDialogOpen(o); }}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[380px]">
             {chitToEdit && (
               <form onSubmit={handleUpdateChit}>
-                <DialogHeader><DialogTitle>Edit Scheme</DialogTitle></DialogHeader>
-                <div className="grid gap-5 py-6">
-                  <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Scheme Name</Label><Input value={chitToEdit.name} onChange={e => setChitToEdit({...chitToEdit, name: e.target.value})} required className="h-11 rounded-xl" /></div>
-                  <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Amount (₹)</Label><Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" /></div>
-                  <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Max Members</Label><Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" /></div>
-                  <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Collection Type</Label><Select value={chitToEdit.collectionType} onValueChange={(v) => setChitToEdit({...chitToEdit, collectionType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
+                <DialogHeader><DialogTitle className="text-lg">Edit Scheme</DialogTitle></DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Scheme Name</Label><Input value={chitToEdit.name} onChange={e => setChitToEdit({...chitToEdit, name: e.target.value})} required className="h-10 rounded-xl text-sm" /></div>
+                  <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Amount (₹)</Label><Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(e.target.value)})} required className="h-10 rounded-xl text-sm" /></div>
+                  <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Max Members</Label><Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(e.target.value)})} required className="h-10 rounded-xl text-sm" /></div>
+                  <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Collection Type</Label><Select value={chitToEdit.collectionType} onValueChange={(v) => setChitToEdit({...chitToEdit, collectionType: v})}><SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
                 </div>
-                <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Save Changes</Button></DialogFooter>
+                <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-10 font-bold text-sm">{isActionPending ? <Loader2 className="mr-2 size-3 animate-spin" /> : null}Save Changes</Button></DialogFooter>
               </form>
             )}
           </DialogContent>
         </Dialog>
 
         <AlertDialog open={isDeleteChitDialogOpen} onOpenChange={(o) => { if(!o) { setChitToDelete(null); document.body.style.pointerEvents = 'auto'; } setIsDeleteChitDialogOpen(o); }}>
-          <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme <strong>{chitToDelete?.name}</strong> and all associated data. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-            <AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteChitDialogOpen(false)}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteChit} disabled={isActionPending} className="bg-destructive hover:bg-destructive/90">{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Delete Permanently</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogContent className="sm:max-w-[380px]">
+            <AlertDialogHeader><AlertDialogTitle className="text-destructive text-lg">Delete Scheme?</AlertDialogTitle><AlertDialogDescription className="text-xs">This will permanently remove <strong>{chitToDelete?.name}</strong> and all associated data.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteChitDialogOpen(false)} className="h-10 text-xs">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteChit} disabled={isActionPending} className="bg-destructive hover:bg-destructive/90 h-10 text-xs">{isActionPending ? <Loader2 className="mr-2 size-3 animate-spin" /> : null}Delete</AlertDialogAction></AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       </div>
@@ -734,24 +734,24 @@ export default function RoundsPage() {
 
       {/* Profile Dialog */}
       <Dialog open={isMemberProfileDialogOpen} onOpenChange={(o) => { if(!o) { setSelectedProfileMember(null); document.body.style.pointerEvents = 'auto'; } setIsMemberProfileDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[340px]">
           {selectedProfileMember && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               <DialogHeader>
-                <div className="flex items-center gap-4">
-                  <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xl shadow-inner uppercase">{getInitials(selectedProfileMember.name)}</div>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black text-lg shadow-inner uppercase">{getInitials(selectedProfileMember.name)}</div>
                   <div className="space-y-0.5">
-                    <DialogTitle className="text-xl font-black uppercase tracking-tight">{selectedProfileMember.name}</DialogTitle>
+                    <DialogTitle className="text-lg font-black uppercase tracking-tight">{selectedProfileMember.name}</DialogTitle>
                     <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-primary/20 text-primary/70">{selectedProfileMember.paymentType || currentRound?.collectionType}</Badge>
                   </div>
                 </div>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-xl"><span className="text-xs font-bold uppercase text-muted-foreground">Phone</span><span className="font-bold text-sm tabular-nums">{selectedProfileMember.phone}</span></div>
-                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-xl"><span className="text-xs font-bold uppercase text-muted-foreground">Joined</span><span className="font-bold text-sm">{selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : '-'}</span></div>
-                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-xl border border-emerald-100"><span className="text-xs font-bold uppercase text-emerald-600">Cycle Paid</span><span className="font-black text-emerald-700 tabular-nums">₹{(totalPaidByMember.get(selectedProfileMember.id) || 0).toLocaleString()}</span></div>
+              <div className="grid gap-3 py-2">
+                <div className="flex justify-between items-center p-2.5 bg-muted/30 rounded-xl"><span className="text-[10px] font-bold uppercase text-muted-foreground">Phone</span><span className="font-bold text-xs tabular-nums">{selectedProfileMember.phone}</span></div>
+                <div className="flex justify-between items-center p-2.5 bg-muted/30 rounded-xl"><span className="text-[10px] font-bold uppercase text-muted-foreground">Joined</span><span className="font-bold text-xs">{selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : '-'}</span></div>
+                <div className="flex justify-between items-center p-2.5 bg-emerald-50 rounded-xl border border-emerald-100"><span className="text-[10px] font-bold uppercase text-emerald-600">Cycle Paid</span><span className="font-black text-emerald-700 tabular-nums text-sm">₹{(totalPaidByMember.get(selectedProfileMember.id) || 0).toLocaleString()}</span></div>
               </div>
-              <DialogFooter><Button onClick={() => setIsMemberProfileDialogOpen(false)} className="w-full font-bold h-11 rounded-xl uppercase tracking-widest text-[10px]">Close Profile</Button></DialogFooter>
+              <DialogFooter><Button onClick={() => setIsMemberProfileDialogOpen(false)} className="w-full font-bold h-10 rounded-xl uppercase tracking-widest text-[9px]">Close Profile</Button></DialogFooter>
             </div>
           )}
         </DialogContent>
@@ -759,19 +759,19 @@ export default function RoundsPage() {
 
       {/* Pending Details Dialog */}
       <Dialog open={isPendingDetailsOpen} onOpenChange={(o) => { if(!o) { setSelectedPendingMember(null); document.body.style.pointerEvents = 'auto'; } setIsPendingDetailsOpen(o); }}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[340px]">
           {selectedPendingMember && (
-            <div className="space-y-6">
-              <DialogHeader><DialogTitle className="flex items-center gap-2"><Clock className="size-5 text-destructive" /> Arrears Breakdown</DialogTitle><DialogDescription className="text-[10px] font-bold uppercase tracking-widest">{selectedPendingMember.name}</DialogDescription></DialogHeader>
+            <div className="space-y-4">
+              <DialogHeader><DialogTitle className="flex items-center gap-2 text-base"><Clock className="size-4 text-destructive" /> Arrears Breakdown</DialogTitle><DialogDescription className="text-[9px] font-bold uppercase tracking-widest">{selectedPendingMember.name}</DialogDescription></DialogHeader>
               
-              <div className="p-8 bg-destructive/5 rounded-3xl border border-dashed border-destructive/20 text-center space-y-4">
-                <div className="space-y-1"><p className="text-[10px] font-black uppercase tracking-[0.3em] text-destructive/60">Estimated Debt</p><div className="text-5xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}</div></div>
-                <Badge className="bg-destructive text-destructive-foreground px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">⏳ {selectedPendingMember.calculatedPendingDays || 0} Missed Days</Badge>
+              <div className="p-6 bg-destructive/5 rounded-2xl border border-dashed border-destructive/20 text-center space-y-3">
+                <div className="space-y-0.5"><p className="text-[9px] font-black uppercase tracking-[0.2em] text-destructive/60">Estimated Debt</p><div className="text-4xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}</div></div>
+                <Badge className="bg-destructive text-destructive-foreground px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-md">⏳ {selectedPendingMember.calculatedPendingDays || 0} Missed Days</Badge>
               </div>
 
-              <div className="space-y-3">
-                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Recorded Arrears Log</h4>
-                <ScrollArea className="h-[180px] rounded-2xl border border-border/50 bg-muted/5 p-2">
+              <div className="space-y-2">
+                <h4 className="text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground ml-1">Recorded Arrears Log</h4>
+                <ScrollArea className="h-[150px] rounded-xl border border-border/50 bg-muted/5 p-2">
                   <div className="space-y-1.5">
                     {(allPayments || [])
                       .filter(p => p.memberId === selectedPendingMember.id && (p.status === 'pending' || p.status === 'unpaid' || getPaymentAmount(p) === 0))
@@ -781,25 +781,25 @@ export default function RoundsPage() {
                         return da.localeCompare(db);
                       })
                       .map((p, idx) => (
-                        <div key={idx} className="flex items-center justify-between px-4 py-2.5 bg-white rounded-xl border shadow-sm group hover:border-destructive/30 transition-all">
-                          <div className="flex items-center gap-2.5">
-                            <CalendarDays className="size-3.5 text-muted-foreground/40 group-hover:text-destructive/40 transition-colors" />
-                            <span className="text-xs font-bold tabular-nums text-foreground/80">{getRecordDate(p)}</span>
+                        <div key={idx} className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border shadow-sm group hover:border-destructive/30 transition-all">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays className="size-3 text-muted-foreground/40 group-hover:text-destructive/40 transition-colors" />
+                            <span className="text-[11px] font-bold tabular-nums text-foreground/80">{getRecordDate(p)}</span>
                           </div>
-                          <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 h-5">Unpaid</Badge>
+                          <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 h-4">Unpaid</Badge>
                         </div>
                       ))}
                     {(allPayments || []).filter(p => p.memberId === selectedPendingMember.id && (p.status === 'pending' || p.status === 'unpaid' || getPaymentAmount(p) === 0)).length === 0 && (
-                      <div className="h-32 flex flex-col items-center justify-center space-y-2">
-                        <AlertCircle className="size-6 text-muted-foreground/20" />
-                        <p className="text-[10px] font-bold uppercase text-muted-foreground/40 tracking-widest italic">No specific dates logged</p>
+                      <div className="h-24 flex flex-col items-center justify-center space-y-1.5">
+                        <AlertCircle className="size-5 text-muted-foreground/20" />
+                        <p className="text-[9px] font-bold uppercase text-muted-foreground/40 tracking-widest italic">No specific dates logged</p>
                       </div>
                     )}
                   </div>
                 </ScrollArea>
               </div>
 
-              <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all shadow-lg">Close Audit</Button></DialogFooter>
+              <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-black uppercase tracking-[0.1em] h-10 rounded-xl active:scale-95 transition-all shadow-md">Close Audit</Button></DialogFooter>
             </div>
           )}
         </DialogContent>
@@ -807,69 +807,69 @@ export default function RoundsPage() {
 
       {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(o) => { if(!o) { setHistoryMember(null); document.body.style.pointerEvents = 'auto'; } setIsHistoryDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[450px]">
           {historyMember && (
-            <div className="space-y-6">
-              <DialogHeader><DialogTitle className="flex items-center gap-2"><History className="size-5 text-primary" /> Payment History</DialogTitle><DialogDescription className="text-xs font-medium uppercase tracking-widest">{historyMember.name}</DialogDescription></DialogHeader>
-              <div className="max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-4">
+              <DialogHeader><DialogTitle className="flex items-center gap-2 text-base"><History className="size-4 text-primary" /> Payment History</DialogTitle><DialogDescription className="text-[10px] font-medium uppercase tracking-widest">{historyMember.name}</DialogDescription></DialogHeader>
+              <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                 <Table>
-                  <TableHeader className="bg-muted/30 sticky top-0"><TableRow><TableHead className="text-[10px] font-black uppercase tracking-widest h-10">Date</TableHead><TableHead className="text-[10px] font-black uppercase tracking-widest h-10">Amount</TableHead><TableHead className="text-[10px] font-black uppercase tracking-widest h-10 text-right">Method</TableHead></TableRow></TableHeader>
+                  <TableHeader className="bg-muted/30 sticky top-0"><TableRow><TableHead className="text-[9px] font-black uppercase tracking-widest h-8">Date</TableHead><TableHead className="text-[9px] font-black uppercase tracking-widest h-8">Amount</TableHead><TableHead className="text-[9px] font-black uppercase tracking-widest h-8 text-right">Method</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {allPayments.filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid')).length > 0 ? (
                       allPayments.filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid')).map((p, i) => (
-                        <TableRow key={i} className="hover:bg-muted/5 transition-colors"><TableCell className="text-xs font-bold tabular-nums py-3">{getRecordDate(p)}</TableCell><TableCell className="text-xs font-black text-emerald-600 tabular-nums">₹{getPaymentAmount(p).toLocaleString()}</TableCell><TableCell className="text-[10px] font-bold text-muted-foreground text-right uppercase tracking-widest">{p.method || 'Cash'}</TableCell></TableRow>
+                        <TableRow key={i} className="hover:bg-muted/5 transition-colors"><TableCell className="text-[11px] font-bold tabular-nums py-2.5">{getRecordDate(p)}</TableCell><TableCell className="text-[11px] font-black text-emerald-600 tabular-nums py-2.5">₹{getPaymentAmount(p).toLocaleString()}</TableCell><TableCell className="text-[9px] font-bold text-muted-foreground text-right uppercase tracking-widest">{p.method || 'Cash'}</TableCell></TableRow>
                       ))
-                    ) : <TableRow><TableCell colSpan={3} className="h-32 text-center text-[10px] font-bold uppercase text-muted-foreground/40 italic">No contributions recorded</TableCell></TableRow>}
+                    ) : <TableRow><TableCell colSpan={3} className="h-24 text-center text-[9px] font-bold uppercase text-muted-foreground/40 italic">No contributions recorded</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </div>
-              <DialogFooter><Button onClick={() => setIsHistoryDialogOpen(false)} className="w-full font-bold h-11 rounded-xl">Close Registry</Button></DialogFooter>
+              <DialogFooter><Button onClick={() => setIsHistoryDialogOpen(false)} className="w-full font-bold h-10 rounded-xl">Close Registry</Button></DialogFooter>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
       <Dialog open={isAddMemberDialogOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsAddMemberDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[380px]">
           <form onSubmit={handleAddMemberToScheme}>
-            <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Adding to scheme: <span className="font-bold text-primary">{currentRound?.name}</span></DialogDescription></DialogHeader>
-            <div className="grid gap-5 py-6">
-              <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Full Name</Label><Input value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required className="h-11 rounded-xl" placeholder="Member name" /></div>
-              <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Phone Number</Label><Input value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required className="h-11 rounded-xl" placeholder="Contact number" /></div>
-              <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Join Date</Label><Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required className="h-11 rounded-xl" /></div>
-              <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Payment Mode</Label><Select value={newMember.paymentType} onValueChange={v => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Inherit from scheme" /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
+            <DialogHeader><DialogTitle className="text-lg">Register Member</DialogTitle><DialogDescription className="text-[11px]">Adding to scheme: <span className="font-bold text-primary">{currentRound?.name}</span></DialogDescription></DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Full Name</Label><Input value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required className="h-10 rounded-xl text-sm" placeholder="Member name" /></div>
+              <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Phone Number</Label><Input value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required className="h-10 rounded-xl text-sm" placeholder="Contact number" /></div>
+              <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Join Date</Label><Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required className="h-10 rounded-xl text-sm" /></div>
+              <div className="grid gap-1.5"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Payment Mode</Label><Select value={newMember.paymentType} onValueChange={v => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue placeholder="Inherit from scheme" /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
             </div>
-            <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Complete Registration</Button></DialogFooter>
+            <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-10 font-bold text-sm">Complete Registration</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isDailyAuditOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsDailyAuditOpen(o); }}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[340px]">
           {currentRound && (
             <>
-              <DialogHeader><DialogTitle className="flex items-center gap-2"><Wallet className="size-5 text-primary" />Audit Ledger</DialogTitle></DialogHeader>
-              <div className="space-y-6 py-4">
-                <div className="space-y-1.5"><Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Select Audit Date</Label><div className="relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" /><Input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className="pl-10 h-11 font-bold text-sm" /></div></div>
-                <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-3xl border border-dashed border-emerald-200 text-center"><p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600/60 mb-3">Audit Total Intake</p><div className="text-5xl font-black text-emerald-600 tabular-nums tracking-tighter">₹{getGroupCollectionForDate(currentRound.name, auditDate).toLocaleString()}</div></div>
+              <DialogHeader><DialogTitle className="flex items-center gap-2 text-base"><Wallet className="size-4 text-primary" />Audit Ledger</DialogTitle></DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-muted-foreground">Select Audit Date</Label><div className="relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" /><Input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className="pl-9 h-10 font-bold text-xs" /></div></div>
+                <div className="flex flex-col items-center justify-center p-6 bg-emerald-50 rounded-2xl border border-dashed border-emerald-200 text-center"><p className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-600/60 mb-2">Audit Total Intake</p><div className="text-4xl font-black text-emerald-600 tabular-nums tracking-tighter">₹{getGroupCollectionForDate(currentRound.name, auditDate).toLocaleString()}</div></div>
               </div>
-              <DialogFooter><Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-bold h-11 rounded-xl">Close Audit</Button></DialogFooter>
+              <DialogFooter><Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-bold h-10 rounded-xl">Close Audit</Button></DialogFooter>
             </>
           )}
         </DialogContent>
       </Dialog>
 
       <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(o) => { if(!o) { setSelectedMemberForPayment(null); document.body.style.pointerEvents = 'auto'; } setIsQuickPaymentDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[380px]">
           {selectedMemberForPayment && (
             <form onSubmit={handleQuickPayment}>
-              <DialogHeader><DialogTitle>Record Payment</DialogTitle><DialogDescription>Processing entry for <span className="font-bold text-primary">{selectedMemberForPayment.name}</span>.</DialogDescription></DialogHeader>
-              <div className="grid gap-6 py-4">
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Amount (₹)</Label><Input type="number" value={paymentData.amount} onChange={e => setPaymentData({...paymentData, amount: Number(e.target.value)})} required className="h-12 text-lg font-black text-primary rounded-xl" /></div>
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Target Date</Label><Input type="date" value={paymentData.date} onChange={e => setPaymentData({...paymentData, date: e.target.value})} required className="h-11 rounded-xl" /></div>
-                <div className="grid gap-2"><Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Method</Label><Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="UPI">UPI</SelectItem></SelectContent></Select></div>
+              <DialogHeader><DialogTitle className="text-lg">Record Payment</DialogTitle><DialogDescription className="text-[11px]">Processing entry for <span className="font-bold text-primary">{selectedMemberForPayment.name}</span>.</DialogDescription></DialogHeader>
+              <div className="grid gap-4 py-2">
+                <div className="grid gap-1"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Payment Amount (₹)</Label><Input type="number" value={paymentData.amount} onChange={e => setPaymentData({...paymentData, amount: Number(e.target.value)})} required className="h-11 text-base font-black text-primary rounded-xl" /></div>
+                <div className="grid gap-1"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Target Date</Label><Input type="date" value={paymentData.date} onChange={e => setPaymentData({...paymentData, date: e.target.value})} required className="h-10 rounded-xl text-sm" /></div>
+                <div className="grid gap-1"><Label className="text-[10px] font-bold uppercase text-muted-foreground">Method</Label><Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v})}><SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="UPI">UPI</SelectItem></SelectContent></Select></div>
               </div>
-              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-12 font-black uppercase tracking-[0.2em] bg-emerald-600 hover:bg-emerald-700 shadow-lg active:scale-[0.98] transition-all">{isActionPending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <CheckCircle2 className="size-4 mr-2" />}Confirm Entry</Button></DialogFooter>
+              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-[0.1em] bg-emerald-600 hover:bg-emerald-700 shadow-sm active:scale-[0.98] transition-all text-xs">{isActionPending ? <Loader2 className="size-3 mr-2 animate-spin" /> : <CheckCircle2 className="size-3 mr-2" />}Confirm Entry</Button></DialogFooter>
             </form>
           )}
         </DialogContent>
