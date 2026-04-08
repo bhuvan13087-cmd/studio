@@ -710,7 +710,7 @@ export default function RoundsPage() {
         <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Base Rate</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums tracking-tight">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Occupancy</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums tracking-tight">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Pending</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-amber-600 tracking-tight">{assignedMembers.filter(m => m.memberStatus === 'pending').length}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle><Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" onClick={() => setIsDailyAuditOpen(true)}><Wallet className="size-3" /></Button></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle><Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" onClick={() => setIsDailyAuditOpen(true)}><Wallet className="size-3" /></Button></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent>
       </div>
 
       <div className="rounded-2xl border bg-card shadow-sm overflow-hidden border-border/60">
@@ -763,11 +763,43 @@ export default function RoundsPage() {
           {selectedPendingMember && (
             <div className="space-y-6">
               <DialogHeader><DialogTitle className="flex items-center gap-2"><Clock className="size-5 text-destructive" /> Arrears Breakdown</DialogTitle><DialogDescription className="text-[10px] font-bold uppercase tracking-widest">{selectedPendingMember.name}</DialogDescription></DialogHeader>
+              
               <div className="p-8 bg-destructive/5 rounded-3xl border border-dashed border-destructive/20 text-center space-y-4">
                 <div className="space-y-1"><p className="text-[10px] font-black uppercase tracking-[0.3em] text-destructive/60">Estimated Debt</p><div className="text-5xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}</div></div>
                 <Badge className="bg-destructive text-destructive-foreground px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">⏳ {selectedPendingMember.calculatedPendingDays || 0} Missed Days</Badge>
               </div>
-              <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-bold h-11 rounded-xl">Close Audit</Button></DialogFooter>
+
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Recorded Arrears Log</h4>
+                <ScrollArea className="h-[180px] rounded-2xl border border-border/50 bg-muted/5 p-2">
+                  <div className="space-y-1.5">
+                    {(allPayments || [])
+                      .filter(p => p.memberId === selectedPendingMember.id && (p.status === 'pending' || p.status === 'unpaid' || getPaymentAmount(p) === 0))
+                      .sort((a, b) => {
+                        const da = getRecordDate(a) || "";
+                        const db = getRecordDate(b) || "";
+                        return da.localeCompare(db);
+                      })
+                      .map((p, idx) => (
+                        <div key={idx} className="flex items-center justify-between px-4 py-2.5 bg-white rounded-xl border shadow-sm group hover:border-destructive/30 transition-all">
+                          <div className="flex items-center gap-2.5">
+                            <CalendarDays className="size-3.5 text-muted-foreground/40 group-hover:text-destructive/40 transition-colors" />
+                            <span className="text-xs font-bold tabular-nums text-foreground/80">{getRecordDate(p)}</span>
+                          </div>
+                          <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 h-5">Unpaid</Badge>
+                        </div>
+                      ))}
+                    {(allPayments || []).filter(p => p.memberId === selectedPendingMember.id && (p.status === 'pending' || p.status === 'unpaid' || getPaymentAmount(p) === 0)).length === 0 && (
+                      <div className="h-32 flex flex-col items-center justify-center space-y-2">
+                        <AlertCircle className="size-6 text-muted-foreground/20" />
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground/40 tracking-widest italic">No specific dates logged</p>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl active:scale-95 transition-all shadow-lg">Close Audit</Button></DialogFooter>
             </div>
           )}
         </DialogContent>
