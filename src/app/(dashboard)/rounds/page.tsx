@@ -183,7 +183,6 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
       
       pSnapshot.docs.forEach(pDoc => {
         const pData = pDoc.data();
-        const mId = pData.memberId;
         const targetDate = pData.targetDate || (pData.paymentDate ? (pData.paymentDate.toDate ? format(pData.paymentDate.toDate(), 'yyyy-MM-dd') : pData.paymentDate.split('T')[0]) : null);
         if (!targetDate) return;
         
@@ -262,7 +261,6 @@ export default function RoundsPage() {
   const [paymentData, setPaymentData] = useState(INITIAL_PAYMENT_STATE)
   const [newChit, setNewChit] = useState(INITIAL_CHIT_STATE)
   
-  const [viewMonth, setViewMonth] = useState<string>(format(new Date(), 'MMMM'))
   const [viewYear, setViewYear] = useState<string>(format(new Date(), 'yyyy'))
   
   const { toast } = useToast()
@@ -381,17 +379,10 @@ export default function RoundsPage() {
         } else {
           const cycleStart = parseISO(activeCycle.startDate);
           const cycleEnd = parseISO(activeCycle.endDate);
-          const specificDueDate = scheme?.specificDueDate;
           const numericDueDate = scheme?.dueDate || 5;
-          let isPastDue = false;
-          let dueDateLimit: Date;
-          if (specificDueDate) {
-            dueDateLimit = parseISO(specificDueDate);
-            isPastDue = isAfter(today, dueDateLimit);
-          } else {
-            isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate;
-            dueDateLimit = startOfDay(addDays(cycleStart, numericDueDate - 1));
-          }
+          let isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate;
+          let dueDateLimit = startOfDay(addDays(cycleStart, numericDueDate - 1));
+          
           if (!isPastDue) {
             memberStatus = 'waiting';
             pendingDaysCount = 0;
@@ -675,6 +666,30 @@ export default function RoundsPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={isEditChitDialogOpen} onOpenChange={(o) => { if(!o) { setChitToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditChitDialogOpen(o); }}>
+          <DialogContent className="sm:max-w-[425px]">
+            {chitToEdit && (
+              <form onSubmit={handleUpdateChit}>
+                <DialogHeader><DialogTitle>Edit Scheme</DialogTitle></DialogHeader>
+                <div className="grid gap-5 py-6">
+                  <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Scheme Name</Label><Input value={chitToEdit.name} onChange={e => setChitToEdit({...chitToEdit, name: e.target.value})} required className="h-11 rounded-xl" /></div>
+                  <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Amount (₹)</Label><Input type="number" value={chitToEdit.monthlyAmount || ""} onChange={e => setChitToEdit({...chitToEdit, monthlyAmount: Number(e.target.value)})} required className="h-11 rounded-xl" /></div>
+                  <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Max Members</Label><Input type="number" value={chitToEdit.totalMembers || ""} onChange={e => setChitToEdit({...chitToEdit, totalMembers: Number(e.target.value)})} required className="h-11 rounded-xl" /></div>
+                  <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Collection Type</Label><Select value={chitToEdit.collectionType} onValueChange={(v) => setChitToEdit({...chitToEdit, collectionType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
+                </div>
+                <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Save Changes</Button></DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={isDeleteChitDialogOpen} onOpenChange={(o) => { if(!o) { setChitToDelete(null); document.body.style.pointerEvents = 'auto'; } setIsDeleteChitDialogOpen(o); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Scheme?</AlertDialogTitle><AlertDialogDescription>This will permanently remove the scheme <strong>{chitToDelete?.name}</strong> and all associated data. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteChitDialogOpen(false)}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteChit} disabled={isActionPending} className="bg-destructive hover:bg-destructive/90">{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Delete Permanently</AlertDialogAction></AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     )
   }
@@ -716,6 +731,86 @@ export default function RoundsPage() {
           </Table>
         </div>
       </div>
+
+      {/* Profile Dialog */}
+      <Dialog open={isMemberProfileDialogOpen} onOpenChange={(o) => { if(!o) { setSelectedProfileMember(null); document.body.style.pointerEvents = 'auto'; } setIsMemberProfileDialogOpen(o); }}>
+        <DialogContent className="sm:max-w-[400px]">
+          {selectedProfileMember && (
+            <div className="space-y-6">
+              <DialogHeader>
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xl shadow-inner uppercase">{getInitials(selectedProfileMember.name)}</div>
+                  <div className="space-y-0.5">
+                    <DialogTitle className="text-xl font-black uppercase tracking-tight">{selectedProfileMember.name}</DialogTitle>
+                    <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-primary/20 text-primary/70">{selectedProfileMember.paymentType || currentRound?.collectionType}</Badge>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-xl"><span className="text-xs font-bold uppercase text-muted-foreground">Phone</span><span className="font-bold text-sm tabular-nums">{selectedProfileMember.phone}</span></div>
+                <div className="flex justify-between items-center p-3 bg-muted/30 rounded-xl"><span className="text-xs font-bold uppercase text-muted-foreground">Joined</span><span className="font-bold text-sm">{selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : '-'}</span></div>
+                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-xl border border-emerald-100"><span className="text-xs font-bold uppercase text-emerald-600">Cycle Paid</span><span className="font-black text-emerald-700 tabular-nums">₹{(totalPaidByMember.get(selectedProfileMember.id) || 0).toLocaleString()}</span></div>
+              </div>
+              <DialogFooter><Button onClick={() => setIsMemberProfileDialogOpen(false)} className="w-full font-bold h-11 rounded-xl uppercase tracking-widest text-[10px]">Close Profile</Button></DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Pending Details Dialog */}
+      <Dialog open={isPendingDetailsOpen} onOpenChange={(o) => { if(!o) { setSelectedPendingMember(null); document.body.style.pointerEvents = 'auto'; } setIsPendingDetailsOpen(o); }}>
+        <DialogContent className="sm:max-w-[400px]">
+          {selectedPendingMember && (
+            <div className="space-y-6">
+              <DialogHeader><DialogTitle className="flex items-center gap-2"><Clock className="size-5 text-destructive" /> Arrears Breakdown</DialogTitle><DialogDescription className="text-[10px] font-bold uppercase tracking-widest">{selectedPendingMember.name}</DialogDescription></DialogHeader>
+              <div className="p-8 bg-destructive/5 rounded-3xl border border-dashed border-destructive/20 text-center space-y-4">
+                <div className="space-y-1"><p className="text-[10px] font-black uppercase tracking-[0.3em] text-destructive/60">Estimated Debt</p><div className="text-5xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}</div></div>
+                <Badge className="bg-destructive text-destructive-foreground px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">⏳ {selectedPendingMember.calculatedPendingDays || 0} Missed Days</Badge>
+              </div>
+              <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-bold h-11 rounded-xl">Close Audit</Button></DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* History Dialog */}
+      <Dialog open={isHistoryDialogOpen} onOpenChange={(o) => { if(!o) { setHistoryMember(null); document.body.style.pointerEvents = 'auto'; } setIsHistoryDialogOpen(o); }}>
+        <DialogContent className="sm:max-w-[500px]">
+          {historyMember && (
+            <div className="space-y-6">
+              <DialogHeader><DialogTitle className="flex items-center gap-2"><History className="size-5 text-primary" /> Payment History</DialogTitle><DialogDescription className="text-xs font-medium uppercase tracking-widest">{historyMember.name}</DialogDescription></DialogHeader>
+              <div className="max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                <Table>
+                  <TableHeader className="bg-muted/30 sticky top-0"><TableRow><TableHead className="text-[10px] font-black uppercase tracking-widest h-10">Date</TableHead><TableHead className="text-[10px] font-black uppercase tracking-widest h-10">Amount</TableHead><TableHead className="text-[10px] font-black uppercase tracking-widest h-10 text-right">Method</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {allPayments.filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid')).length > 0 ? (
+                      allPayments.filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid')).map((p, i) => (
+                        <TableRow key={i} className="hover:bg-muted/5 transition-colors"><TableCell className="text-xs font-bold tabular-nums py-3">{getRecordDate(p)}</TableCell><TableCell className="text-xs font-black text-emerald-600 tabular-nums">₹{getPaymentAmount(p).toLocaleString()}</TableCell><TableCell className="text-[10px] font-bold text-muted-foreground text-right uppercase tracking-widest">{p.method || 'Cash'}</TableCell></TableRow>
+                      ))
+                    ) : <TableRow><TableCell colSpan={3} className="h-32 text-center text-[10px] font-bold uppercase text-muted-foreground/40 italic">No contributions recorded</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </div>
+              <DialogFooter><Button onClick={() => setIsHistoryDialogOpen(false)} className="w-full font-bold h-11 rounded-xl">Close Registry</Button></DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddMemberDialogOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsAddMemberDialogOpen(o); }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <form onSubmit={handleAddMemberToScheme}>
+            <DialogHeader><DialogTitle>Register Member</DialogTitle><DialogDescription>Adding to scheme: <span className="font-bold text-primary">{currentRound?.name}</span></DialogDescription></DialogHeader>
+            <div className="grid gap-5 py-6">
+              <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Full Name</Label><Input value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required className="h-11 rounded-xl" placeholder="Member name" /></div>
+              <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Phone Number</Label><Input value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required className="h-11 rounded-xl" placeholder="Contact number" /></div>
+              <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Join Date</Label><Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required className="h-11 rounded-xl" /></div>
+              <div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">Payment Mode</Label><Select value={newMember.paymentType} onValueChange={v => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Inherit from scheme" /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
+            </div>
+            <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-bold">{isActionPending ? <Loader2 className="mr-2 animate-spin" /> : null}Complete Registration</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isDailyAuditOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsDailyAuditOpen(o); }}>
         <DialogContent className="sm:max-w-[400px]">
