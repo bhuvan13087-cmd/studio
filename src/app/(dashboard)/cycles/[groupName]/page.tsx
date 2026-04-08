@@ -1,12 +1,13 @@
+
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, ArrowRight, ChevronRight, Calendar, History, Clock, Pencil, Save, ShieldCheck, Archive, RefreshCcw } from "lucide-react"
+import { Loader2, ChevronLeft, ChevronRight, History, Pencil, Save, ShieldCheck, Archive, RefreshCcw, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, orderBy, doc, updateDoc, addDoc } from "firebase/firestore"
+import { collection, query, orderBy, doc, updateDoc, addDoc, where, getDocs, writeBatch } from "firebase/firestore"
 import { useRouter } from "next/navigation"
-import { format, parseISO, isValid } from "date-fns"
+import { format, parseISO, isValid, subDays } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import {
   Dialog,
@@ -22,39 +23,30 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { createAuditLog } from "@/firebase/logging"
 
-/**
- * @fileOverview Refined Group-Specific Cycle Audit Page.
- * 
- * Displays a chronological list of cycle date ranges with a compact, professional UI.
- * Now categorizes cycles into "Active" and "Past" states for better auditing flow.
- * includes high-integrity deduplication for overlapping or duplicate date records.
- */
 export default function GroupCyclesPage({ params }: { params: Promise<{ groupName: string }> }) {
   const router = useRouter()
   const resolvedParams = React.use(params)
   const { toast } = useToast()
   const { user } = useUser()
   
-  // Safe Param Handling
   const rawGroupName = resolvedParams?.groupName || ""
   const groupName = decodeURIComponent(rawGroupName).trim()
 
   const db = useFirestore()
 
-  // Edit State
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
   const [isActionPending, setIsActionPending] = React.useState(false)
   const [editingCycle, setEditingCycle] = React.useState<{id: string, startDate: string, endDate: string} | null>(null)
 
-  // Fetch all cycles safely
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('startDate', 'desc')), [db])
   const { data: allCycles, isLoading } = useCollection(cyclesQuery)
 
-  // Data Sanitization - Categorize by Status & Deduplicate by Start Date
+  const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
+  const { data: membersData } = useCollection(membersQuery)
+
   const { activeCycles, pastCycles } = React.useMemo(() => {
     if (!Array.isArray(allCycles)) return { activeCycles: [], pastCycles: [] }
     
-    // Map to track unique periods: key = startDate (Ensure only one record per start date)
     const uniqueMap = new Map<string, any>()
 
     allCycles
@@ -68,9 +60,6 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
         const start = String(c?.startDate || "-")
         const key = start
         
-        // Priority Strategy: 
-        // 1. Prefer 'active' status over others.
-        // 2. Otherwise prefer the first record encountered (usually most recent due to orderBy)
         const existing = uniqueMap.get(key)
         if (!existing || (c.status === 'active' && existing.status !== 'active')) {
           uniqueMap.set(key, {
@@ -110,9 +99,7 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
   const handleCycleClick = (cycle: { id: string, startDate: string }) => {
     const safeGroupName = String(groupName || "")
     const safeCycleId = String(cycle?.id || cycle?.startDate || "")
-
     if (!safeGroupName || !safeCycleId) return
-
     router.push(`/cycles/${encodeURIComponent(safeGroupName)}/${encodeURIComponent(safeCycleId)}`)
   }
 
@@ -124,87 +111,86 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
 
   const handleUpdateCycle = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!db || !editingCycle || isActionPending) return
-
-    if (!editingCycle.startDate || !editingCycle.endDate) {
-      toast({ variant: "destructive", title: "Validation Error", description: "Both dates are required." })
-      return
-    }
+    if (!db || !editingCycle || isActionPending || !user) return
 
     setIsActionPending(true)
     try {
-      const cycleRef = doc(db, 'cycles', editingCycle.id)
-      await withTimeout(updateDoc(cycleRef, {
+      const batch = writeBatch(db);
+      
+      const q = query(collection(db, 'cycles'), where('name', '==', groupName));
+      const querySnapshot = await getDocs(q);
+      let cycles = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      
+      cycles = cycles.map(c => c.id === editingCycle.id ? { ...c, startDate: editingCycle.startDate, endDate: editingCycle.endDate } : c);
+      
+      cycles.sort((a, b) => a.startDate.localeCompare(b.startDate));
+      
+      for (let i = 0; i < cycles.length - 1; i++) {
+        const nextStart = parseISO(cycles[i+1].startDate);
+        const expectedEnd = format(subDays(nextStart, 1), 'yyyy-MM-dd');
+        
+        if (cycles[i].endDate !== expectedEnd) {
+          cycles[i].endDate = expectedEnd;
+          batch.update(doc(db, 'cycles', cycles[i].id), { 
+            endDate: expectedEnd,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+      
+      batch.update(doc(db, 'cycles', editingCycle.id), {
         startDate: editingCycle.startDate,
         endDate: editingCycle.endDate,
         updatedAt: new Date().toISOString()
-      }))
+      });
 
-      await createAuditLog(db, user, `Updated cycle dates for ${groupName}: ${editingCycle.startDate} to ${editingCycle.endDate}`)
+      const groupMembers = membersData?.filter(m => {
+        const mGroup = String(m?.chitGroup || "").trim().toLowerCase();
+        const gName = groupName.toLowerCase();
+        return (mGroup === gName || mGroup === gName.replace(/Group/gi, '').trim());
+      }) || [];
+      const memberIds = groupMembers.map(m => m.id);
       
-      toast({ title: "Cycle Updated", description: "The period dates have been corrected." })
+      if (memberIds.length > 0) {
+        for (let i = 0; i < memberIds.length; i += 30) {
+          const chunk = memberIds.slice(i, i + 30);
+          const pQuery = query(collection(db, 'payments'), where('memberId', 'in', chunk));
+          const pSnapshot = await getDocs(pQuery);
+          
+          pSnapshot.docs.forEach(pDoc => {
+            const pData = pDoc.data();
+            const tDate = pData.targetDate || (pData.paymentDate ? (pData.paymentDate.toDate ? format(pData.paymentDate.toDate(), 'yyyy-MM-dd') : pData.paymentDate.split('T')[0]) : null);
+            if (!tDate) return;
+            const matchingCycle = cycles.find(c => tDate >= c.startDate && tDate <= c.endDate);
+            if (matchingCycle && pData.cycleId !== matchingCycle.id) {
+              batch.update(pDoc.ref, { cycleId: matchingCycle.id });
+            }
+          });
+        }
+      }
+
+      await withTimeout(batch.commit());
+      await createAuditLog(db, user, `Chain-Synced cycles for ${groupName}: Timeline and payment IDs adjusted.`);
+      
+      toast({ title: "Timeline Synchronized", description: "Cycles and historical windows have been corrected." })
       setIsEditDialogOpen(false)
       setEditingCycle(null)
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update cycle." })
+      toast({ variant: "destructive", title: "Sync Error", description: error.message || "Failed to sync timeline." })
     } finally {
       setIsActionPending(false)
-    }
-  }
-
-  const handleReconcileHistory = async () => {
-    if (!db || !user || isActionPending) return
-
-    setIsActionPending(true)
-    try {
-      const cycleRef = collection(db, 'cycles')
-      await addDoc(cycleRef, {
-        name: groupName,
-        startDate: "2026-03-15",
-        endDate: "2026-03-29",
-        status: "completed",
-        type: "recovered",
-        createdAt: new Date().toISOString(),
-        completedAt: new Date().toISOString()
-      })
-
-      await createAuditLog(db, user, `Reconciled legacy history for ${groupName}: 2026-03-15 to 2026-03-29`)
-      
-      toast({ title: "History Restored", description: "Legacy operational window has been archived." })
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to restore history." })
-    } finally {
-      setIsActionPending(false)
-    }
-  }
-
-  const formatDateLabel = (dateStr: string) => {
-    if (!dateStr || dateStr === "-") return "-"
-    try {
-      const date = parseISO(dateStr)
-      if (!isValid(date)) return dateStr
-      return format(date, 'dd MMM yyyy')
-    } catch {
-      return dateStr
+      document.body.style.pointerEvents = 'auto';
     }
   }
 
   const CycleItem = ({ cycle, isActive }: { cycle: any, isActive: boolean }) => (
     <div 
       onClick={() => handleCycleClick(cycle)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          handleCycleClick(cycle)
-        }
-      }}
-      role="button"
-      tabIndex={0}
       className={cn(
         "group relative flex items-center justify-between w-full p-4 rounded-xl border transition-all duration-200 text-left active:scale-[0.99] overflow-hidden cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary",
         isActive 
           ? "border-emerald-200 bg-emerald-50/40 hover:border-emerald-300 hover:bg-emerald-50/60 shadow-sm" 
-          : "border-border/50 bg-card hover:border-primary/30 hover:shadow-sm"
+          : "border-border/50 bg-card hover:border-primary/30 hover:bg-muted/5 hover:shadow-md"
       )}
     >
       <div className={cn(
@@ -216,23 +202,21 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
         <div className="flex items-center gap-4">
           <div className="flex flex-col">
             <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">Start</span>
-            <span className="text-xs font-bold tabular-nums text-foreground/80 group-hover:text-foreground transition-colors">
-              {formatDateLabel(cycle.startDate)}
+            <span className="text-xs font-bold tabular-nums text-foreground/80">
+              {cycle.startDate ? format(parseISO(cycle.startDate), 'dd MMM yyyy') : '-'}
             </span>
           </div>
-
           <div className="h-px w-4 bg-border/60" />
-
           <div className="flex flex-col">
             <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">End</span>
             <span className={cn("text-xs font-bold tabular-nums", isActive ? "text-emerald-700" : "text-muted-foreground/80")}>
-              {formatDateLabel(cycle.endDate)}
+              {cycle.endDate ? format(parseISO(cycle.endDate), 'dd MMM yyyy') : '-'}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         {isActive && (
           <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-emerald-200 text-emerald-700 bg-emerald-50 h-5 px-1.5 hidden sm:flex">
             Active
@@ -246,156 +230,70 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
         >
           <Pencil className="size-3.5" />
         </Button>
-        <span className={cn(
-          "text-[8px] font-black uppercase tracking-[0.2em] transition-all",
-          isActive ? "text-emerald-600/0 group-hover:text-emerald-600/60" : "text-primary/0 group-hover:text-primary/60"
-        )}>
-          View
-        </span>
-        <ChevronRight className={cn(
-          "size-4 text-muted-foreground/20 transition-colors",
-          isActive ? "group-hover:text-emerald-600" : "group-hover:text-primary"
-        )} />
+        <div className="flex items-center gap-1.5 opacity-40 group-hover:opacity-100 transition-all">
+          <span className="text-[8px] font-black uppercase tracking-widest">View</span>
+          <Eye className="size-3.5" />
+        </div>
       </div>
     </div>
   )
 
   return (
-    <div className="max-w-2xl mx-auto space-y-10 animate-in fade-in duration-500 pb-10 overflow-x-hidden">
-      {/* Header Section */}
+    <div className="max-w-2xl mx-auto space-y-10 animate-in fade-in duration-500 pb-10">
       <div className="flex items-center gap-4">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={() => router.push('/cycles')}
-          className="rounded-full h-10 w-10 hover:bg-primary/10 text-primary transition-all active:scale-90"
-        >
-          <ChevronLeft className="size-6" />
-        </Button>
+        <Button variant="ghost" size="icon" onClick={() => router.push('/cycles')} className="rounded-full h-10 w-10 hover:bg-primary/10 text-primary transition-all active:scale-90"><ChevronLeft className="size-6" /></Button>
         <div className="space-y-0.5">
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-primary font-headline uppercase">
-            {groupName}
-          </h2>
-          <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1.5">
-            <History className="size-2.5" /> Registry History
-          </p>
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-primary font-headline uppercase">{groupName}</h2>
+          <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1.5"><History className="size-2.5" /> Registry History</p>
         </div>
       </div>
 
       <div className="space-y-8">
-        {/* Active Cycles Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <ShieldCheck className="size-3 text-emerald-500" />
-            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-emerald-600">
-              Current Audit Period
-            </h3>
+            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-emerald-600">Current Audit Period</h3>
             <div className="h-px flex-1 bg-emerald-100" />
           </div>
-          
           <div className="grid gap-2">
-            {activeCycles.length > 0 ? (
-              activeCycles.map((cycle) => (
-                <CycleItem key={cycle.id} cycle={cycle} isActive={true} />
-              ))
-            ) : (
-              <div className="p-8 text-center border-2 border-dashed rounded-2xl bg-muted/5 text-muted-foreground/40 italic">
-                <p className="text-[10px] font-bold uppercase tracking-widest">No active period detected</p>
-              </div>
-            )}
+            {activeCycles.length > 0 ? activeCycles.map((c) => <CycleItem key={c.id} cycle={c} isActive={true} />) : <div className="p-8 text-center border-2 border-dashed rounded-2xl bg-muted/5 text-muted-foreground/40 italic"><p className="text-[10px] font-bold uppercase tracking-widest">No active period detected</p></div>}
           </div>
         </div>
 
-        {/* Historical Cycles Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <Archive className="size-3 text-muted-foreground/60" />
-            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground/80">
-              Historical Archives
-            </h3>
+            <h3 className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground/80">Historical Archives</h3>
             <div className="h-px flex-1 bg-muted" />
-            <span className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest">
-              {pastCycles.length} Records
-            </span>
+            <span className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest">{pastCycles.length} Records</span>
           </div>
-          
           <div className="grid gap-2">
-            {pastCycles.length > 0 ? (
-              pastCycles.map((cycle) => (
-                <CycleItem key={cycle.id} cycle={cycle} isActive={false} />
-              ))
-            ) : (
-              <div className="p-12 text-center border-2 border-dashed rounded-3xl bg-muted/5 space-y-4">
-                <div className="space-y-2">
-                  <History className="size-8 mx-auto text-muted-foreground/20" />
-                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 italic">
-                    No historical records located
-                  </p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  disabled={isActionPending}
-                  onClick={handleReconcileHistory}
-                  className="h-9 px-4 rounded-xl font-black uppercase text-[8px] tracking-[0.15em] border-primary/20 text-primary hover:bg-primary/5"
-                >
-                  {isActionPending ? <Loader2 className="size-3 mr-2 animate-spin" /> : <RefreshCcw className="size-3 mr-2" />}
-                  Restore Legacy Archive (Mar 15 - Mar 29)
-                </Button>
-              </div>
-            )}
+            {pastCycles.length > 0 ? pastCycles.map((c) => <CycleItem key={c.id} cycle={c} isActive={false} />) : <div className="p-12 text-center border-2 border-dashed rounded-3xl bg-muted/5 text-muted-foreground/40 italic"><p className="text-[9px] font-black uppercase tracking-[0.2em]">No historical records located</p></div>}
           </div>
         </div>
       </div>
 
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isEditDialogOpen} onOpenChange={(o) => { if(!o) { setEditingCycle(null); document.body.style.pointerEvents = 'auto'; } setIsEditDialogOpen(o); }}>
         <DialogContent className="sm:max-w-[400px]">
           {editingCycle && (
             <form onSubmit={handleUpdateCycle} className="space-y-6">
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Pencil className="size-5 text-primary" />
-                  Edit Audit Period
-                </DialogTitle>
-                <DialogDescription>
-                  Modify the operational start and end dates for this cycle in {groupName}.
-                </DialogDescription>
+                <DialogTitle className="flex items-center gap-2"><Pencil className="size-5 text-primary" /> Edit Audit Period</DialogTitle>
+                <DialogDescription>Modifying the start date will automatically synchronize previous cycle end dates.</DialogDescription>
               </DialogHeader>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Start Date</Label>
-                  <Input 
-                    type="date" 
-                    value={editingCycle.startDate} 
-                    onChange={e => setEditingCycle({...editingCycle, startDate: e.target.value})}
-                    className="h-11 rounded-xl font-bold"
-                    required
-                    disabled={isActionPending}
-                  />
+                  <Input type="date" value={editingCycle.startDate} onChange={e => setEditingCycle({...editingCycle, startDate: e.target.value})} className="h-11 rounded-xl font-bold" required disabled={isActionPending} />
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">End Date</Label>
-                  <Input 
-                    type="date" 
-                    value={editingCycle.endDate} 
-                    onChange={e => setEditingCycle({...editingCycle, endDate: e.target.value})}
-                    className="h-11 rounded-xl font-bold"
-                    required
-                    disabled={isActionPending}
-                  />
+                  <Input type="date" value={editingCycle.endDate} onChange={e => setEditingCycle({...editingCycle, endDate: e.target.value})} className="h-11 rounded-xl font-bold" required disabled={isActionPending} />
                 </div>
               </div>
-
               <DialogFooter>
-                <Button 
-                  type="submit" 
-                  disabled={isActionPending}
-                  className="w-full h-12 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all"
-                >
-                  {isActionPending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />}
-                  Save Period Changes
+                <Button type="submit" disabled={isActionPending} className="w-full h-12 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all">
+                  {isActionPending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />} Save & Sync Timeline
                 </Button>
               </DialogFooter>
             </form>
