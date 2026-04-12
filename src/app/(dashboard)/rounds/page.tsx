@@ -547,7 +547,6 @@ export default function RoundsPage() {
       toast({ variant: "destructive", title: "Duplicate Entry", description: "Already paid for this date." });
       return;
     }
-    setIsQuickPaymentDialogOpen(true);
     setIsActionPending(true);
     try {
       const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(currentRound.name).trim() && c.status === 'active');
@@ -804,13 +803,10 @@ export default function RoundsPage() {
                   <DialogTitle className="text-lg font-black uppercase tracking-tight text-primary truncate px-2">
                     {selectedProfileMember.name}
                   </DialogTitle>
-                  <div className="flex items-center justify-center gap-1.5">
+                  <div className="flex items-center justify-center">
                     <Badge className="text-[8px] font-black uppercase tracking-widest bg-primary text-white border-none px-2.5 h-4">
                       {selectedProfileMember.paymentType || currentRound?.collectionType}
                     </Badge>
-                    <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest ml-1">
-                      • Joined {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : 'N/A'}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -974,6 +970,9 @@ export default function RoundsPage() {
               <div className="p-5 bg-destructive/5 rounded-2xl border border-dashed border-destructive/20 text-center space-y-2">
                 <div className="space-y-0"><p className="text-[8px] font-black uppercase tracking-[0.2em] text-destructive/60">Estimated Debt</p><div className="text-3xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}</div></div>
                 <Badge className="bg-destructive text-destructive-foreground px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md">⏳ {selectedPendingMember.calculatedPendingDays || 0} Missed</Badge>
+                <p className="text-[8px] font-bold text-muted-foreground/60 uppercase tracking-widest pt-1">
+                  Joined {selectedPendingMember.joinDate ? format(parseISO(selectedPendingMember.joinDate), 'dd MMM yyyy') : 'N/A'}
+                </p>
               </div>
 
               <div className="space-y-1.5">
