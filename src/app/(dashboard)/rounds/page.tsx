@@ -778,37 +778,95 @@ export default function RoundsPage() {
 
       {/* Profile Dialog */}
       <Dialog open={isMemberProfileDialogOpen} onOpenChange={(o) => { if(!o) { setSelectedProfileMember(null); document.body.style.pointerEvents = 'auto'; } setIsMemberProfileDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[340px]">
+        <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
           {selectedProfileMember && (
-            <div className="space-y-4">
-              <DialogHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black text-lg shadow-inner uppercase">{getInitials(selectedProfileMember.name)}</div>
-                    <div className="space-y-0.5">
-                      <DialogTitle className="text-lg font-black uppercase tracking-tight">{selectedProfileMember.name}</DialogTitle>
-                      <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-primary/20 text-primary/70">{selectedProfileMember.paymentType || currentRound?.collectionType}</Badge>
+            <div className="flex flex-col">
+              {/* Top Banner Area */}
+              <div className="bg-primary/5 p-6 pb-8 text-center relative border-b border-border/40">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute right-4 top-4 h-8 w-8 rounded-full hover:bg-white/80 text-primary transition-all shadow-sm border border-border/20"
+                  onClick={() => {
+                    setMemberProfileToEdit({ ...selectedProfileMember });
+                    setIsEditMemberProfileOpen(true);
+                  }}
+                >
+                  <Edit3 className="size-4" />
+                </Button>
+                
+                <div className="mx-auto mb-4 h-20 w-20 rounded-2xl bg-white text-primary flex items-center justify-center font-black text-2xl shadow-lg border-2 border-primary/10 uppercase ring-4 ring-primary/5">
+                  {getInitials(selectedProfileMember.name)}
+                </div>
+                
+                <div className="space-y-1">
+                  <DialogTitle className="text-xl font-black uppercase tracking-tight text-primary">
+                    {selectedProfileMember.name}
+                  </DialogTitle>
+                  <div className="flex items-center justify-center gap-2">
+                    <Badge className="text-[9px] font-black uppercase tracking-widest bg-primary text-white border-none px-3">
+                      {selectedProfileMember.paymentType || currentRound?.collectionType}
+                    </Badge>
+                    <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-widest border-primary/30 text-primary/60 px-2 bg-white/50">
+                      ID: {selectedProfileMember.id.slice(-6).toUpperCase()}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Info Body */}
+              <div className="p-6 space-y-5 bg-white">
+                <div className="grid gap-4">
+                  <div className="flex items-center gap-4 group">
+                    <div className="h-9 w-9 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                      <Phone className="size-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">Phone Contact</span>
+                      <span className="font-bold text-sm tabular-nums text-foreground">{selectedProfileMember.phone}</span>
                     </div>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 rounded-full hover:bg-primary/5 text-primary/40 hover:text-primary transition-all"
-                    onClick={() => {
-                      setMemberProfileToEdit({ ...selectedProfileMember });
-                      setIsEditMemberProfileOpen(true);
-                    }}
-                  >
-                    <Edit3 className="size-4" />
-                  </Button>
+
+                  <div className="flex items-center gap-4 group">
+                    <div className="h-9 w-9 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                      <CalendarDays className="size-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">Registered On</span>
+                      <span className="font-bold text-sm text-foreground">
+                        {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMMM yyyy') : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </DialogHeader>
-              <div className="grid gap-3 py-2">
-                <div className="flex justify-between items-center p-2.5 bg-muted/30 rounded-xl"><span className="text-[10px] font-bold uppercase text-muted-foreground">Phone</span><span className="font-bold text-xs tabular-nums">{selectedProfileMember.phone}</span></div>
-                <div className="flex justify-between items-center p-2.5 bg-muted/30 rounded-xl"><span className="text-[10px] font-bold uppercase text-muted-foreground">Joined</span><span className="font-bold text-xs">{selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : '-'}</span></div>
-                <div className="flex justify-between items-center p-2.5 bg-emerald-50 rounded-xl border border-emerald-100"><span className="text-[10px] font-bold uppercase text-emerald-600">Cycle Paid</span><span className="font-black text-emerald-700 tabular-nums text-sm">₹{(totalPaidByMember.get(selectedProfileMember.id) || 0).toLocaleString()}</span></div>
+
+                {/* Financial Spotlight */}
+                <div className="pt-2">
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between shadow-inner relative overflow-hidden group">
+                    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
+                      <IndianRupee className="size-24 text-emerald-900" />
+                    </div>
+                    <div className="relative z-10 space-y-0.5">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80">Cycle Contribution</span>
+                      <p className="text-2xl font-black text-emerald-700 tabular-nums tracking-tighter">
+                        ₹{(totalPaidByMember.get(selectedProfileMember.id) || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md relative z-10">
+                      <Wallet className="size-5" />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <DialogFooter><Button onClick={() => setIsMemberProfileDialogOpen(false)} className="w-full font-bold h-10 rounded-xl uppercase tracking-widest text-[9px]">Close Profile</Button></DialogFooter>
+
+              <div className="p-4 bg-muted/5 border-t border-border/40">
+                <Button 
+                  onClick={() => setIsMemberProfileDialogOpen(false)} 
+                  className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl text-[10px] shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
+                >
+                  Close Profile
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
@@ -816,70 +874,85 @@ export default function RoundsPage() {
 
       {/* Edit Member Profile Dialog */}
       <Dialog open={isEditMemberProfileOpen} onOpenChange={(o) => { if(!o) { setMemberProfileToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditMemberProfileOpen(o); }}>
-        <DialogContent className="sm:max-w-[380px]">
+        <DialogContent className="sm:max-w-[380px] rounded-3xl p-0 overflow-hidden shadow-2xl border-none">
           {memberProfileToEdit && (
-            <form onSubmit={handleUpdateMemberProfile} className="space-y-6">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 font-headline uppercase tracking-tight"><Edit3 className="size-5 text-primary" /> Edit Profile</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Modifying registry for {memberProfileToEdit.name}</DialogDescription>
-              </DialogHeader>
+            <form onSubmit={handleUpdateMemberProfile} className="flex flex-col">
+              <div className="bg-primary p-6 text-white text-center border-b border-white/10">
+                <DialogHeader>
+                  <div className="mx-auto mb-3 h-14 w-14 rounded-2xl bg-white/10 text-white flex items-center justify-center shadow-inner">
+                    <Edit3 className="size-6" />
+                  </div>
+                  <DialogTitle className="text-xl font-black uppercase tracking-tight text-white">Edit Registry</DialogTitle>
+                  <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-white/60">Updating details for {memberProfileToEdit.name}</DialogDescription>
+                </DialogHeader>
+              </div>
               
-              <div className="grid gap-4 py-2">
-                <div className="grid gap-1.5">
-                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Full Name</Label>
-                  <Input 
-                    value={memberProfileToEdit.name} 
-                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} 
-                    required 
-                    className="h-10 rounded-xl text-sm font-bold"
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Phone Number</Label>
-                  <Input 
-                    value={memberProfileToEdit.phone} 
-                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} 
-                    required 
-                    className="h-10 rounded-xl text-sm font-bold tabular-nums"
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Join Date</Label>
-                  <Input 
-                    type="date" 
-                    value={memberProfileToEdit.joinDate} 
-                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} 
-                    required 
-                    className="h-10 rounded-xl text-sm font-bold"
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Collection Type</Label>
-                  <Select 
-                    value={memberProfileToEdit.paymentType || currentRound?.collectionType} 
-                    onValueChange={v => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}
-                  >
-                    <SelectTrigger className="h-10 rounded-xl text-sm font-bold">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Daily">Daily</SelectItem>
-                      <SelectItem value="Monthly">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="p-6 space-y-5 bg-white">
+                <div className="grid gap-4 py-2">
+                  <div className="grid gap-1.5">
+                    <Label className="text-[10px] font-black uppercase text-muted-foreground/70 ml-1">Full Name</Label>
+                    <Input 
+                      value={memberProfileToEdit.name} 
+                      onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} 
+                      required 
+                      className="h-11 rounded-xl text-sm font-bold border-muted/60 focus:ring-primary/20"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-[10px] font-black uppercase text-muted-foreground/70 ml-1">Phone Number</Label>
+                    <Input 
+                      value={memberProfileToEdit.phone} 
+                      onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} 
+                      required 
+                      className="h-11 rounded-xl text-sm font-bold tabular-nums border-muted/60 focus:ring-primary/20"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-[10px] font-black uppercase text-muted-foreground/70 ml-1">Join Date</Label>
+                    <Input 
+                      type="date" 
+                      value={memberProfileToEdit.joinDate} 
+                      onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} 
+                      required 
+                      className="h-11 rounded-xl text-sm font-bold border-muted/60 focus:ring-primary/20"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-[10px] font-black uppercase text-muted-foreground/70 ml-1">Collection Type</Label>
+                    <Select 
+                      value={memberProfileToEdit.paymentType || currentRound?.collectionType} 
+                      onValueChange={v => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}
+                    >
+                      <SelectTrigger className="h-11 rounded-xl text-sm font-bold border-muted/60 focus:ring-primary/20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Daily">Daily</SelectItem>
+                        <SelectItem value="Monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
-              <DialogFooter>
+              <div className="p-4 bg-muted/5 border-t border-border/40 flex flex-col gap-3">
                 <Button 
                   type="submit" 
                   disabled={isActionPending} 
-                  className="w-full h-11 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all"
+                  className="w-full h-12 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all"
                 >
                   {isActionPending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />}
-                  Update Details
+                  Save Profile
                 </Button>
-              </DialogFooter>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  onClick={() => setIsEditMemberProfileOpen(false)} 
+                  className="w-full h-10 font-bold uppercase tracking-widest text-[9px] text-muted-foreground"
+                >
+                  Cancel
+                </Button>
+              </div>
             </form>
           )}
         </DialogContent>
