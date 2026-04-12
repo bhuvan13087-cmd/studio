@@ -547,6 +547,7 @@ export default function RoundsPage() {
       toast({ variant: "destructive", title: "Duplicate Entry", description: "Already paid for this date." });
       return;
     }
+    setIsQuickPaymentDialogOpen(true);
     setIsActionPending(true);
     try {
       const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(currentRound.name).trim() && c.status === 'active');
@@ -786,7 +787,7 @@ export default function RoundsPage() {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="absolute right-3 top-3 h-7 w-7 rounded-full hover:bg-white/80 text-primary transition-all shadow-sm border border-border/20"
+                  className="absolute left-3 top-3 h-7 w-7 rounded-full hover:bg-white/80 text-primary transition-all shadow-sm border border-border/20"
                   onClick={() => {
                     setMemberProfileToEdit({ ...selectedProfileMember });
                     setIsEditMemberProfileOpen(true);
