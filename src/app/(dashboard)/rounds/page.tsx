@@ -808,9 +808,9 @@ export default function RoundsPage() {
                     <Badge className="text-[8px] font-black uppercase tracking-widest bg-primary text-white border-none px-2.5 h-4">
                       {selectedProfileMember.paymentType || currentRound?.collectionType}
                     </Badge>
-                    <Badge variant="outline" className="text-[8px] font-bold uppercase tracking-widest border-primary/30 text-primary/60 px-1.5 h-4 bg-white/50">
-                      ID: {selectedProfileMember.id.slice(-6).toUpperCase()}
-                    </Badge>
+                    <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest ml-1">
+                      • Joined {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : 'N/A'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -964,7 +964,12 @@ export default function RoundsPage() {
         <DialogContent className="sm:max-w-[320px]">
           {selectedPendingMember && (
             <div className="space-y-4">
-              <DialogHeader><DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight"><Clock className="size-4 text-destructive" /> Arrears Detail</DialogTitle><DialogDescription className="text-[9px] font-bold uppercase tracking-widest truncate">{selectedPendingMember.name}</DialogDescription></DialogHeader>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight"><Clock className="size-4 text-destructive" /> Arrears Detail</DialogTitle>
+                <DialogDescription className="text-[9px] font-bold uppercase tracking-widest truncate">
+                  {selectedPendingMember.name} • Joined {selectedPendingMember.joinDate ? format(parseISO(selectedPendingMember.joinDate), 'dd MMM yyyy') : 'N/A'}
+                </DialogDescription>
+              </DialogHeader>
               
               <div className="p-5 bg-destructive/5 rounded-2xl border border-dashed border-destructive/20 text-center space-y-2">
                 <div className="space-y-0"><p className="text-[8px] font-black uppercase tracking-[0.2em] text-destructive/60">Estimated Debt</p><div className="text-3xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}</div></div>
