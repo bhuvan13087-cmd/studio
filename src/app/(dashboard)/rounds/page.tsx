@@ -782,12 +782,25 @@ export default function RoundsPage() {
           {selectedProfileMember && (
             <div className="space-y-4">
               <DialogHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black text-lg shadow-inner uppercase">{getInitials(selectedProfileMember.name)}</div>
-                  <div className="space-y-0.5">
-                    <DialogTitle className="text-lg font-black uppercase tracking-tight">{selectedProfileMember.name}</DialogTitle>
-                    <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-primary/20 text-primary/70">{selectedProfileMember.paymentType || currentRound?.collectionType}</Badge>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black text-lg shadow-inner uppercase">{getInitials(selectedProfileMember.name)}</div>
+                    <div className="space-y-0.5">
+                      <DialogTitle className="text-lg font-black uppercase tracking-tight">{selectedProfileMember.name}</DialogTitle>
+                      <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-primary/20 text-primary/70">{selectedProfileMember.paymentType || currentRound?.collectionType}</Badge>
+                    </div>
                   </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 rounded-full hover:bg-primary/5 text-primary/40 hover:text-primary transition-all"
+                    onClick={() => {
+                      setMemberProfileToEdit({ ...selectedProfileMember });
+                      setIsEditMemberProfileOpen(true);
+                    }}
+                  >
+                    <Edit3 className="size-4" />
+                  </Button>
                 </div>
               </DialogHeader>
               <div className="grid gap-3 py-2">
@@ -797,6 +810,77 @@ export default function RoundsPage() {
               </div>
               <DialogFooter><Button onClick={() => setIsMemberProfileDialogOpen(false)} className="w-full font-bold h-10 rounded-xl uppercase tracking-widest text-[9px]">Close Profile</Button></DialogFooter>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member Profile Dialog */}
+      <Dialog open={isEditMemberProfileOpen} onOpenChange={(o) => { if(!o) { setMemberProfileToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditMemberProfileOpen(o); }}>
+        <DialogContent className="sm:max-w-[380px]">
+          {memberProfileToEdit && (
+            <form onSubmit={handleUpdateMemberProfile} className="space-y-6">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 font-headline uppercase tracking-tight"><Edit3 className="size-5 text-primary" /> Edit Profile</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Modifying registry for {memberProfileToEdit.name}</DialogDescription>
+              </DialogHeader>
+              
+              <div className="grid gap-4 py-2">
+                <div className="grid gap-1.5">
+                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Full Name</Label>
+                  <Input 
+                    value={memberProfileToEdit.name} 
+                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} 
+                    required 
+                    className="h-10 rounded-xl text-sm font-bold"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Phone Number</Label>
+                  <Input 
+                    value={memberProfileToEdit.phone} 
+                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} 
+                    required 
+                    className="h-10 rounded-xl text-sm font-bold tabular-nums"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Join Date</Label>
+                  <Input 
+                    type="date" 
+                    value={memberProfileToEdit.joinDate} 
+                    onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} 
+                    required 
+                    className="h-10 rounded-xl text-sm font-bold"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Collection Type</Label>
+                  <Select 
+                    value={memberProfileToEdit.paymentType || currentRound?.collectionType} 
+                    onValueChange={v => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}
+                  >
+                    <SelectTrigger className="h-10 rounded-xl text-sm font-bold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Daily">Daily</SelectItem>
+                      <SelectItem value="Monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button 
+                  type="submit" 
+                  disabled={isActionPending} 
+                  className="w-full h-11 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all"
+                >
+                  {isActionPending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Save className="size-4 mr-2" />}
+                  Update Details
+                </Button>
+              </DialogFooter>
+            </form>
           )}
         </DialogContent>
       </Dialog>
