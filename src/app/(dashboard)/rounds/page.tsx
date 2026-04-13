@@ -665,7 +665,7 @@ export default function RoundsPage() {
       <div className="space-y-8 animate-in fade-in duration-500 pb-10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1.5"><h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary font-headline uppercase">Seat Reservations</h2><p className="text-sm text-muted-foreground font-medium">Manage schemes and isolated audit periods.</p></div>
-          <Button onClick={() => setIsAddChitDialogOpen(true)} className="font-bold gap-2 px-6 h-11 shadow-lg bg-primary hover:bg-primary/90 active:scale-95 transition-all"><Plus className="size-5" /> Add Scheme</Button>
+          <Button onClick={() => setIsAddChitDialogOpen(true)} className="font-bold gap-2 px-6 h-11 shadow-lg bg-primary hover:bg-primary/90 active:scale-[0.98] transition-all"><Plus className="size-5" /> Add Scheme</Button>
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {chitSchemes.map((group) => {
@@ -686,17 +686,19 @@ export default function RoundsPage() {
                   <GroupCycleControl group={group} latestCycle={activeCycle || (allCycles || []).find(c => String(c.name).trim() === String(group.name).trim())} />
                 </div>
                 <CardHeader className="p-5 pb-3 space-y-1.5 border-b border-border/40">
-                  <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">{group.collectionType}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">{group.collectionType}</Badge>
+                    {cycleDuration !== null && cycleDuration > 0 && (
+                      <Badge variant="secondary" className="text-[9px] font-black tracking-tighter bg-emerald-50 text-emerald-700 border-none px-2 h-4">
+                        {cycleDuration} Days
+                      </Badge>
+                    )}
+                  </div>
                   <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate pr-16">{getDisplayName(group.name)}</CardTitle>
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
                     <Calendar className="size-3 text-primary/40" />
                     {activeCycle ? (
-                      <>
-                        {format(parseISO(activeCycle.startDate), 'MMM dd')} → {format(parseISO(activeCycle.endDate), 'MMM dd')}
-                        {cycleDuration !== null && cycleDuration > 0 && (
-                          <span className="ml-1 pl-1 border-l border-border/60 text-primary/70">{cycleDuration} Days</span>
-                        )}
-                      </>
+                      <>{format(parseISO(activeCycle.startDate), 'MMM dd')} → {format(parseISO(activeCycle.endDate), 'MMM dd')}</>
                     ) : 'No Active Cycle'}
                   </div>
                 </CardHeader>
@@ -795,10 +797,10 @@ export default function RoundsPage() {
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-10 w-10 shadow-sm active:scale-95 transition-all"><ChevronLeft className="size-5" /></Button>
+          <Button variant="outline" size="icon" onClick={() => setSelectedChitId(null)} className="rounded-full h-10 w-10 shadow-sm active:scale-[0.98] transition-all"><ChevronLeft className="size-5" /></Button>
           <div className="min-w-0"><div className="flex items-center gap-2 mb-1"><h2 className="text-xl sm:text-2xl font-black truncate tracking-tight text-primary font-headline uppercase">{currentRound?.name}</h2><Badge variant="secondary" className="text-[9px] font-black tracking-tighter bg-primary/10 text-primary border-none">{currentRound?.collectionType}</Badge></div></div>
         </div>
-        <div className="flex items-center gap-3"><Button onClick={() => setIsAddMemberDialogOpen(true)} className="font-bold gap-2 h-11 px-6 shadow-lg active:scale-95 transition-all"><UserPlus className="size-5" /> Add Member</Button></div>
+        <div className="flex items-center gap-3"><Button onClick={() => setIsAddMemberDialogOpen(true)} className="font-bold gap-2 h-11 px-6 shadow-lg active:scale-[0.98] transition-all"><UserPlus className="size-5" /> Add Member</Button></div>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -905,7 +907,7 @@ export default function RoundsPage() {
                     <Button 
                       type="submit" 
                       disabled={isActionPending} 
-                      className="w-full h-10 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all text-[9px]"
+                      className="w-full h-10 font-black uppercase tracking-[0.2em] shadow-lg active:scale-[0.98] transition-all text-[9px]"
                     >
                       {isActionPending ? <Loader2 className="size-3 mr-2 animate-spin" /> : <Save className="size-3 mr-2" />}
                       Save Profile
@@ -1007,7 +1009,7 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Arrears Detail popup */}
+      {/* Pending Details popup */}
       <Dialog open={isPendingDetailsOpen} onOpenChange={(o) => { if(!o) { setSelectedPendingMember(null); document.body.style.pointerEvents = 'auto'; } setIsPendingDetailsOpen(o); }}>
         <DialogContent 
           className="sm:max-w-[310px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl"
@@ -1017,7 +1019,7 @@ export default function RoundsPage() {
         >
           {selectedPendingMember && (
             <div className="flex flex-col">
-              <div className="bg-primary/5 p-4 text-center relative border-b border-primary/10">
+              <div className="bg-primary/5 p-4 text-center relative border-b border-border/40">
                 <div className="mx-auto mb-2 h-12 w-12 rounded-2xl bg-white text-primary flex items-center justify-center shadow-lg border-2 border-primary/10 ring-4 ring-primary/5">
                   <History className="size-6" />
                 </div>
@@ -1026,7 +1028,7 @@ export default function RoundsPage() {
                   <DialogTitle className="text-lg font-black uppercase tracking-tight text-primary leading-tight text-center">
                     Pending Details
                   </DialogTitle>
-                  <DialogDescription className="text-sm font-black text-primary/90 px-4 text-center">
+                  <DialogDescription className="text-sm font-black text-primary px-4 text-center">
                     {selectedPendingMember.name}
                   </DialogDescription>
                 </div>
@@ -1065,7 +1067,6 @@ export default function RoundsPage() {
                               <CalendarDays className="size-3.5 text-primary/40" />
                               <span className="text-[11px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
                             </div>
-                            <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter border-primary/10 text-primary bg-primary/5 h-3.5 px-1">Unpaid</Badge>
                           </div>
                         ))
                       ) : (
@@ -1137,7 +1138,7 @@ export default function RoundsPage() {
               <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Join Date</Label><Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required className="h-10 rounded-xl text-sm font-bold border-muted/60" /></div>
               <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Payment Mode</Label><Select value={newMember.paymentType} onValueChange={v => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-10 rounded-xl text-sm font-bold border-muted/60"><SelectValue placeholder="Inherit" /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
             </div>
-            <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-[0.1em] shadow-md">Complete Registration</Button></DialogFooter>
+            <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-[0.1em] shadow-md active:scale-[0.98]">Complete Registration</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
