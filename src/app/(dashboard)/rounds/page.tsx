@@ -253,8 +253,7 @@ export default function RoundsPage() {
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false)
   const [isQuickPaymentDialogOpen, setIsQuickPaymentDialogOpen] = useState(false)
   const [isMemberProfileDialogOpen, setIsMemberProfileDialogOpen] = useState(false)
-  const [isEditMemberProfileOpen, setIsEditMemberProfileOpen] = useState(false)
-  const [memberProfileToEdit, setMemberProfileToEdit] = useState<any>(null)
+  const [isEditingMember, setIsEditingMember] = useState(false)
   const [isPendingDetailsOpen, setIsPendingDetailsOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isActionPending, setIsActionPending] = useState(false)
@@ -290,9 +289,6 @@ export default function RoundsPage() {
 
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: allPayments } = useCollection(paymentsQuery);
-
-  const testPaymentsQuery = useMemoFirebase(() => collection(db, 'payments'), [db]);
-  const { data: testPayments } = useCollection(testPaymentsQuery);
 
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db]);
   const { data: allCycles } = useCollection(cyclesQuery);
@@ -643,15 +639,23 @@ export default function RoundsPage() {
 
   const handleUpdateMemberProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db || !memberProfileToEdit || isActionPending) return;
+    if (!db || !selectedProfileMember || isActionPending) return;
     setIsActionPending(true);
     try {
-      await updateDoc(doc(db, 'members', memberProfileToEdit.id), { name: memberProfileToEdit.name, phone: memberProfileToEdit.phone, joinDate: memberProfileToEdit.joinDate, paymentType: memberProfileToEdit.paymentType });
-      await createAuditLog(db, user, `Updated member profile: ${memberProfileToEdit.name}`);
-      setIsEditMemberProfileOpen(false);
-      setIsMemberProfileDialogOpen(false);
+      await updateDoc(doc(db, 'members', selectedProfileMember.id), { 
+        name: selectedProfileMember.name, 
+        phone: selectedProfileMember.phone, 
+        joinDate: selectedProfileMember.joinDate, 
+        paymentType: selectedProfileMember.paymentType 
+      });
+      await createAuditLog(db, user, `Updated member profile: ${selectedProfileMember.name}`);
+      setIsEditingMember(false);
       toast({ title: "Profile Updated", description: "Details saved successfully." });
-    } catch (e: any) { toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update profile." }); } finally { setIsActionPending(false); document.body.style.pointerEvents = 'auto'; }
+    } catch (e: any) { 
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update profile." }); 
+    } finally { 
+      setIsActionPending(false); 
+    }
   }
 
   if (isRoleLoading || isRoundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
@@ -796,7 +800,7 @@ export default function RoundsPage() {
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => (
                 <TableRow key={m.id} className="hover:bg-muted/5 transition-colors group">
-                  <TableCell className="pl-6 py-4"><div className="flex items-center gap-4 cursor-pointer" onClick={() => { setSelectedProfileMember(m); setIsMemberProfileDialogOpen(true); }}><div className="h-10 w-10 rounded-xl bg-secondary text-primary flex items-center justify-center font-black text-xs uppercase">{getInitials(m.name)}</div><div className="flex flex-col min-w-0"><span className="text-sm font-bold truncate tracking-tight">{m.name}</span><span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{m.paymentType || currentRound?.collectionType}</span></div></div></TableCell>
+                  <TableCell className="pl-6 py-4"><div className="flex items-center gap-4 cursor-pointer" onClick={() => { setSelectedProfileMember(m); setIsEditingMember(false); setIsMemberProfileDialogOpen(true); }}><div className="h-10 w-10 rounded-xl bg-secondary text-primary flex items-center justify-center font-black text-xs uppercase">{getInitials(m.name)}</div><div className="flex flex-col min-w-0"><span className="text-sm font-bold truncate tracking-tight">{m.name}</span><span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{m.paymentType || currentRound?.collectionType}</span></div></div></TableCell>
                   <TableCell><button onClick={() => { setSelectedPendingMember(m); setIsPendingDetailsOpen(true); }} className={cn("px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest tabular-nums", m.calculatedPendingDays > 0 ? "text-destructive font-bold" : "text-muted-foreground/40")}>{m.calculatedPendingDays} Days</button></TableCell>
                   <TableCell><Badge variant={m.memberStatus === 'paid' ? 'default' : 'secondary'} className={cn("text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none shadow-sm", m.memberStatus === 'paid' ? "bg-emerald-500" : (m.memberStatus === 'waiting' ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"))}>{m.memberStatus.toUpperCase()}</Badge></TableCell>
                   <TableCell className="text-right pr-6"><div className="flex items-center justify-end gap-1.5"><Button variant="ghost" size="icon" className={cn("h-9 w-9 rounded-xl transition-all", m.memberStatus === 'paid' ? "text-emerald-500 bg-emerald-50" : "text-emerald-600 hover:bg-emerald-50 active:scale-90")} disabled={m.memberStatus === 'paid' || isActionPending || !currentActiveCycle} onClick={() => { setSelectedMemberForPayment(m); setPaymentData({ ...INITIAL_PAYMENT_STATE, amount: m.monthlyAmount || currentRound?.monthlyAmount || 800, date: format(new Date(), 'yyyy-MM-dd') }); setIsQuickPaymentDialogOpen(true); }}><IndianRupee className="size-4.5" /></Button><Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:bg-muted/50 rounded-xl" onClick={() => { setHistoryMember(m); setIsHistoryDialogOpen(true); }}><History className="size-4.5" /></Button></div></TableCell>
@@ -807,8 +811,8 @@ export default function RoundsPage() {
         </div>
       </div>
 
-      {/* Member Profile Dialog */}
-      <Dialog open={isMemberProfileDialogOpen} onOpenChange={(o) => { if(!o) { setSelectedProfileMember(null); document.body.style.pointerEvents = 'auto'; } setIsMemberProfileDialogOpen(o); }}>
+      {/* Member Profile Dialog (Merged View/Edit) */}
+      <Dialog open={isMemberProfileDialogOpen} onOpenChange={(o) => { if(!o) { setSelectedProfileMember(null); setIsEditingMember(false); document.body.style.pointerEvents = 'auto'; } setIsMemberProfileDialogOpen(o); }}>
         <DialogContent 
           className="sm:max-w-[310px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl"
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -817,183 +821,174 @@ export default function RoundsPage() {
         >
           {selectedProfileMember && (
             <div className="flex flex-col">
-              <div className="bg-primary/5 p-4 pb-5 text-center relative border-b border-border/40">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="absolute left-3 top-3 h-7 w-7 rounded-full hover:bg-white/80 text-primary transition-all shadow-sm border border-border/20"
-                  onClick={() => {
-                    setMemberProfileToEdit({ ...selectedProfileMember });
-                    setIsEditMemberProfileOpen(true);
-                  }}
-                >
-                  <Edit3 className="size-3.5" />
-                </Button>
-                
-                <div className="mx-auto mb-2 h-14 w-14 rounded-2xl bg-white text-primary flex items-center justify-center font-black text-lg shadow-lg border-2 border-primary/10 uppercase ring-4 ring-primary/5">
-                  {getInitials(selectedProfileMember.name)}
-                </div>
-                
-                <div className="space-y-0.5">
-                  <DialogTitle className="text-base font-black uppercase tracking-tight text-primary truncate px-2 text-center">
-                    {selectedProfileMember.name}
-                  </DialogTitle>
-                  <div className="flex items-center justify-center">
-                    <Badge className="text-[8px] font-black uppercase tracking-widest bg-primary text-white border-none px-2.5 h-4">
-                      {selectedProfileMember.paymentType || currentRound?.collectionType}
-                    </Badge>
+              {isEditingMember ? (
+                /* EDIT VIEW */
+                <form onSubmit={handleUpdateMemberProfile} className="flex flex-col">
+                  <div className="bg-primary p-4 text-white text-center border-b border-white/10">
+                    <DialogHeader>
+                      <div className="mx-auto mb-2 h-10 w-10 rounded-2xl bg-white/10 text-white flex items-center justify-center shadow-inner">
+                        <Edit3 className="size-4" />
+                      </div>
+                      <DialogTitle className="text-base font-black uppercase tracking-tight text-white">Edit Registry</DialogTitle>
+                      <DialogDescription className="text-[8px] font-bold uppercase tracking-widest text-white/60">Member Details</DialogDescription>
+                    </DialogHeader>
                   </div>
-                </div>
-              </div>
-
-              <div className="p-4 space-y-3 bg-white">
-                <div className="grid gap-2">
-                  <div className="flex items-center gap-3 group">
-                    <div className="h-7 w-7 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                      <Phone className="size-3" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-0.5">Phone Contact</span>
-                      <span className="font-bold text-[11px] tabular-nums text-foreground">{selectedProfileMember.phone}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 group">
-                    <div className="h-7 w-7 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                      <CalendarDays className="size-3" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-0.5">Joining Date</span>
-                      <span className="font-bold text-[11px] text-foreground">
-                        {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-1">
-                  <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between shadow-inner relative overflow-hidden group">
-                    <div className="absolute -right-3 -bottom-3 opacity-5 group-hover:scale-110 transition-transform duration-500">
-                      <IndianRupee className="size-14 text-emerald-900" />
-                    </div>
-                    <div className="relative z-10 space-y-0">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-emerald-600/80">Cycle Paid</span>
-                      <p className="text-lg font-black text-emerald-700 tabular-nums tracking-tighter">
-                        ₹{(totalPaidByMember.get(selectedProfileMember.id) || 0).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="h-8 w-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md relative z-10">
-                      <Wallet className="size-3.5" />
+                  
+                  <div className="p-4 space-y-3 bg-white">
+                    <div className="grid gap-3 py-1">
+                      <div className="grid gap-1">
+                        <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Full Name</Label>
+                        <Input 
+                          value={selectedProfileMember.name} 
+                          onChange={e => setSelectedProfileMember({...selectedProfileMember, name: e.target.value})} 
+                          required 
+                          className="h-9 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Phone Number</Label>
+                        <Input 
+                          value={selectedProfileMember.phone} 
+                          onChange={e => setSelectedProfileMember({...selectedProfileMember, phone: e.target.value})} 
+                          required 
+                          className="h-9 rounded-xl text-xs font-bold tabular-nums border-muted/60 focus:ring-primary/20"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Join Date</Label>
+                        <Input 
+                          type="date" 
+                          value={selectedProfileMember.joinDate} 
+                          onChange={e => setSelectedProfileMember({...selectedProfileMember, joinDate: e.target.value})} 
+                          required 
+                          className="h-9 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Mode</Label>
+                        <Select 
+                          value={selectedProfileMember.paymentType || currentRound?.collectionType} 
+                          onValueChange={v => setSelectedProfileMember({...selectedProfileMember, paymentType: v})}
+                        >
+                          <SelectTrigger className="h-9 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Daily">Daily</SelectItem>
+                            <SelectItem value="Monthly">Monthly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="p-3 bg-muted/5 border-t border-border/40">
-                <Button 
-                  onClick={() => setIsMemberProfileDialogOpen(false)} 
-                  className="w-full font-black uppercase tracking-[0.2em] h-10 rounded-xl text-[9px] shadow-sm active:scale-[0.98]"
-                >
-                  Close Profile
-                </Button>
-              </div>
+                  <div className="p-3 bg-muted/5 border-t border-border/40 flex flex-col gap-1.5">
+                    <Button 
+                      type="submit" 
+                      disabled={isActionPending} 
+                      className="w-full h-10 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all text-[9px]"
+                    >
+                      {isActionPending ? <Loader2 className="size-3 mr-2 animate-spin" /> : <Save className="size-3 mr-2" />}
+                      Save Profile
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      onClick={() => setIsEditingMember(false)} 
+                      className="w-full h-8 font-bold uppercase tracking-widest text-[8px] text-muted-foreground"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                /* VIEW MODE */
+                <>
+                  <div className="bg-primary/5 p-4 pb-5 text-center relative border-b border-border/40">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="absolute left-3 top-3 h-7 w-7 rounded-full hover:bg-white/80 text-primary transition-all shadow-sm border border-border/20"
+                      onClick={() => setIsEditingMember(true)}
+                    >
+                      <Edit3 className="size-3.5" />
+                    </Button>
+                    
+                    <div className="mx-auto mb-2 h-14 w-14 rounded-2xl bg-white text-primary flex items-center justify-center font-black text-lg shadow-lg border-2 border-primary/10 uppercase ring-4 ring-primary/5">
+                      {getInitials(selectedProfileMember.name)}
+                    </div>
+                    
+                    <div className="space-y-0.5">
+                      <DialogTitle className="text-base font-black uppercase tracking-tight text-primary truncate px-2 text-center">
+                        {selectedProfileMember.name}
+                      </DialogTitle>
+                      <div className="flex items-center justify-center">
+                        <Badge className="text-[8px] font-black uppercase tracking-widest bg-primary text-white border-none px-2.5 h-4">
+                          {selectedProfileMember.paymentType || currentRound?.collectionType}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 space-y-3 bg-white">
+                    <div className="grid gap-2">
+                      <div className="flex items-center gap-3 group">
+                        <div className="h-7 w-7 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                          <Phone className="size-3" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-0.5">Phone Contact</span>
+                          <span className="font-bold text-[11px] tabular-nums text-foreground">{selectedProfileMember.phone}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 group">
+                        <div className="h-7 w-7 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                          <CalendarDays className="size-3" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-0.5">Joining Date</span>
+                          <span className="font-bold text-[11px] text-foreground">
+                            {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-1">
+                      <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between shadow-inner relative overflow-hidden group">
+                        <div className="absolute -right-3 -bottom-3 opacity-5 group-hover:scale-110 transition-transform duration-500">
+                          <IndianRupee className="size-14 text-emerald-900" />
+                        </div>
+                        <div className="relative z-10 space-y-0">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-emerald-600/80">Cycle Paid</span>
+                          <p className="text-lg font-black text-emerald-700 tabular-nums tracking-tighter">
+                            ₹{(totalPaidByMember.get(selectedProfileMember.id) || 0).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="h-8 w-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md relative z-10">
+                          <Wallet className="size-3.5" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-muted/5 border-t border-border/40">
+                    <Button 
+                      onClick={() => setIsMemberProfileDialogOpen(false)} 
+                      className="w-full font-black uppercase tracking-[0.2em] h-10 rounded-xl text-[9px] shadow-sm active:scale-[0.98]"
+                    >
+                      Close Profile
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Edit Member Profile Dialog */}
-      <Dialog open={isEditMemberProfileOpen} onOpenChange={(o) => { if(!o) { setMemberProfileToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditMemberProfileOpen(o); }}>
-        <DialogContent 
-          className="sm:max-w-[310px] rounded-3xl p-0 overflow-hidden shadow-2xl border-none"
-          onOpenAutoFocus={(e) => e.preventDefault()}
-          onInteractOutside={handlePopupBlur}
-          onEscapeKeyDown={handlePopupBlur}
-        >
-          {memberProfileToEdit && (
-            <form onSubmit={handleUpdateMemberProfile} className="flex flex-col">
-              <div className="bg-primary p-4 text-white text-center border-b border-white/10">
-                <DialogHeader>
-                  <div className="mx-auto mb-2 h-10 w-10 rounded-2xl bg-white/10 text-white flex items-center justify-center shadow-inner">
-                    <Edit3 className="size-4" />
-                  </div>
-                  <DialogTitle className="text-base font-black uppercase tracking-tight text-white">Edit Registry</DialogTitle>
-                  <DialogDescription className="text-[8px] font-bold uppercase tracking-widest text-white/60">Member Details</DialogDescription>
-                </DialogHeader>
-              </div>
-              
-              <div className="p-4 space-y-3 bg-white">
-                <div className="grid gap-3 py-1">
-                  <div className="grid gap-1">
-                    <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Full Name</Label>
-                    <Input 
-                      value={memberProfileToEdit.name} 
-                      onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} 
-                      required 
-                      className="h-9 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20"
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Phone Number</Label>
-                    <Input 
-                      value={memberProfileToEdit.phone} 
-                      onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} 
-                      required 
-                      className="h-9 rounded-xl text-xs font-bold tabular-nums border-muted/60 focus:ring-primary/20"
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Join Date</Label>
-                    <Input 
-                      type="date" 
-                      value={memberProfileToEdit.joinDate} 
-                      onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} 
-                      required 
-                      className="h-9 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20"
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Mode</Label>
-                    <Select 
-                      value={memberProfileToEdit.paymentType || currentRound?.collectionType} 
-                      onValueChange={v => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}
-                    >
-                      <SelectTrigger className="h-9 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Daily">Daily</SelectItem>
-                        <SelectItem value="Monthly">Monthly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-3 bg-muted/5 border-t border-border/40 flex flex-col gap-1.5">
-                <Button 
-                  type="submit" 
-                  disabled={isActionPending} 
-                  className="w-full h-10 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all text-[9px]"
-                >
-                  {isActionPending ? <Loader2 className="size-3 mr-2 animate-spin" /> : <Save className="size-3 mr-2" />}
-                  Save Profile
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  onClick={() => setIsEditMemberProfileOpen(false)} 
-                  className="w-full h-8 font-bold uppercase tracking-widest text-[8px] text-muted-foreground"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Arrears Detail popup Redesign - Compact */}
+      {/* Arrears Detail popup */}
       <Dialog open={isPendingDetailsOpen} onOpenChange={(o) => { if(!o) { setSelectedPendingMember(null); document.body.style.pointerEvents = 'auto'; } setIsPendingDetailsOpen(o); }}>
         <DialogContent 
           className="sm:max-w-[310px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl"

@@ -1,7 +1,8 @@
+
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon, ChevronDown, ShieldCheck, AlertCircle } from "lucide-react"
+import { Search, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon, ChevronDown, ShieldCheck, AlertCircle, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -56,12 +57,19 @@ import { withTimeout } from "@/lib/utils"
 
 const PAGE_SIZE = 50
 
+const handlePopupBlur = (e: any) => {
+  const ae = document.activeElement;
+  if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae instanceof HTMLSelectElement) {
+    ae.blur();
+    e.preventDefault();
+  }
+};
+
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isEditMemberDialogOpen, setIsEditMemberDialogOpen] = useState(false)
   const [selectedMember, setSelectedMember] = useState<any>(null)
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
-  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isDeactivateMemberDialogOpen, setIsDeactivateMemberDialogOpen] = useState(false)
   const [memberToDeactivate, setMemberToDeactivate] = useState<any>(null)
   const [memberToEdit, setMemberToEdit] = useState<any>(null)
@@ -121,10 +129,8 @@ export default function MembersPage() {
         });
         if (hasPaidThisCycle) { memberStatus = 'paid'; } else {
           const cycleStart = parseISO(activeCycle.startDate);
-          const specificDueDate = scheme?.specificDueDate;
           const numericDueDate = scheme?.dueDate || 5;
-          let isPastDue = false;
-          if (specificDueDate) { isPastDue = isAfter(today, parseISO(specificDueDate)); } else { isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate; }
+          let isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate;
           if (!isPastDue) { memberStatus = 'waiting'; } else { memberStatus = 'pending'; }
         }
       }
@@ -148,12 +154,48 @@ export default function MembersPage() {
 
   const visibleMembers = useMemo(() => filteredMembers.slice(0, displayLimit), [filteredMembers, displayLimit])
 
-  const handleModalClose = (setter: (v: boolean) => void, resetter: () => void) => {
-    setter(false);
-    resetter();
-    document.body.style.pointerEvents = 'auto';
-    document.body.style.overflow = 'auto';
-  };
+  const handleUpdateMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !memberToEdit || isActionPending) return;
+    setIsActionPending(true);
+    try {
+      await updateDoc(doc(db, 'members', memberToEdit.id), { 
+        name: memberToEdit.name, 
+        phone: memberToEdit.phone, 
+        joinDate: memberToEdit.joinDate, 
+        paymentType: memberToEdit.paymentType 
+      });
+      await createAuditLog(db, user, `Updated member profile: ${memberToEdit.name}`);
+      setIsEditMemberDialogOpen(false);
+      setMemberToEdit(null);
+      toast({ title: "Profile Updated", description: "Details saved successfully." });
+    } catch (e: any) { 
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update member." }); 
+    } finally { 
+      setIsActionPending(false); 
+      document.body.style.pointerEvents = 'auto';
+    }
+  }
+
+  const handleDeactivateMember = async () => {
+    if (!db || !memberToDeactivate || isActionPending) return;
+    setIsActionPending(true);
+    try {
+      await updateDoc(doc(db, 'members', memberToDeactivate.id), { 
+        status: "inactive",
+        deactivatedAt: new Date().toISOString()
+      });
+      await createAuditLog(db, user, `Deactivated member: ${memberToDeactivate.name}`);
+      setIsDeactivateMemberDialogOpen(false);
+      setMemberToDeactivate(null);
+      toast({ title: "Member Deactivated", description: "Seat is now marked as inactive." });
+    } catch (e: any) { 
+      toast({ variant: "destructive", title: "Error", description: e.message || "Failed to deactivate." }); 
+    } finally { 
+      setIsActionPending(false); 
+      document.body.style.pointerEvents = 'auto';
+    }
+  }
 
   if (isRoleLoading) return (<div className="flex min-h-[400px] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
 
@@ -250,6 +292,46 @@ export default function MembersPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={isEditMemberDialogOpen} onOpenChange={(o) => { if(!o) { setMemberToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditMemberDialogOpen(o); }}>
+        <DialogContent 
+          className="sm:max-w-[340px]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={handlePopupBlur}
+          onEscapeKeyDown={handlePopupBlur}
+        >
+          {memberToEdit && (
+            <form onSubmit={handleUpdateMember} className="space-y-6">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><Pencil className="size-5 text-primary" /> Edit Registry</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold uppercase text-muted-foreground">Modify participant metadata.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-2">
+                <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Full Name</Label><Input value={memberToEdit.name} onChange={e => setMemberToEdit({...memberToEdit, name: e.target.value})} required className="h-10 rounded-xl font-bold" /></div>
+                <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Phone Number</Label><Input value={memberToEdit.phone} onChange={e => setMemberToEdit({...memberToEdit, phone: e.target.value})} required className="h-10 rounded-xl font-bold tabular-nums" /></div>
+                <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Join Date</Label><Input type="date" value={memberToEdit.joinDate} onChange={e => setMemberToEdit({...memberToEdit, joinDate: e.target.value})} required className="h-10 rounded-xl font-bold" /></div>
+                <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Mode</Label><Select value={memberToEdit.paymentType || "Daily"} onValueChange={v => setMemberToEdit({...memberToEdit, paymentType: v})}><SelectTrigger className="h-10 rounded-xl font-bold"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
+              </div>
+              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-widest shadow-md">{isActionPending ? <Loader2 className="mr-2 size-3 animate-spin" /> : <Save className="size-3 mr-2" />} Save Profile</Button></DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Deactivate AlertDialog */}
+      <AlertDialog open={isDeactivateMemberDialogOpen} onOpenChange={(o) => { if(!o) { setMemberToDeactivate(null); document.body.style.pointerEvents = 'auto'; } setIsDeactivateMemberDialogOpen(o); }}>
+        <AlertDialogContent className="sm:max-w-[340px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive font-headline uppercase">Deactivate Member?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs font-medium">This will move <strong>{memberToDeactivate?.name}</strong> to the inactive archive. Their seat will become vacant.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2">
+            <AlertDialogAction onClick={handleDeactivateMember} disabled={isActionPending} className="bg-destructive hover:bg-destructive/90 h-11 font-black uppercase tracking-widest w-full">Confirm Deactivation</AlertDialogAction>
+            <AlertDialogCancel className="h-10 font-bold uppercase text-[10px] w-full border-muted/60">Keep Active</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
