@@ -523,18 +523,26 @@ export default function RoundsPage() {
 
   const reconciliationCycles = useMemo(() => {
     if (!activePopupGroupName || !allCycles) return [];
+    
+    const allGroupCycles = allCycles.filter(c => String(c?.name || "").trim().toLowerCase() === activePopupGroupName.toLowerCase());
+    
     const uniqueMap = new Map<string, any>();
-    allCycles
-      .filter(c => String(c?.name || "").trim().toLowerCase() === activePopupGroupName.toLowerCase())
-      .forEach(c => {
-        const start = String(c?.startDate || "-");
-        const existing = uniqueMap.get(start);
-        if (!existing || (c.status === 'active' && existing.status !== 'active')) {
-          uniqueMap.set(start, c);
-        }
-      });
+    allGroupCycles.forEach(c => {
+      const start = String(c?.startDate || "-");
+      const existing = uniqueMap.get(start);
+      if (!existing || (c.status === 'active' && existing.status !== 'active')) {
+        uniqueMap.set(start, c);
+      }
+    });
 
-    return Array.from(uniqueMap.values())
+    const sortedFull = Array.from(uniqueMap.values()).sort((a, b) => a.startDate.localeCompare(b.startDate));
+    
+    const numbered = sortedFull.map((c, i) => ({
+      ...c,
+      displayLabel: `Cycle ${i + 1}`
+    }));
+
+    return numbered
       .filter(c => !viewYear || format(parseISO(c.startDate), 'yyyy') === viewYear)
       .sort((a, b) => b.startDate.localeCompare(a.startDate));
   }, [activePopupGroupName, allCycles, viewYear]);
@@ -721,7 +729,7 @@ export default function RoundsPage() {
                 <div className="space-y-4 py-2">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-muted-foreground">Year</Label><Select value={viewYear} onValueChange={setViewYear}><SelectTrigger className="h-9 text-xs font-bold rounded-xl"><SelectValue /></SelectTrigger><SelectContent>{YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-muted-foreground">Cycle</Label><Select value={selectedReconciliationCycleId || ""} onValueChange={setSelectedReconciliationCycleId}><SelectTrigger className="h-9 text-xs font-bold rounded-xl"><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{reconciliationCycles.length > 0 ? reconciliationCycles.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.startDate}</SelectItem>) : <div className="p-4 text-center text-[9px] font-bold uppercase text-muted-foreground italic">Empty</div>}</SelectContent></Select></div>
+                    <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-muted-foreground">Cycle</Label><Select value={selectedReconciliationCycleId || ""} onValueChange={setSelectedReconciliationCycleId}><SelectTrigger className="h-9 text-xs font-bold rounded-xl"><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{reconciliationCycles.length > 0 ? reconciliationCycles.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.displayLabel} ({format(parseISO(c.startDate), 'MMM dd')})</SelectItem>) : <div className="p-4 text-center text-[9px] font-bold uppercase text-muted-foreground italic">No cycles available</div>}</SelectContent></Select></div>
                   </div>
                   <div className="flex flex-col items-center justify-center p-5 bg-emerald-50 rounded-2xl border border-dashed border-emerald-200 text-center"><p className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-600/60 mb-1.5">Verified Total</p><div className="text-3xl font-black text-emerald-600 tabular-nums tracking-tighter">₹{reconciliationTotal.toLocaleString()}</div></div>
                 </div>
@@ -746,7 +754,7 @@ export default function RoundsPage() {
                 <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Max Members</Label><Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(newChit.totalMembers)})} required className="h-10 rounded-xl text-sm font-bold" /></div>
                 <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Collection Type</Label><Select value={newChit.collectionType} onValueChange={(v) => setNewChit({...newChit, collectionType: v})}><SelectTrigger className="h-10 rounded-xl font-bold"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
               </div>
-              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-[0.1em] shadow-md active:scale-[0.98] transition-all">{isActionPending ? <Loader2 className="mr-2 size-3 animate-spin" /> : null}Create Scheme</Button></DialogFooter>
+              <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-[0.1em] shadow-md active:scale-[0.98] transition-all">{isActionPending ? <Loader2 className="size-3 mr-2 animate-spin" /> : null}Create Scheme</Button></DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
@@ -799,7 +807,7 @@ export default function RoundsPage() {
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Base Rate</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums tracking-tight">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Scheme Amount</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums tracking-tight">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Occupancy</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums tracking-tight">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Pending</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-amber-600 tracking-tight">{assignedMembers.filter(m => m.memberStatus === 'pending').length}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl">
