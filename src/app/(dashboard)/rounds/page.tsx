@@ -725,7 +725,7 @@ export default function RoundsPage() {
           >
             {activePopupGroupName && (
               <>
-                <DialogHeader><DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight"><Wallet className="size-4 text-primary" />Reconciliation</DialogTitle><DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">{getDisplayName(activePopupGroupName)} Summary</DialogDescription></DialogHeader>
+                <DialogHeader><DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight"><Wallet className="size-4 text-primary" />Total Collections</DialogTitle><DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">{getDisplayName(activePopupGroupName)} Summary</DialogDescription></DialogHeader>
                 <div className="space-y-4 py-2">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-muted-foreground">Year</Label><Select value={viewYear} onValueChange={setViewYear}><SelectTrigger className="h-9 text-xs font-bold rounded-xl"><SelectValue /></SelectTrigger><SelectContent>{YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select></div>
