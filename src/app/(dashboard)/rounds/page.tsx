@@ -278,6 +278,9 @@ export default function RoundsPage() {
   const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
   const { data: allPayments } = useCollection(paymentsQuery);
 
+  const testPaymentsQuery = useMemoFirebase(() => collection(db, 'payments'), [db]);
+  const { data: testPayments } = useCollection(testPaymentsQuery);
+
   const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db]);
   const { data: allCycles } = useCollection(cyclesQuery);
 
@@ -778,11 +781,10 @@ export default function RoundsPage() {
 
       {/* Member Profile Dialog */}
       <Dialog open={isMemberProfileDialogOpen} onOpenChange={(o) => { if(!o) { setSelectedProfileMember(null); document.body.style.pointerEvents = 'auto'; } setIsMemberProfileDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[320px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+        <DialogContent className="sm:max-w-[310px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
           {selectedProfileMember && (
             <div className="flex flex-col">
-              {/* Top Banner Area */}
-              <div className="bg-primary/5 p-5 pb-6 text-center relative border-b border-border/40">
+              <div className="bg-primary/5 p-4 pb-5 text-center relative border-b border-border/40">
                 <Button 
                   variant="ghost" 
                   size="icon" 
@@ -795,12 +797,12 @@ export default function RoundsPage() {
                   <Edit3 className="size-3.5" />
                 </Button>
                 
-                <div className="mx-auto mb-3 h-16 w-16 rounded-2xl bg-white text-primary flex items-center justify-center font-black text-xl shadow-lg border-2 border-primary/10 uppercase ring-4 ring-primary/5">
+                <div className="mx-auto mb-2 h-14 w-14 rounded-2xl bg-white text-primary flex items-center justify-center font-black text-lg shadow-lg border-2 border-primary/10 uppercase ring-4 ring-primary/5">
                   {getInitials(selectedProfileMember.name)}
                 </div>
                 
-                <div className="space-y-1">
-                  <DialogTitle className="text-lg font-black uppercase tracking-tight text-primary truncate px-2">
+                <div className="space-y-0.5">
+                  <DialogTitle className="text-base font-black uppercase tracking-tight text-primary truncate px-2">
                     {selectedProfileMember.name}
                   </DialogTitle>
                   <div className="flex items-center justify-center">
@@ -811,55 +813,53 @@ export default function RoundsPage() {
                 </div>
               </div>
 
-              {/* Info Body */}
-              <div className="p-5 space-y-4 bg-white">
-                <div className="grid gap-3">
-                  <div className="flex items-center gap-3.5 group">
-                    <div className="h-8 w-8 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                      <Phone className="size-3.5" />
+              <div className="p-4 space-y-3 bg-white">
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-3 group">
+                    <div className="h-7 w-7 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                      <Phone className="size-3" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60">Phone Contact</span>
-                      <span className="font-bold text-xs tabular-nums text-foreground">{selectedProfileMember.phone}</span>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-0.5">Phone</span>
+                      <span className="font-bold text-[11px] tabular-nums text-foreground">{selectedProfileMember.phone}</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3.5 group">
-                    <div className="h-8 w-8 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                      <CalendarDays className="size-3.5" />
+                  <div className="flex items-center gap-3 group">
+                    <div className="h-7 w-7 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                      <CalendarDays className="size-3" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60">Joining Date</span>
-                      <span className="font-bold text-xs text-foreground">
-                        {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMMM yyyy') : 'N/A'}
+                      <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-0.5">Joined</span>
+                      <span className="font-bold text-[11px] text-foreground">
+                        {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : 'N/A'}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Financial Spotlight */}
                 <div className="pt-1">
-                  <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between shadow-inner relative overflow-hidden group">
+                  <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between shadow-inner relative overflow-hidden group">
                     <div className="absolute -right-3 -bottom-3 opacity-5 group-hover:scale-110 transition-transform duration-500">
-                      <IndianRupee className="size-16 text-emerald-900" />
+                      <IndianRupee className="size-14 text-emerald-900" />
                     </div>
                     <div className="relative z-10 space-y-0">
                       <span className="text-[8px] font-black uppercase tracking-widest text-emerald-600/80">Cycle Paid</span>
-                      <p className="text-xl font-black text-emerald-700 tabular-nums tracking-tighter">
+                      <p className="text-lg font-black text-emerald-700 tabular-nums tracking-tighter">
                         ₹{(totalPaidByMember.get(selectedProfileMember.id) || 0).toLocaleString()}
                       </p>
                     </div>
-                    <div className="h-9 w-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md relative z-10">
-                      <Wallet className="size-4" />
+                    <div className="h-8 w-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md relative z-10">
+                      <Wallet className="size-3.5" />
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="p-3.5 bg-muted/5 border-t border-border/40">
+              <div className="p-3 bg-muted/5 border-t border-border/40">
                 <Button 
                   onClick={() => setIsMemberProfileDialogOpen(false)} 
-                  className="w-full font-black uppercase tracking-[0.2em] h-11 rounded-xl text-[9px] shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
+                  className="w-full font-black uppercase tracking-[0.2em] h-10 rounded-xl text-[9px] shadow-sm active:scale-[0.98]"
                 >
                   Close Profile
                 </Button>
@@ -871,28 +871,28 @@ export default function RoundsPage() {
 
       {/* Edit Member Profile Dialog */}
       <Dialog open={isEditMemberProfileOpen} onOpenChange={(o) => { if(!o) { setMemberProfileToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditMemberProfileOpen(o); }}>
-        <DialogContent className="sm:max-w-[320px] rounded-3xl p-0 overflow-hidden shadow-2xl border-none">
+        <DialogContent className="sm:max-w-[310px] rounded-3xl p-0 overflow-hidden shadow-2xl border-none">
           {memberProfileToEdit && (
             <form onSubmit={handleUpdateMemberProfile} className="flex flex-col">
-              <div className="bg-primary p-5 text-white text-center border-b border-white/10">
+              <div className="bg-primary p-4 text-white text-center border-b border-white/10">
                 <DialogHeader>
-                  <div className="mx-auto mb-3 h-12 w-12 rounded-2xl bg-white/10 text-white flex items-center justify-center shadow-inner">
-                    <Edit3 className="size-5" />
+                  <div className="mx-auto mb-2 h-10 w-10 rounded-2xl bg-white/10 text-white flex items-center justify-center shadow-inner">
+                    <Edit3 className="size-4" />
                   </div>
-                  <DialogTitle className="text-lg font-black uppercase tracking-tight text-white">Edit Registry</DialogTitle>
-                  <DialogDescription className="text-[9px] font-bold uppercase tracking-widest text-white/60">Member Details</DialogDescription>
+                  <DialogTitle className="text-base font-black uppercase tracking-tight text-white">Edit Registry</DialogTitle>
+                  <DialogDescription className="text-[8px] font-bold uppercase tracking-widest text-white/60">Member Details</DialogDescription>
                 </DialogHeader>
               </div>
               
-              <div className="p-5 space-y-4 bg-white">
-                <div className="grid gap-3.5 py-1">
+              <div className="p-4 space-y-3 bg-white">
+                <div className="grid gap-3 py-1">
                   <div className="grid gap-1">
                     <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Full Name</Label>
                     <Input 
                       value={memberProfileToEdit.name} 
                       onChange={e => setMemberProfileToEdit({...memberProfileToEdit, name: e.target.value})} 
                       required 
-                      className="h-10 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20"
+                      className="h-9 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20"
                     />
                   </div>
                   <div className="grid gap-1">
@@ -901,7 +901,7 @@ export default function RoundsPage() {
                       value={memberProfileToEdit.phone} 
                       onChange={e => setMemberProfileToEdit({...memberProfileToEdit, phone: e.target.value})} 
                       required 
-                      className="h-10 rounded-xl text-xs font-bold tabular-nums border-muted/60 focus:ring-primary/20"
+                      className="h-9 rounded-xl text-xs font-bold tabular-nums border-muted/60 focus:ring-primary/20"
                     />
                   </div>
                   <div className="grid gap-1">
@@ -911,16 +911,16 @@ export default function RoundsPage() {
                       value={memberProfileToEdit.joinDate} 
                       onChange={e => setMemberProfileToEdit({...memberProfileToEdit, joinDate: e.target.value})} 
                       required 
-                      className="h-10 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20"
+                      className="h-9 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20"
                     />
                   </div>
                   <div className="grid gap-1">
-                    <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Collection Type</Label>
+                    <Label className="text-[8px] font-black uppercase text-muted-foreground/70 ml-1">Mode</Label>
                     <Select 
                       value={memberProfileToEdit.paymentType || currentRound?.collectionType} 
                       onValueChange={v => setMemberProfileToEdit({...memberProfileToEdit, paymentType: v})}
                     >
-                      <SelectTrigger className="h-10 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20">
+                      <SelectTrigger className="h-9 rounded-xl text-xs font-bold border-muted/60 focus:ring-primary/20">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -932,11 +932,11 @@ export default function RoundsPage() {
                 </div>
               </div>
 
-              <div className="p-4 bg-muted/5 border-t border-border/40 flex flex-col gap-2">
+              <div className="p-3 bg-muted/5 border-t border-border/40 flex flex-col gap-1.5">
                 <Button 
                   type="submit" 
                   disabled={isActionPending} 
-                  className="w-full h-11 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all text-[10px]"
+                  className="w-full h-10 font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all text-[9px]"
                 >
                   {isActionPending ? <Loader2 className="size-3 mr-2 animate-spin" /> : <Save className="size-3 mr-2" />}
                   Save Profile
@@ -945,7 +945,7 @@ export default function RoundsPage() {
                   type="button" 
                   variant="ghost" 
                   onClick={() => setIsEditMemberProfileOpen(false)} 
-                  className="w-full h-9 font-bold uppercase tracking-widest text-[8px] text-muted-foreground"
+                  className="w-full h-8 font-bold uppercase tracking-widest text-[8px] text-muted-foreground"
                 >
                   Cancel
                 </Button>
@@ -955,71 +955,68 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Arrears Breakdown Dialog Redesign */}
+      {/* Arrears Breakdown Dialog Redesign - Reduced Size */}
       <Dialog open={isPendingDetailsOpen} onOpenChange={(o) => { if(!o) { setSelectedPendingMember(null); document.body.style.pointerEvents = 'auto'; } setIsPendingDetailsOpen(o); }}>
-        <DialogContent className="sm:max-w-[340px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+        <DialogContent className="sm:max-w-[310px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
           {selectedPendingMember && (
             <div className="flex flex-col">
-              {/* Top Banner - Arrears Tint */}
-              <div className="bg-destructive/5 p-6 text-center relative border-b border-destructive/10">
-                <div className="mx-auto mb-3 h-14 w-14 rounded-2xl bg-white text-destructive flex items-center justify-center shadow-lg border-2 border-destructive/10 ring-4 ring-destructive/5">
-                  <AlertCircle className="size-7" />
+              <div className="bg-destructive/5 p-4 text-center relative border-b border-destructive/10">
+                <div className="mx-auto mb-2 h-12 w-12 rounded-2xl bg-white text-destructive flex items-center justify-center shadow-lg border-2 border-destructive/10 ring-4 ring-destructive/5">
+                  <AlertCircle className="size-6" />
                 </div>
                 
-                <div className="space-y-1">
-                  <DialogTitle className="text-xl font-black uppercase tracking-tight text-destructive">
+                <div className="space-y-0.5">
+                  <DialogTitle className="text-lg font-black uppercase tracking-tight text-destructive leading-tight">
                     Arrears Audit
                   </DialogTitle>
-                  <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-destructive/60 truncate px-4">
+                  <DialogDescription className="text-[8px] font-bold uppercase tracking-widest text-destructive/60 truncate px-4">
                     {selectedPendingMember.name} • Joined {selectedPendingMember.joinDate ? format(parseISO(selectedPendingMember.joinDate), 'dd MMM yyyy') : 'N/A'}
                   </DialogDescription>
                 </div>
               </div>
 
-              {/* Financial Spotlight - The Debt */}
-              <div className="p-5 space-y-6 bg-white">
-                <div className="p-4 rounded-2xl bg-destructive/5 border border-destructive/10 flex items-center justify-between shadow-inner relative overflow-hidden group">
+              <div className="p-4 space-y-4 bg-white">
+                <div className="p-3 rounded-2xl bg-destructive/5 border border-destructive/10 flex items-center justify-between shadow-inner relative overflow-hidden group">
                   <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
-                    <IndianRupee className="size-20 text-destructive-foreground fill-destructive" />
+                    <IndianRupee className="size-16 text-destructive-foreground fill-destructive" />
                   </div>
                   <div className="relative z-10">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-destructive/70">Estimated Debt</span>
-                    <p className="text-3xl font-black text-destructive tabular-nums tracking-tighter">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-destructive/70">Estimated Debt</span>
+                    <p className="text-2xl font-black text-destructive tabular-nums tracking-tighter">
                       ₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}
                     </p>
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-destructive text-white flex items-center justify-center shadow-md relative z-10">
-                    <Wallet className="size-5" />
+                  <div className="h-9 w-9 rounded-xl bg-destructive text-white flex items-center justify-center shadow-md relative z-10">
+                    <Wallet className="size-4" />
                   </div>
                 </div>
 
-                {/* Missed Dates Ledger */}
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-1">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Missing Contributions</h4>
-                    <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 px-2 h-5">
-                      {selectedPendingMember.calculatedPendingDays || 0} Missed
+                    <h4 className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/80">Missed Ledger</h4>
+                    <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 px-1.5 h-4">
+                      {selectedPendingMember.calculatedPendingDays || 0} Days
                     </Badge>
                   </div>
                   
-                  <ScrollArea className="h-[160px] rounded-2xl border border-border/40 bg-muted/5 p-2 shadow-inner">
-                    <div className="grid gap-1.5">
+                  <ScrollArea className="h-[130px] rounded-2xl border border-border/40 bg-muted/5 p-1.5 shadow-inner">
+                    <div className="grid gap-1">
                       {missedDatesForSelectedMember.length > 0 ? (
                         missedDatesForSelectedMember.map((dateStr, idx) => (
-                          <div key={idx} className="flex items-center justify-between px-3 py-2.5 bg-white rounded-xl border border-border/40 shadow-sm hover:border-destructive/30 transition-all group">
-                            <div className="flex items-center gap-3">
-                              <div className="h-7 w-7 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-destructive/10 group-hover:text-destructive transition-colors">
-                                <CalendarDays className="size-3.5" />
+                          <div key={idx} className="flex items-center justify-between px-2.5 py-2 bg-white rounded-xl border border-border/40 shadow-sm hover:border-destructive/30 transition-all group">
+                            <div className="flex items-center gap-2.5">
+                              <div className="h-6 w-6 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-destructive/10 group-hover:text-destructive transition-colors">
+                                <CalendarDays className="size-3" />
                               </div>
-                              <span className="text-[11px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
+                              <span className="text-[10px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
                             </div>
-                            <span className="text-[8px] font-black uppercase text-destructive/40 group-hover:text-destructive/60 transition-colors tracking-widest">Unpaid</span>
+                            <span className="text-[7px] font-black uppercase text-destructive/40 tracking-widest">Unpaid</span>
                           </div>
                         ))
                       ) : (
-                        <div className="h-32 flex flex-col items-center justify-center space-y-2 opacity-40">
-                          <CheckCircle2 className="size-8 text-emerald-500" />
-                          <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-[0.2em]">Registry Clear</p>
+                        <div className="h-24 flex flex-col items-center justify-center space-y-1.5 opacity-40">
+                          <CheckCircle2 className="size-6 text-emerald-500" />
+                          <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-[0.2em]">Registry Clear</p>
                         </div>
                       )}
                     </div>
@@ -1027,11 +1024,10 @@ export default function RoundsPage() {
                 </div>
               </div>
 
-              {/* Action Area */}
-              <div className="p-4 bg-muted/5 border-t border-border/40">
+              <div className="p-3 bg-muted/5 border-t border-border/40">
                 <Button 
                   onClick={() => setIsPendingDetailsOpen(false)} 
-                  className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl text-[10px] shadow-sm hover:shadow-lg transition-all active:scale-[0.98] bg-destructive hover:bg-destructive/90 text-white"
+                  className="w-full font-black uppercase tracking-[0.2em] h-11 rounded-xl text-[9px] shadow-sm active:scale-[0.98] bg-destructive hover:bg-destructive/90 text-white"
                 >
                   Close Audit
                 </Button>
