@@ -672,6 +672,12 @@ export default function RoundsPage() {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && String(m.chitGroup).trim() === String(group.name).trim()).length;
             const groupPendingCount = membersWithCalculatedStats.filter(m => String(m.chitGroup).trim() === String(group.name).trim() && m.status !== 'inactive' && m.memberStatus === 'pending').length;
             const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(group.name).trim() && c.status === 'active');
+            
+            // Calculate Duration in Days (Inclusive)
+            const cycleDuration = activeCycle && activeCycle.startDate && activeCycle.endDate
+              ? differenceInDays(parseISO(activeCycle.endDate), parseISO(activeCycle.startDate)) + 1
+              : null;
+
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-3 right-3 flex items-center gap-1">
@@ -682,7 +688,17 @@ export default function RoundsPage() {
                 <CardHeader className="p-5 pb-3 space-y-1.5 border-b border-border/40">
                   <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">{group.collectionType}</Badge>
                   <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate pr-16">{getDisplayName(group.name)}</CardTitle>
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest"><Calendar className="size-3 text-primary/40" />{activeCycle ? `${format(parseISO(activeCycle.startDate), 'MMM dd')} → ${format(parseISO(activeCycle.endDate), 'MMM dd')}` : 'No Active Cycle'}</div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+                    <Calendar className="size-3 text-primary/40" />
+                    {activeCycle ? (
+                      <>
+                        {format(parseISO(activeCycle.startDate), 'MMM dd')} → {format(parseISO(activeCycle.endDate), 'MMM dd')}
+                        {cycleDuration !== null && cycleDuration > 0 && (
+                          <span className="ml-1 pl-1 border-l border-border/60 text-primary/70">{cycleDuration} Days</span>
+                        )}
+                      </>
+                    ) : 'No Active Cycle'}
+                  </div>
                 </CardHeader>
                 <CardContent className="p-5 flex-1 space-y-4">
                   <div className="space-y-3">
@@ -789,7 +805,10 @@ export default function RoundsPage() {
         <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Base Rate</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums tracking-tight">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Occupancy</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums tracking-tight">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Pending</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-amber-600 tracking-tight">{assignedMembers.filter(m => m.memberStatus === 'pending').length}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle><Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" onClick={() => setIsDailyAuditOpen(true)}><Wallet className="size-3" /></Button></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl">
+          <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle><Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" onClick={() => setIsDailyAuditOpen(true)}><Wallet className="size-3" /></Button></CardHeader>
+          <CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent>
+        </Card>
       </div>
 
       <div className="rounded-2xl border bg-card shadow-sm overflow-hidden border-border/60">
