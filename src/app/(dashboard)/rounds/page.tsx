@@ -955,45 +955,87 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Arrears Breakdown Dialog */}
+      {/* Arrears Breakdown Dialog Redesign */}
       <Dialog open={isPendingDetailsOpen} onOpenChange={(o) => { if(!o) { setSelectedPendingMember(null); document.body.style.pointerEvents = 'auto'; } setIsPendingDetailsOpen(o); }}>
-        <DialogContent className="sm:max-w-[320px]">
+        <DialogContent className="sm:max-w-[340px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
           {selectedPendingMember && (
-            <div className="space-y-4">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight"><Clock className="size-4 text-destructive" /> Arrears Detail</DialogTitle>
-                <DialogDescription className="text-[9px] font-bold uppercase tracking-widest truncate">
-                  {selectedPendingMember.name} • Joined {selectedPendingMember.joinDate ? format(parseISO(selectedPendingMember.joinDate), 'dd MMM yyyy') : 'N/A'}
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="p-5 bg-destructive/5 rounded-2xl border border-dashed border-destructive/20 text-center space-y-2">
-                <div className="space-y-0"><p className="text-[8px] font-black uppercase tracking-[0.2em] text-destructive/60">Estimated Debt</p><div className="text-3xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}</div></div>
-                <Badge className="bg-destructive text-destructive-foreground px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md">⏳ {selectedPendingMember.calculatedPendingDays || 0} Missed</Badge>
+            <div className="flex flex-col">
+              {/* Top Banner - Arrears Tint */}
+              <div className="bg-destructive/5 p-6 text-center relative border-b border-destructive/10">
+                <div className="mx-auto mb-3 h-14 w-14 rounded-2xl bg-white text-destructive flex items-center justify-center shadow-lg border-2 border-destructive/10 ring-4 ring-destructive/5">
+                  <AlertCircle className="size-7" />
+                </div>
+                
+                <div className="space-y-1">
+                  <DialogTitle className="text-xl font-black uppercase tracking-tight text-destructive">
+                    Arrears Audit
+                  </DialogTitle>
+                  <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-destructive/60 truncate px-4">
+                    {selectedPendingMember.name} • Joined {selectedPendingMember.joinDate ? format(parseISO(selectedPendingMember.joinDate), 'dd MMM yyyy') : 'N/A'}
+                  </DialogDescription>
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <h4 className="text-[8px] font-black uppercase tracking-[0.1em] text-muted-foreground ml-1">Missed Dates Ledger</h4>
-                <ScrollArea className="h-[120px] rounded-xl border border-border/50 bg-muted/5 p-1.5">
-                  <div className="space-y-1">
-                    {missedDatesForSelectedMember.length > 0 ? (
-                      missedDatesForSelectedMember.map((dateStr, idx) => (
-                        <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-white rounded-lg border border-border/40 shadow-sm transition-all hover:border-destructive/30">
-                          <CalendarDays className="size-3.5 text-destructive/40" />
-                          <span className="text-[11px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="h-20 flex flex-col items-center justify-center space-y-1">
-                        <AlertCircle className="size-4 text-muted-foreground/20" />
-                        <p className="text-[8px] font-bold uppercase text-muted-foreground/40 tracking-widest italic">No Missed Dates</p>
-                      </div>
-                    )}
+              {/* Financial Spotlight - The Debt */}
+              <div className="p-5 space-y-6 bg-white">
+                <div className="p-4 rounded-2xl bg-destructive/5 border border-destructive/10 flex items-center justify-between shadow-inner relative overflow-hidden group">
+                  <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
+                    <IndianRupee className="size-20 text-destructive-foreground fill-destructive" />
                   </div>
-                </ScrollArea>
+                  <div className="relative z-10">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-destructive/70">Estimated Debt</span>
+                    <p className="text-3xl font-black text-destructive tabular-nums tracking-tighter">
+                      ₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="h-10 w-10 rounded-xl bg-destructive text-white flex items-center justify-center shadow-md relative z-10">
+                    <Wallet className="size-5" />
+                  </div>
+                </div>
+
+                {/* Missed Dates Ledger */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Missing Contributions</h4>
+                    <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 px-2 h-5">
+                      {selectedPendingMember.calculatedPendingDays || 0} Missed
+                    </Badge>
+                  </div>
+                  
+                  <ScrollArea className="h-[160px] rounded-2xl border border-border/40 bg-muted/5 p-2 shadow-inner">
+                    <div className="grid gap-1.5">
+                      {missedDatesForSelectedMember.length > 0 ? (
+                        missedDatesForSelectedMember.map((dateStr, idx) => (
+                          <div key={idx} className="flex items-center justify-between px-3 py-2.5 bg-white rounded-xl border border-border/40 shadow-sm hover:border-destructive/30 transition-all group">
+                            <div className="flex items-center gap-3">
+                              <div className="h-7 w-7 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-destructive/10 group-hover:text-destructive transition-colors">
+                                <CalendarDays className="size-3.5" />
+                              </div>
+                              <span className="text-[11px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
+                            </div>
+                            <span className="text-[8px] font-black uppercase text-destructive/40 group-hover:text-destructive/60 transition-colors tracking-widest">Unpaid</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="h-32 flex flex-col items-center justify-center space-y-2 opacity-40">
+                          <CheckCircle2 className="size-8 text-emerald-500" />
+                          <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-[0.2em]">Registry Clear</p>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
               </div>
 
-              <DialogFooter><Button onClick={() => setIsPendingDetailsOpen(false)} className="w-full font-black uppercase tracking-[0.1em] h-10 rounded-xl active:scale-95 transition-all shadow-md text-[10px]">Close Audit</Button></DialogFooter>
+              {/* Action Area */}
+              <div className="p-4 bg-muted/5 border-t border-border/40">
+                <Button 
+                  onClick={() => setIsPendingDetailsOpen(false)} 
+                  className="w-full font-black uppercase tracking-[0.2em] h-12 rounded-xl text-[10px] shadow-sm hover:shadow-lg transition-all active:scale-[0.98] bg-destructive hover:bg-destructive/90 text-white"
+                >
+                  Close Audit
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
@@ -1030,7 +1072,7 @@ export default function RoundsPage() {
             <DialogHeader><DialogTitle className="text-lg font-headline uppercase tracking-tight">Register Member</DialogTitle><DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Adding to <span className="text-primary">{currentRound?.name}</span></DialogDescription></DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Full Name</Label><Input value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required className="h-10 rounded-xl text-sm font-bold border-muted/60" placeholder="Member name" /></div>
-              <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Phone Number</Label><Input value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required className="h-10 rounded-xl text-sm font-bold border-muted/60" placeholder="Contact number" /></div>
+              <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Phone Number</Label><Input value={newMember.phone} onChange={e => setNewMember({...newMember, phone: e.target.value})} required className="h-10 rounded-xl text-sm font-bold tabular-nums border-muted/60" placeholder="Contact number" /></div>
               <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Join Date</Label><Input type="date" value={newMember.joinDate} onChange={e => setNewMember({...newMember, joinDate: e.target.value})} required className="h-10 rounded-xl text-sm font-bold border-muted/60" /></div>
               <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Payment Mode</Label><Select value={newMember.paymentType} onValueChange={v => setNewMember({...newMember, paymentType: v})}><SelectTrigger className="h-10 rounded-xl text-sm font-bold border-muted/60"><SelectValue placeholder="Inherit" /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
             </div>
