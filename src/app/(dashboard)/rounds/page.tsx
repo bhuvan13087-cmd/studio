@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -796,7 +795,7 @@ export default function RoundsPage() {
         <div className="p-5 border-b bg-muted/30 flex justify-between items-center"><h3 className="text-sm font-bold flex items-center gap-2 tracking-tight uppercase"><Users className="size-4 text-primary" /> Board Participants</h3></div>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader className="bg-muted/10"><TableRow className="border-b"><TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 pl-6">Member Participant</TableHead><TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Arrears Count</TableHead><TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Status Indicator</TableHead><TableHead className="w-[120px] pr-6"></TableHead></TableRow></TableHeader>
+            <TableHeader className="bg-muted/10"><TableRow className="border-b"><TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 pl-6">Member Participant</TableHead><TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Pending Count</TableHead><TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Status Indicator</TableHead><TableHead className="w-[120px] pr-6"></TableHead></TableRow></TableHeader>
             <TableBody>
               {assignedMembers.length > 0 ? assignedMembers.map((m) => (
                 <TableRow key={m.id} className="hover:bg-muted/5 transition-colors group">
