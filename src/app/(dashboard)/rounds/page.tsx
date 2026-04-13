@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -788,7 +789,7 @@ export default function RoundsPage() {
         <Card className="shadow-sm border-l-4 border-l-primary/40 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Base Rate</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums tracking-tight">₹{(currentRound?.monthlyAmount || 0).toLocaleString()}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-primary bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Occupancy</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums tracking-tight">{assignedMembers.length} / {currentRound?.totalMembers}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Pending</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-amber-600 tracking-tight">{assignedMembers.filter(m => m.memberStatus === 'pending').length}</div></CardContent></Card>
-        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle><Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" onClick={() => setIsDailyAuditOpen(true)}><Wallet className="size-3" /></Button></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent></Card>
+        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle><Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" onClick={() => setIsDailyAuditOpen(true)}><Wallet className="size-3" /></Button></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent>
       </div>
 
       <div className="rounded-2xl border bg-card shadow-sm overflow-hidden border-border/60">
@@ -997,33 +998,33 @@ export default function RoundsPage() {
         >
           {selectedPendingMember && (
             <div className="flex flex-col">
-              <div className="bg-destructive/5 p-4 text-center relative border-b border-destructive/10">
-                <div className="mx-auto mb-2 h-12 w-12 rounded-2xl bg-white text-destructive flex items-center justify-center shadow-lg border-2 border-destructive/10 ring-4 ring-destructive/5">
-                  <AlertCircle className="size-6" />
+              <div className="bg-primary/5 p-4 text-center relative border-b border-primary/10">
+                <div className="mx-auto mb-2 h-12 w-12 rounded-2xl bg-white text-primary flex items-center justify-center shadow-lg border-2 border-primary/10 ring-4 ring-primary/5">
+                  <History className="size-6" />
                 </div>
                 
                 <div className="space-y-0.5">
-                  <DialogTitle className="text-lg font-black uppercase tracking-tight text-destructive leading-tight">
+                  <DialogTitle className="text-lg font-black uppercase tracking-tight text-primary leading-tight text-center">
                     Pending Details
                   </DialogTitle>
-                  <DialogDescription className="text-[10px] font-bold text-destructive/80 px-4">
+                  <DialogDescription className="text-[10px] font-bold text-primary/80 px-4 text-center">
                     {selectedPendingMember.name}
                   </DialogDescription>
                 </div>
               </div>
 
               <div className="p-4 space-y-4 bg-white">
-                <div className="p-3 rounded-2xl bg-destructive/5 border border-destructive/10 flex items-center justify-between shadow-inner relative overflow-hidden group">
+                <div className="p-3 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-between shadow-inner relative overflow-hidden group">
                   <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
-                    <IndianRupee className="size-16 text-destructive-foreground fill-destructive" />
+                    <IndianRupee className="size-16 text-primary-foreground fill-primary" />
                   </div>
                   <div className="relative z-10">
-                    <span className="text-[8px] font-black uppercase tracking-widest text-destructive/70">Estimated Debt</span>
-                    <p className="text-2xl font-black text-destructive tabular-nums tracking-tighter">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-primary/70">Estimated Debt</span>
+                    <p className="text-2xl font-black text-primary tabular-nums tracking-tighter">
                       ₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}
                     </p>
                   </div>
-                  <div className="h-9 w-9 rounded-xl bg-destructive text-white flex items-center justify-center shadow-md relative z-10">
+                  <div className="h-9 w-9 rounded-xl bg-primary text-white flex items-center justify-center shadow-md relative z-10">
                     <Wallet className="size-4" />
                   </div>
                 </div>
@@ -1031,7 +1032,7 @@ export default function RoundsPage() {
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-1">
                     <h4 className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/80">Missed Dates Ledger</h4>
-                    <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 px-1.5 h-4">
+                    <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-primary/20 text-primary bg-primary/5 px-1.5 h-4">
                       {selectedPendingMember.calculatedPendingDays || 0} Missed
                     </Badge>
                   </div>
@@ -1040,9 +1041,12 @@ export default function RoundsPage() {
                     <div className="grid gap-1">
                       {missedDatesForSelectedMember.length > 0 ? (
                         missedDatesForSelectedMember.map((dateStr, idx) => (
-                          <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-white rounded-lg border border-border/40 shadow-sm">
-                            <CalendarDays className="size-3.5 text-destructive/40" />
-                            <span className="text-[11px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
+                          <div key={idx} className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-border/40 shadow-sm">
+                            <div className="flex items-center gap-3">
+                              <CalendarDays className="size-3.5 text-primary/40" />
+                              <span className="text-[11px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
+                            </div>
+                            <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter border-primary/10 text-primary bg-primary/5 h-3.5 px-1">Unpaid</Badge>
                           </div>
                         ))
                       ) : (
@@ -1059,7 +1063,7 @@ export default function RoundsPage() {
               <div className="p-3 bg-muted/5 border-t border-border/40">
                 <Button 
                   onClick={() => setIsPendingDetailsOpen(false)} 
-                  className="w-full font-black uppercase tracking-[0.2em] h-11 rounded-xl text-[9px] shadow-sm active:scale-[0.98] bg-destructive hover:bg-destructive/90 text-white"
+                  className="w-full font-black uppercase tracking-[0.2em] h-11 rounded-xl text-[9px] shadow-sm active:scale-[0.98] bg-primary hover:bg-primary/90 text-white"
                 >
                   Close Audit
                 </Button>
