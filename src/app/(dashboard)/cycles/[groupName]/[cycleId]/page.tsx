@@ -67,6 +67,24 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
     )
   }, [cyclesData, groupName, cycleId])
 
+  const cycleNumber = React.useMemo(() => {
+    if (!selectedCycle || !Array.isArray(cyclesData)) return null;
+    const groupCycles = cyclesData
+      .filter(c => {
+        const mGroup = String(c?.name || "").trim().toLowerCase();
+        const gName = groupName.toLowerCase();
+        const gNameClean = groupName.replace(/Group/gi, '').trim().toLowerCase();
+        return (mGroup === gName || mGroup === gNameClean);
+      });
+    
+    // Deduplicate by start date
+    const uniqueStarts = Array.from(new Set(groupCycles.map(c => c.startDate)))
+      .sort((a, b) => a.localeCompare(b));
+    
+    const idx = uniqueStarts.indexOf(selectedCycle.startDate);
+    return idx !== -1 ? idx + 1 : null;
+  }, [selectedCycle, cyclesData, groupName]);
+
   const isCompleted = selectedCycle?.status === 'completed';
 
   const auditData = React.useMemo(() => {
@@ -206,7 +224,9 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
           <Button variant="ghost" size="icon" onClick={() => router.push(`/cycles/${encodeURIComponent(groupName)}`)} className="rounded-full h-10 w-10 hover:bg-primary/10 text-primary transition-all active:scale-90"><ChevronLeft className="size-6" /></Button>
           <div className="space-y-0.5">
             <h2 className="text-2xl font-black tracking-tight text-primary font-headline uppercase">{groupName}</h2>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Registry Audit Detail</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+              Registry Audit Detail {cycleNumber ? `• Cycle ${cycleNumber}` : ''}
+            </p>
           </div>
         </div>
 
@@ -278,7 +298,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant={m.paid ? "default" : "secondary"} className={cn("text-[8px] font-black uppercase tracking-tighter border-none px-2 py-0.5", m.paid ? "bg-emerald-500 text-white" : "bg-amber-100 text-amber-700")}>
+                          <Badge variant={m.paid ? "default" : "secondary"} className={cn("text-[8px] font-black uppercase tracking-tighter border-none px-2 py-0.5", m.paid ? "bg-emerald-500" : "bg-amber-100 text-amber-700")}>
                             {m.paid ? "PAID" : "PENDING"}
                           </Badge>
                         </TableCell>

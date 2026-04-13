@@ -55,35 +55,35 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
   const { activeCycles, pastCycles } = React.useMemo(() => {
     if (!Array.isArray(allCycles)) return { activeCycles: [], pastCycles: [] }
     
+    const filtered = allCycles.filter((c) => {
+      const mGroup = String(c?.name || "").trim().toLowerCase();
+      const gName = groupName.toLowerCase();
+      const gNameClean = groupName.replace(/Group/gi, '').trim().toLowerCase();
+      return (mGroup === gName || mGroup === gNameClean);
+    });
+
+    // Deduplicate by start date
     const uniqueMap = new Map<string, any>()
+    filtered.forEach((c) => {
+      const start = String(c?.startDate || "-")
+      const existing = uniqueMap.get(start)
+      if (!existing || (c.status === 'active' && existing.status !== 'active')) {
+        uniqueMap.set(start, c)
+      }
+    })
 
-    allCycles
-      .filter((c) => {
-        const mGroup = String(c?.name || "").trim().toLowerCase();
-        const gName = groupName.toLowerCase();
-        const gNameClean = groupName.replace(/Group/gi, '').trim().toLowerCase();
-        return (mGroup === gName || mGroup === gNameClean);
-      })
-      .forEach((c) => {
-        const start = String(c?.startDate || "-")
-        const key = start
-        
-        const existing = uniqueMap.get(key)
-        if (!existing || (c.status === 'active' && existing.status !== 'active')) {
-          uniqueMap.set(key, {
-            id: String(c?.id || ""),
-            startDate: start,
-            endDate: String(c?.endDate || "-"),
-            status: c?.status || 'active'
-          })
-        }
-      })
+    const sortedUnique = Array.from(uniqueMap.values()).sort((a, b) => 
+      String(a.startDate).localeCompare(String(b.startDate))
+    );
 
-    const deduplicated = Array.from(uniqueMap.values())
+    const numbered = sortedUnique.map((c, i) => ({
+      ...c,
+      cycleNumber: i + 1
+    }));
 
     return {
-      activeCycles: deduplicated.filter(c => c.status === 'active'),
-      pastCycles: deduplicated.filter(c => c.status !== 'active')
+      activeCycles: numbered.filter(c => c.status === 'active'),
+      pastCycles: numbered.filter(c => c.status !== 'active').reverse()
     }
   }, [allCycles, groupName])
 
@@ -207,6 +207,10 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
       )} />
       
       <div className="flex items-center gap-6 pl-2">
+        <div className="flex flex-col min-w-[60px]">
+          <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">Audit ID</span>
+          <span className={cn("text-[10px] font-black uppercase", isActive ? "text-emerald-700" : "text-primary/60")}>Cycle {cycle.cycleNumber}</span>
+        </div>
         <div className="flex items-center gap-4">
           <div className="flex flex-col">
             <span className="text-[8px] font-black uppercase tracking-[0.15em] text-muted-foreground/50 mb-0.5">Start</span>

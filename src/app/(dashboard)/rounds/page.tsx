@@ -235,7 +235,7 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
             <div className="space-y-1"><Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">End</Label><Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 text-xs rounded-xl font-bold border-muted/60" disabled={isSaving} /></div>
           </div>
         </div>
-        <DialogFooter><Button onClick={handleSave} disabled={isSaving} className="w-full font-black uppercase tracking-[0.1em] h-11 rounded-xl active:scale-95 transition-all shadow-md">{isSaving ? <Loader2 className="size-3 mr-2 animate-spin" /> : <Save className="size-3 mr-2" />}{isLatestActive ? 'Apply' : 'Launch'}</Button></DialogFooter>
+        <DialogFooter><Button onClick={handleSave} disabled={isSaving} className="w-full font-black uppercase tracking-[0.1em] h-11 rounded-xl active:scale-[0.98] transition-all shadow-md">{isSaving ? <Loader2 className="size-3 mr-2 animate-spin" /> : <Save className="size-3 mr-2" />}{isLatestActive ? 'Apply' : 'Launch'}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -671,12 +671,11 @@ export default function RoundsPage() {
           {chitSchemes.map((group) => {
             const currentOccupancy = (members || []).filter(m => m.status !== 'inactive' && String(m.chitGroup).trim() === String(group.name).trim()).length;
             const groupPendingCount = membersWithCalculatedStats.filter(m => String(m.chitGroup).trim() === String(group.name).trim() && m.status !== 'inactive' && m.memberStatus === 'pending').length;
-            const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(group.name).trim() && c.status === 'active');
             
-            // Calculate Duration in Days (Inclusive)
-            const cycleDuration = activeCycle && activeCycle.startDate && activeCycle.endDate
-              ? differenceInDays(parseISO(activeCycle.endDate), parseISO(activeCycle.startDate)) + 1
-              : null;
+            const groupCycles = (allCycles || []).filter(c => String(c.name).trim() === String(group.name).trim());
+            const uniqueStarts = Array.from(new Set(groupCycles.map(c => c.startDate))).sort((a, b) => a.localeCompare(b));
+            const activeCycle = groupCycles.find(c => c.status === 'active');
+            const cycleNumber = activeCycle ? uniqueStarts.indexOf(activeCycle.startDate) + 1 : null;
 
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
@@ -686,19 +685,12 @@ export default function RoundsPage() {
                   <GroupCycleControl group={group} latestCycle={activeCycle || (allCycles || []).find(c => String(c.name).trim() === String(group.name).trim())} />
                 </div>
                 <CardHeader className="p-5 pb-3 space-y-1.5 border-b border-border/40">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">{group.collectionType}</Badge>
-                    {cycleDuration !== null && cycleDuration > 0 && (
-                      <Badge variant="secondary" className="text-[9px] font-black tracking-tighter bg-emerald-50 text-emerald-700 border-none px-2 h-4">
-                        {cycleDuration} Days
-                      </Badge>
-                    )}
-                  </div>
+                  <Badge variant="outline" className="w-fit text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-primary/5 border-primary/20 text-primary">{group.collectionType}</Badge>
                   <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate pr-16">{getDisplayName(group.name)}</CardTitle>
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
                     <Calendar className="size-3 text-primary/40" />
                     {activeCycle ? (
-                      <>{format(parseISO(activeCycle.startDate), 'MMM dd')} → {format(parseISO(activeCycle.endDate), 'MMM dd')}</>
+                      <>{cycleNumber ? `Cycle ${cycleNumber} | ` : ''}{format(parseISO(activeCycle.startDate), 'MMM dd')} → {format(parseISO(activeCycle.endDate), 'MMM dd')}</>
                     ) : 'No Active Cycle'}
                   </div>
                 </CardHeader>
@@ -751,7 +743,7 @@ export default function RoundsPage() {
               <div className="grid gap-4 py-4">
                 <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Scheme Name</Label><Input value={newChit.name} onChange={e => setNewChit({...newChit, name: e.target.value})} required className="h-10 rounded-xl text-sm font-bold" placeholder="e.g. Group A" /></div>
                 <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Amount (₹)</Label><Input type="number" value={newChit.monthlyAmount || ""} onChange={e => setNewChit({...newChit, monthlyAmount: Number(e.target.value)})} required className="h-10 rounded-xl text-sm font-bold" /></div>
-                <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Max Members</Label><Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(e.target.value)})} required className="h-10 rounded-xl text-sm font-bold" /></div>
+                <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Max Members</Label><Input type="number" value={newChit.totalMembers || ""} onChange={e => setNewChit({...newChit, totalMembers: Number(newChit.totalMembers)})} required className="h-10 rounded-xl text-sm font-bold" /></div>
                 <div className="grid gap-1.5"><Label className="text-[9px] font-black uppercase text-muted-foreground">Collection Type</Label><Select value={newChit.collectionType} onValueChange={(v) => setNewChit({...newChit, collectionType: v})}><SelectTrigger className="h-10 rounded-xl font-bold"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Daily">Daily</SelectItem><SelectItem value="Monthly">Monthly</SelectItem></SelectContent></Select></div>
               </div>
               <DialogFooter><Button type="submit" disabled={isActionPending} className="w-full h-11 font-black uppercase tracking-[0.1em] shadow-md active:scale-[0.98] transition-all">{isActionPending ? <Loader2 className="mr-2 size-3 animate-spin" /> : null}Create Scheme</Button></DialogFooter>
@@ -791,7 +783,10 @@ export default function RoundsPage() {
     )
   }
 
-  const currentActiveCycle = (allCycles || []).find(c => String(c.name).trim() === String(currentRound?.name).trim() && c.status === 'active');
+  const groupCyclesForActive = (allCycles || []).filter(c => String(c.name).trim() === String(currentRound?.name).trim());
+  const uniqueStartsForActive = Array.from(new Set(groupCyclesForActive.map(c => c.startDate))).sort((a, b) => a.localeCompare(b));
+  const currentActiveCycle = groupCyclesForActive.find(c => c.status === 'active');
+  const activeCycleNumber = currentActiveCycle ? uniqueStartsForActive.indexOf(currentActiveCycle.startDate) + 1 : null;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
@@ -809,12 +804,20 @@ export default function RoundsPage() {
         <Card className="shadow-sm border-l-4 border-l-amber-500 bg-card rounded-xl"><CardHeader className="p-2.5 pb-1"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Pending</CardTitle></CardHeader><CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-amber-600 tracking-tight">{assignedMembers.filter(m => m.memberStatus === 'pending').length}</div></CardContent></Card>
         <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl">
           <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle><Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" onClick={() => setIsDailyAuditOpen(true)}><Wallet className="size-3" /></Button></CardHeader>
-          <CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent>
-        </Card>
+          <CardContent className="p-2.5 pt-0"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent></Card>
       </div>
 
       <div className="rounded-2xl border bg-card shadow-sm overflow-hidden border-border/60">
-        <div className="p-5 border-b bg-muted/30 flex justify-between items-center"><h3 className="text-sm font-bold flex items-center gap-2 tracking-tight uppercase"><Users className="size-4 text-primary" /> Board Participants</h3></div>
+        <div className="p-5 border-b bg-muted/30 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <h3 className="text-sm font-bold flex items-center gap-2 tracking-tight uppercase"><Users className="size-4 text-primary" /> Board Participants</h3>
+            {activeCycleNumber && (
+              <Badge className="bg-primary/10 text-primary border-none text-[10px] font-black uppercase tracking-widest px-2.5">
+                Active Cycle {activeCycleNumber}
+              </Badge>
+            )}
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/10"><TableRow className="border-b"><TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12 pl-6">Member Participant</TableHead><TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Pending Count</TableHead><TableHead className="text-[10px] uppercase font-black tracking-[0.2em] h-12">Status Indicator</TableHead><TableHead className="w-[120px] pr-6"></TableHead></TableRow></TableHeader>

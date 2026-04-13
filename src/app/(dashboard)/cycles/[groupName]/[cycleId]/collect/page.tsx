@@ -58,7 +58,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
   })
 
   // Data Fetching
-  const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles')), [db])
+  const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('startDate', 'asc')), [db])
   const { data: cyclesData, isLoading: cyclesLoading } = useCollection(cyclesQuery)
   
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
@@ -76,6 +76,24 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
       (c.id === cycleId || c.startDate === cycleId)
     )
   }, [cyclesData, groupName, cycleId])
+
+  const cycleNumber = React.useMemo(() => {
+    if (!selectedCycle || !Array.isArray(cyclesData)) return null;
+    const groupCycles = cyclesData
+      .filter(c => {
+        const mGroup = String(c?.name || "").trim().toLowerCase();
+        const gName = groupName.toLowerCase();
+        const gNameClean = groupName.replace(/Group/gi, '').trim().toLowerCase();
+        return (mGroup === gName || mGroup === gNameClean);
+      });
+    
+    // Deduplicate by start date
+    const uniqueStarts = Array.from(new Set(groupCycles.map(c => c.startDate)))
+      .sort((a, b) => a.localeCompare(b));
+    
+    const idx = uniqueStarts.indexOf(selectedCycle.startDate);
+    return idx !== -1 ? idx + 1 : null;
+  }, [selectedCycle, cyclesData, groupName]);
 
   const pendingMembers = React.useMemo(() => {
     if (!selectedCycle || !membersData || !paymentsData || !roundsData) return []
@@ -202,7 +220,9 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full transition-all active:scale-90"><ChevronLeft className="size-6" /></Button>
         <div className="space-y-0.5">
           <h2 className="text-xl font-black uppercase tracking-tight text-primary font-headline">History Settlement</h2>
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">{groupName} • {selectedCycle?.startDate} Window</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+            {groupName} • {selectedCycle?.startDate} Window {cycleNumber ? `• Cycle ${cycleNumber}` : ''}
+          </p>
         </div>
       </div>
 
