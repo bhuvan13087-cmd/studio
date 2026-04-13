@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
@@ -55,6 +56,14 @@ import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 
 const PAGE_SIZE = 50
+
+const handlePopupBlur = (e: any) => {
+  const ae = document.activeElement;
+  if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae instanceof HTMLSelectElement) {
+    ae.blur();
+    e.preventDefault();
+  }
+};
 
 export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -136,6 +145,13 @@ export default function PaymentsPage() {
     });
     return map;
   }, [payments, members, allCycles]);
+
+  const handleModalClose = (setter: (v: boolean) => void, resetter: () => void) => {
+    setter(false);
+    resetter();
+    document.body.style.pointerEvents = 'auto';
+    document.body.style.overflow = 'auto';
+  };
 
   const handleCorrectPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -398,7 +414,12 @@ export default function PaymentsPage() {
       </Tabs>
 
       <Dialog open={isCorrectionOpen} onOpenChange={(o) => { if(!isActionPending) { if(!o) { setPaymentToCorrect(null); setMemberSearchTerm(""); document.body.style.pointerEvents = 'auto'; } setIsCorrectionOpen(o); } }}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent 
+          className="sm:max-w-[450px]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={handlePopupBlur}
+          onEscapeKeyDown={handlePopupBlur}
+        >
           {paymentToCorrect && (
             <form onSubmit={handleCorrectPayment} className="space-y-6">
               <DialogHeader>

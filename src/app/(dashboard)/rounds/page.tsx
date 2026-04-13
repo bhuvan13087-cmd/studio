@@ -98,6 +98,14 @@ const getInitials = (name: string) => {
   return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase();
 };
 
+const handlePopupBlur = (e: any) => {
+  const ae = document.activeElement;
+  if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae instanceof HTMLSelectElement) {
+    ae.blur();
+    e.preventDefault();
+  }
+};
+
 function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: any }) {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
@@ -211,7 +219,12 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
           {isLatestActive ? <CalendarDays className="size-4" /> : <Plus className="size-4" />}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[320px]">
+      <DialogContent 
+        className="sm:max-w-[320px]" 
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onInteractOutside={handlePopupBlur}
+        onEscapeKeyDown={handlePopupBlur}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight"><CalendarDays className="size-4 text-primary" />{isLatestActive ? 'Update Period' : 'Start New Cycle'}</DialogTitle>
           <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Timeline will auto-adjust boundaries.</DialogDescription>
@@ -682,7 +695,12 @@ export default function RoundsPage() {
         </div>
 
         <Dialog open={isCollectionPopupOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsCollectionPopupOpen(o); }}>
-          <DialogContent className="sm:max-w-[320px]">
+          <DialogContent 
+            className="sm:max-w-[320px]"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onInteractOutside={handlePopupBlur}
+            onEscapeKeyDown={handlePopupBlur}
+          >
             {activePopupGroupName && (
               <>
                 <DialogHeader><DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight"><Wallet className="size-4 text-primary" />Reconciliation</DialogTitle><DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">{getDisplayName(activePopupGroupName)} Summary</DialogDescription></DialogHeader>
@@ -700,7 +718,12 @@ export default function RoundsPage() {
         </Dialog>
 
         <Dialog open={isAddChitDialogOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsAddChitDialogOpen(o); }}>
-          <DialogContent className="sm:max-w-[340px]">
+          <DialogContent 
+            className="sm:max-w-[340px]"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onInteractOutside={handlePopupBlur}
+            onEscapeKeyDown={handlePopupBlur}
+          >
             <form onSubmit={handleAddChit}>
               <DialogHeader><DialogTitle className="text-lg font-headline uppercase tracking-tight">New Scheme</DialogTitle></DialogHeader>
               <div className="grid gap-4 py-4">
@@ -715,7 +738,12 @@ export default function RoundsPage() {
         </Dialog>
 
         <Dialog open={isEditChitDialogOpen} onOpenChange={(o) => { if(!o) { setChitToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditChitDialogOpen(o); }}>
-          <DialogContent className="sm:max-w-[340px]">
+          <DialogContent 
+            className="sm:max-w-[340px]"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onInteractOutside={handlePopupBlur}
+            onEscapeKeyDown={handlePopupBlur}
+          >
             {chitToEdit && (
               <form onSubmit={handleUpdateChit}>
                 <DialogHeader><DialogTitle className="text-lg font-headline uppercase tracking-tight">Edit Scheme</DialogTitle></DialogHeader>
@@ -781,7 +809,12 @@ export default function RoundsPage() {
 
       {/* Member Profile Dialog */}
       <Dialog open={isMemberProfileDialogOpen} onOpenChange={(o) => { if(!o) { setSelectedProfileMember(null); document.body.style.pointerEvents = 'auto'; } setIsMemberProfileDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[310px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+        <DialogContent 
+          className="sm:max-w-[310px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={handlePopupBlur}
+          onEscapeKeyDown={handlePopupBlur}
+        >
           {selectedProfileMember && (
             <div className="flex flex-col">
               <div className="bg-primary/5 p-4 pb-5 text-center relative border-b border-border/40">
@@ -802,7 +835,7 @@ export default function RoundsPage() {
                 </div>
                 
                 <div className="space-y-0.5">
-                  <DialogTitle className="text-base font-black uppercase tracking-tight text-primary truncate px-2">
+                  <DialogTitle className="text-base font-black uppercase tracking-tight text-primary truncate px-2 text-center">
                     {selectedProfileMember.name}
                   </DialogTitle>
                   <div className="flex items-center justify-center">
@@ -820,7 +853,7 @@ export default function RoundsPage() {
                       <Phone className="size-3" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-0.5">Phone</span>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-0.5">Phone Contact</span>
                       <span className="font-bold text-[11px] tabular-nums text-foreground">{selectedProfileMember.phone}</span>
                     </div>
                   </div>
@@ -830,7 +863,7 @@ export default function RoundsPage() {
                       <CalendarDays className="size-3" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-0.5">Joined</span>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-0.5">Joining Date</span>
                       <span className="font-bold text-[11px] text-foreground">
                         {selectedProfileMember.joinDate ? format(parseISO(selectedProfileMember.joinDate), 'dd MMM yyyy') : 'N/A'}
                       </span>
@@ -871,7 +904,12 @@ export default function RoundsPage() {
 
       {/* Edit Member Profile Dialog */}
       <Dialog open={isEditMemberProfileOpen} onOpenChange={(o) => { if(!o) { setMemberProfileToEdit(null); document.body.style.pointerEvents = 'auto'; } setIsEditMemberProfileOpen(o); }}>
-        <DialogContent className="sm:max-w-[310px] rounded-3xl p-0 overflow-hidden shadow-2xl border-none">
+        <DialogContent 
+          className="sm:max-w-[310px] rounded-3xl p-0 overflow-hidden shadow-2xl border-none"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={handlePopupBlur}
+          onEscapeKeyDown={handlePopupBlur}
+        >
           {memberProfileToEdit && (
             <form onSubmit={handleUpdateMemberProfile} className="flex flex-col">
               <div className="bg-primary p-4 text-white text-center border-b border-white/10">
@@ -955,9 +993,14 @@ export default function RoundsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Arrears Breakdown Dialog Redesign - Reduced Size */}
+      {/* Arrears Detail popup Redesign - Compact */}
       <Dialog open={isPendingDetailsOpen} onOpenChange={(o) => { if(!o) { setSelectedPendingMember(null); document.body.style.pointerEvents = 'auto'; } setIsPendingDetailsOpen(o); }}>
-        <DialogContent className="sm:max-w-[310px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+        <DialogContent 
+          className="sm:max-w-[310px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={handlePopupBlur}
+          onEscapeKeyDown={handlePopupBlur}
+        >
           {selectedPendingMember && (
             <div className="flex flex-col">
               <div className="bg-destructive/5 p-4 text-center relative border-b border-destructive/10">
@@ -993,28 +1036,23 @@ export default function RoundsPage() {
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-1">
-                    <h4 className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/80">Missed Ledger</h4>
+                    <h4 className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/80">Missed Dates Ledger</h4>
                     <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 px-1.5 h-4">
-                      {selectedPendingMember.calculatedPendingDays || 0} Days
+                      {selectedPendingMember.calculatedPendingDays || 0} Missed
                     </Badge>
                   </div>
                   
-                  <ScrollArea className="h-[130px] rounded-2xl border border-border/40 bg-muted/5 p-1.5 shadow-inner">
+                  <ScrollArea className="h-[120px] rounded-xl border border-border/50 bg-muted/5 p-1.5">
                     <div className="grid gap-1">
                       {missedDatesForSelectedMember.length > 0 ? (
                         missedDatesForSelectedMember.map((dateStr, idx) => (
-                          <div key={idx} className="flex items-center justify-between px-2.5 py-2 bg-white rounded-xl border border-border/40 shadow-sm hover:border-destructive/30 transition-all group">
-                            <div className="flex items-center gap-2.5">
-                              <div className="h-6 w-6 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:bg-destructive/10 group-hover:text-destructive transition-colors">
-                                <CalendarDays className="size-3" />
-                              </div>
-                              <span className="text-[10px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
-                            </div>
-                            <span className="text-[7px] font-black uppercase text-destructive/40 tracking-widest">Unpaid</span>
+                          <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-white rounded-lg border border-border/40 shadow-sm">
+                            <CalendarDays className="size-3.5 text-destructive/40" />
+                            <span className="text-[11px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
                           </div>
                         ))
                       ) : (
-                        <div className="h-24 flex flex-col items-center justify-center space-y-1.5 opacity-40">
+                        <div className="h-24 flex flex-col items-center justify-center space-y-1.5">
                           <CheckCircle2 className="size-6 text-emerald-500" />
                           <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-[0.2em]">Registry Clear</p>
                         </div>
@@ -1039,7 +1077,12 @@ export default function RoundsPage() {
 
       {/* History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={(o) => { if(!o) { setHistoryMember(null); document.body.style.pointerEvents = 'auto'; } setIsHistoryDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[340px]">
+        <DialogContent 
+          className="sm:max-w-[340px]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={handlePopupBlur}
+          onEscapeKeyDown={handlePopupBlur}
+        >
           {historyMember && (
             <div className="space-y-4">
               <DialogHeader><DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight"><History className="size-4 text-primary" /> Ledger</DialogTitle><DialogDescription className="text-[9px] font-bold uppercase tracking-widest truncate">{historyMember.name}</DialogDescription></DialogHeader>
@@ -1063,7 +1106,12 @@ export default function RoundsPage() {
 
       {/* Add Member Dialog */}
       <Dialog open={isAddMemberDialogOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsAddMemberDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[340px]">
+        <DialogContent 
+          className="sm:max-w-[340px]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={handlePopupBlur}
+          onEscapeKeyDown={handlePopupBlur}
+        >
           <form onSubmit={handleAddMemberToScheme}>
             <DialogHeader><DialogTitle className="text-lg font-headline uppercase tracking-tight">Register Member</DialogTitle><DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Adding to <span className="text-primary">{currentRound?.name}</span></DialogDescription></DialogHeader>
             <div className="grid gap-4 py-4">
@@ -1079,7 +1127,12 @@ export default function RoundsPage() {
 
       {/* Audit Ledger Dialog */}
       <Dialog open={isDailyAuditOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsDailyAuditOpen(o); }}>
-        <DialogContent className="sm:max-w-[320px]">
+        <DialogContent 
+          className="sm:max-w-[320px]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={handlePopupBlur}
+          onEscapeKeyDown={handlePopupBlur}
+        >
           {currentRound && (
             <>
               <DialogHeader><DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight"><Wallet className="size-4 text-primary" />Audit Ledger</DialogTitle></DialogHeader>
@@ -1095,7 +1148,12 @@ export default function RoundsPage() {
 
       {/* Record Payment Dialog */}
       <Dialog open={isQuickPaymentDialogOpen} onOpenChange={(o) => { if(!o) { setSelectedMemberForPayment(null); document.body.style.pointerEvents = 'auto'; } setIsQuickPaymentDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[340px]">
+        <DialogContent 
+          className="sm:max-w-[340px]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={handlePopupBlur}
+          onEscapeKeyDown={handlePopupBlur}
+        >
           {selectedMemberForPayment && (
             <form onSubmit={handleQuickPayment}>
               <DialogHeader><DialogTitle className="text-lg font-headline uppercase tracking-tight">Record Payment</DialogTitle><DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Entry for <span className="text-primary">{selectedMemberForPayment.name}</span></DialogDescription></DialogHeader>

@@ -23,6 +23,14 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { createAuditLog } from "@/firebase/logging"
 
+const handlePopupBlur = (e: any) => {
+  const ae = document.activeElement;
+  if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae instanceof HTMLSelectElement) {
+    ae.blur();
+    e.preventDefault();
+  }
+};
+
 export default function GroupCyclesPage({ params }: { params: Promise<{ groupName: string }> }) {
   const router = useRouter()
   const resolvedParams = React.use(params)
@@ -274,7 +282,12 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
       </div>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(o) => { if(!o) { setEditingCycle(null); document.body.style.pointerEvents = 'auto'; } setIsEditDialogOpen(o); }}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent 
+          className="sm:max-w-[400px]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={handlePopupBlur}
+          onEscapeKeyDown={handlePopupBlur}
+        >
           {editingCycle && (
             <form onSubmit={handleUpdateCycle} className="space-y-6">
               <DialogHeader>
