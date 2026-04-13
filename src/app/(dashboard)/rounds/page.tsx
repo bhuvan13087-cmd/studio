@@ -1006,8 +1006,8 @@ export default function RoundsPage() {
                   <DialogTitle className="text-lg font-black uppercase tracking-tight text-destructive leading-tight">
                     Pending Details
                   </DialogTitle>
-                  <DialogDescription className="text-[8px] font-bold uppercase tracking-widest text-destructive/60 truncate px-4">
-                    {selectedPendingMember.name} • Joined {selectedPendingMember.joinDate ? format(parseISO(selectedPendingMember.joinDate), 'dd MMM yyyy') : 'N/A'}
+                  <DialogDescription className="text-[10px] font-bold text-destructive/80 px-4">
+                    {selectedPendingMember.name}
                   </DialogDescription>
                 </div>
               </div>
