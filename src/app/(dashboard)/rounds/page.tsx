@@ -970,9 +970,6 @@ export default function RoundsPage() {
               <div className="p-5 bg-destructive/5 rounded-2xl border border-dashed border-destructive/20 text-center space-y-2">
                 <div className="space-y-0"><p className="text-[8px] font-black uppercase tracking-[0.2em] text-destructive/60">Estimated Debt</p><div className="text-3xl font-black text-destructive tabular-nums tracking-tighter">₹{(selectedPendingMember.calculatedPendingAmount || 0).toLocaleString()}</div></div>
                 <Badge className="bg-destructive text-destructive-foreground px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md">⏳ {selectedPendingMember.calculatedPendingDays || 0} Missed</Badge>
-                <p className="text-[8px] font-bold text-muted-foreground/60 uppercase tracking-widest pt-1">
-                  Joined {selectedPendingMember.joinDate ? format(parseISO(selectedPendingMember.joinDate), 'dd MMM yyyy') : 'N/A'}
-                </p>
               </div>
 
               <div className="space-y-1.5">
@@ -981,18 +978,15 @@ export default function RoundsPage() {
                   <div className="space-y-1">
                     {missedDatesForSelectedMember.length > 0 ? (
                       missedDatesForSelectedMember.map((dateStr, idx) => (
-                        <div key={idx} className="flex items-center justify-between px-2.5 py-1.5 bg-white rounded-lg border shadow-sm group hover:border-destructive/30 transition-all">
-                          <div className="flex items-center gap-2">
-                            <CalendarDays className="size-3 text-muted-foreground/40 group-hover:text-destructive/40 transition-colors" />
-                            <span className="text-[10px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
-                          </div>
-                          <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter border-destructive/20 text-destructive bg-destructive/5 h-3.5">Missed</Badge>
+                        <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-white rounded-lg border border-border/40 shadow-sm transition-all hover:border-destructive/30">
+                          <CalendarDays className="size-3.5 text-destructive/40" />
+                          <span className="text-[11px] font-bold tabular-nums text-foreground/80">{dateStr}</span>
                         </div>
                       ))
                     ) : (
                       <div className="h-20 flex flex-col items-center justify-center space-y-1">
                         <AlertCircle className="size-4 text-muted-foreground/20" />
-                        <p className="text-[8px] font-bold uppercase text-muted-foreground/40 tracking-widest italic">Captured</p>
+                        <p className="text-[8px] font-bold uppercase text-muted-foreground/40 tracking-widest italic">No Missed Dates</p>
                       </div>
                     )}
                   </div>
