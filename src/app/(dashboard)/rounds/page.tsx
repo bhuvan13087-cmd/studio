@@ -463,14 +463,22 @@ export default function RoundsPage() {
 
   const reconciliationCycles = useMemo(() => {
     if (!activePopupGroupName || !allCycles) return [];
-    const allGroupCycles = allCycles.filter(c => String(c?.name || "").trim().toLowerCase() === activePopupGroupName.toLowerCase());
+    const allGroupCycles = allCycles.filter(c => {
+      const cNameClean = String(c?.name || "").replace(/group/gi, '').trim().toLowerCase();
+      const targetClean = activePopupGroupName.replace(/group/gi, '').trim().toLowerCase();
+      return cNameClean === targetClean;
+    });
+
     const uniqueMap = new Map<string, any>();
     allGroupCycles.forEach(c => {
       const start = String(c?.startDate || "-");
       const existing = uniqueMap.get(start);
       if (!existing || (c.status === 'active' && existing.status !== 'active')) { uniqueMap.set(start, c); }
     });
+    
     const sortedFull = Array.from(uniqueMap.values()).sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
+    console.log(`Auditing Group: ${activePopupGroupName}, Found ${sortedFull.length} cycles.`);
+    
     return sortedFull.map((c, i) => ({ ...c, displayLabel: `Cycle ${i + 1}` })).sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
   }, [activePopupGroupName, allCycles]);
 
@@ -592,12 +600,16 @@ export default function RoundsPage() {
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {chitSchemes.map((group) => {
-            const groupCycles = (allCycles || []).filter(c => String(c.name).trim() === String(group.name).trim());
+            const groupCycles = (allCycles || []).filter(c => {
+              const cNameClean = String(c?.name || "").replace(/group/gi, '').trim().toLowerCase();
+              const gNameClean = String(group?.name || "").replace(/group/gi, '').trim().toLowerCase();
+              return cNameClean === gNameClean;
+            });
             const uniqueStarts = Array.from(new Set(groupCycles.map(c => c.startDate))).sort((a, b) => a.localeCompare(b));
             const activeCycle = groupCycles.find(c => c.status === 'active');
             const cycleNumber = activeCycle ? uniqueStarts.indexOf(activeCycle.startDate) + 1 : null;
-            const currentOccupancy = members?.filter(m => m.status !== 'inactive' && String(m.chitGroup).trim() === String(group.name).trim()).length || 0;
-            const groupPendingCount = membersWithCalculatedStats.filter(m => String(m.chitGroup).trim() === String(group.name).trim() && m.status !== 'inactive' && m.memberStatus === 'pending').length;
+            const currentOccupancy = members?.filter(m => m.status !== 'inactive' && String(m.chitGroup).trim().toLowerCase() === String(group.name).trim().toLowerCase()).length || 0;
+            const groupPendingCount = membersWithCalculatedStats.filter(m => String(m.chitGroup).trim().toLowerCase() === String(group.name).trim().toLowerCase() && m.status !== 'inactive' && m.memberStatus === 'pending').length;
 
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
@@ -707,7 +719,11 @@ export default function RoundsPage() {
     )
   }
 
-  const groupCyclesForActive = (allCycles || []).filter(c => String(c.name).trim() === String(currentRound?.name).trim());
+  const groupCyclesForActive = (allCycles || []).filter(c => {
+    const cNameClean = String(c?.name || "").replace(/group/gi, '').trim().toLowerCase();
+    const targetClean = String(currentRound?.name || "").replace(/group/gi, '').trim().toLowerCase();
+    return cNameClean === targetClean;
+  });
   const uniqueStartsForActive = Array.from(new Set(groupCyclesForActive.map(c => c.startDate))).sort((a, b) => a.localeCompare(b));
   const currentActiveCycle = groupCyclesForActive.find(c => c.status === 'active');
   const activeCycleNumber = currentActiveCycle ? uniqueStartsForActive.indexOf(currentActiveCycle.startDate) + 1 : null;
