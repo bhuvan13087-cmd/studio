@@ -464,11 +464,11 @@ export default function RoundsPage() {
   const reconciliationCycles = useMemo(() => {
     if (!activePopupGroupName || !allCycles) return [];
     
+    // REUSE EXACT SAME Normalization logic from Group Cards
     const filtered = allCycles.filter((c) => {
-      const mGroup = String(c?.name || "").trim().toLowerCase();
-      const gName = activePopupGroupName.toLowerCase();
-      const gNameClean = activePopupGroupName.replace(/Group/gi, '').trim().toLowerCase();
-      return (mGroup === gName || mGroup === gNameClean);
+      const cNameClean = String(c?.name || "").replace(/group/gi, '').trim().toLowerCase();
+      const targetClean = String(activePopupGroupName).replace(/group/gi, '').trim().toLowerCase();
+      return cNameClean === targetClean;
     });
 
     // Deduplicate by start date (exact same logic as Cycles Page)
@@ -486,6 +486,7 @@ export default function RoundsPage() {
     );
 
     console.log(`Auditing Group: ${activePopupGroupName}, Found ${sortedUnique.length} unique cycles.`);
+    console.log("Cycles fetched:", sortedUnique);
     
     return sortedUnique.map((c, i) => ({
       ...c,
@@ -498,26 +499,28 @@ export default function RoundsPage() {
     const cycle = allCycles.find(c => c.id === selectedReconciliationCycleId);
     if (!cycle) return 0;
 
-    // STRICT: Use exact dates from selectedCycle without recalculation
+    // REUSE EXACT SAME Dates from selected cycle
     const startDate = cycle.startDate;
     const endDate = cycle.endDate;
+    const cycleIdInternal = cycle.id;
 
+    const gNameClean = String(activePopupGroupName).replace(/group/gi, '').trim().toLowerCase();
     const groupMemberIds = new Set(members.filter(m => {
-      const mGroup = String(m?.chitGroup || "").trim().toLowerCase();
-      const gName = activePopupGroupName.toLowerCase();
-      const gNameClean = activePopupGroupName.replace(/Group/gi, '').trim().toLowerCase();
-      return (mGroup === gName || mGroup === gNameClean);
+      const mGroup = String(m?.chitGroup || "").replace(/group/gi, '').trim().toLowerCase();
+      return mGroup === gNameClean;
     }).map(m => m.id));
 
-    return allPayments
-      .filter(p => {
-        if (!groupMemberIds.has(p.memberId)) return false;
-        if (p.status !== 'success' && p.status !== 'paid') return false;
-        const pDate = getRecordDate(p);
-        // STRICT INCLUSIVE FILTER
-        return pDate && pDate >= startDate && pDate <= endDate;
-      })
-      .reduce((acc, p) => acc + getPaymentAmount(p), 0);
+    // REUSE LOGIC FROM Cycle Dashboard Audit Page
+    const cyclePayments = (allPayments || []).filter(p => {
+      if (!groupMemberIds.has(p.memberId)) return false;
+      if (p.status && !['success', 'paid', 'verified'].includes(p.status.toLowerCase())) return false;
+      if (p.cycleId === cycleIdInternal) return true;
+      const pDate = getRecordDate(p);
+      // STRICT INCLUSIVE FILTER
+      return pDate && pDate >= startDate && pDate <= endDate;
+    });
+
+    return cyclePayments.reduce((acc, p) => acc + getPaymentAmount(p), 0);
   }, [activePopupGroupName, selectedReconciliationCycleId, allPayments, members, allCycles]);
 
   const handleQuickPayment = async (e: React.FormEvent) => {
@@ -693,13 +696,13 @@ export default function RoundsPage() {
                           <SelectItem key={c.id} value={c.id} className="text-xs">
                             {c.displayLabel} ({format(parseISO(c.startDate), 'dd MMM yyyy')} - {format(parseISO(c.endDate), 'dd MMM yyyy')})
                           </SelectItem>
-                        )) : <div className="p-4 text-center text-[9px] font-bold uppercase text-muted-foreground italic">No cycles located</div>}
+                        )) : <div className="p-4 text-center text-[9px] font-bold uppercase text-muted-foreground italic">No cycles available</div>}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="flex flex-col items-center justify-center p-6 bg-emerald-50 rounded-2xl border border-dashed border-emerald-200 text-center relative overflow-hidden group">
                     <div className="absolute -right-3 -bottom-3 opacity-5 group-hover:scale-110 transition-transform duration-500"><IndianRupee className="size-16 text-emerald-900" /></div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-600/60 mb-2 relative z-10">Verified Intake</p>
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-600/60 mb-2 relative z-10">Total Collection</p>
                     <div className="text-3xl font-black text-emerald-600 tabular-nums tracking-tighter relative z-10">₹{reconciliationTotal.toLocaleString()}</div>
                   </div>
                 </div>
