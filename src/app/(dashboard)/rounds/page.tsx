@@ -312,9 +312,9 @@ export default function RoundsPage() {
     const today = now;
 
     return members.map(m => {
-      const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(m.chitGroup).trim() && c.status === 'active');
+      const activeCycle = (allCycles || []).find(c => String(c.name).trim().toLowerCase() === String(m.chitGroup).trim().toLowerCase() && c.status === 'active');
       const mPayments = allPayments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
-      const scheme = chitSchemes.find(r => String(r.name).trim() === String(m.chitGroup).trim());
+      const scheme = chitSchemes.find(r => String(r.name).trim().toLowerCase() === String(m.chitGroup).trim().toLowerCase());
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
       
       let pendingDaysCount = 0;
@@ -375,7 +375,7 @@ export default function RoundsPage() {
   }, [members, allPayments, chitSchemes, allCycles]);
 
   const currentRound = useMemo(() => chitSchemes.find(r => r.id === selectedChitId), [chitSchemes, selectedChitId])
-  const assignedMembers = useMemo(() => membersWithCalculatedStats.filter(m => m.status !== 'inactive' && String(m.chitGroup).trim() === String(currentRound?.name).trim()), [membersWithCalculatedStats, currentRound])
+  const assignedMembers = useMemo(() => membersWithCalculatedStats.filter(m => m.status !== 'inactive' && String(m.chitGroup).trim().toLowerCase() === String(currentRound?.name).trim().toLowerCase()), [membersWithCalculatedStats, currentRound])
 
   const totalPaidByMember = useMemo(() => {
     const map = new Map<string, number>();
@@ -384,7 +384,7 @@ export default function RoundsPage() {
       if ((p.status === 'paid' || p.status === 'success')) {
         const member = members.find(m => m.id === p.memberId);
         if (!member) return;
-        const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(member.chitGroup).trim() && c.status === 'active');
+        const activeCycle = (allCycles || []).find(c => String(c.name).trim().toLowerCase() === String(member.chitGroup).trim().toLowerCase() && c.status === 'active');
         if (!activeCycle) return;
         const pDate = getRecordDate(p);
         if (pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate) {
@@ -402,9 +402,9 @@ export default function RoundsPage() {
   const missedDatesForSelectedMember = useMemo(() => {
     if (!selectedPendingMember || !allPayments || !allCycles || !chitSchemes) return [];
     const m = selectedPendingMember;
-    const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(m.chitGroup).trim() && c.status === 'active');
+    const activeCycle = (allCycles || []).find(c => String(c.name).trim().toLowerCase() === String(m.chitGroup).trim().toLowerCase() && c.status === 'active');
     if (!activeCycle) return [];
-    const scheme = chitSchemes.find(r => String(r.name).trim() === String(m.chitGroup).trim());
+    const scheme = chitSchemes.find(r => String(r.name).trim().toLowerCase() === String(m.chitGroup).trim().toLowerCase());
     const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
     const mPayments = allPayments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
     const missed: string[] = [];
@@ -439,7 +439,7 @@ export default function RoundsPage() {
 
   const getGroupCollectionForDate = (groupName: string, dateStr: string) => {
     if (!allPayments || !members) return 0;
-    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(groupName).trim()).map(m => m.id));
+    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim().toLowerCase() === String(groupName).trim().toLowerCase()).map(m => m.id));
     return allPayments
       .filter(p => {
         if (!groupMemberIds.has(p.memberId)) return false;
@@ -453,9 +453,9 @@ export default function RoundsPage() {
   const getGroupTodayCollection = (groupName: string) => getGroupCollectionForDate(groupName, format(new Date(), 'yyyy-MM-dd'));
 
   const getGroupActiveCycleCollection = (groupName: string) => {
-    const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(groupName).trim() && c.status === 'active');
+    const activeCycle = (allCycles || []).find(c => String(c.name).trim().toLowerCase() === String(groupName).trim().toLowerCase() && c.status === 'active');
     if (!activeCycle || !allPayments || !members) return 0;
-    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(groupName).trim()).map(m => m.id));
+    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim().toLowerCase() === String(groupName).trim().toLowerCase()).map(m => m.id));
     return allPayments
       .filter(p => groupMemberIds.has(p.memberId) && (p.status === 'success' || p.status === 'paid') && getRecordDate(p) >= activeCycle.startDate && getRecordDate(p) <= activeCycle.endDate)
       .reduce((acc, p) => acc + getPaymentAmount(p), 0);
@@ -463,32 +463,60 @@ export default function RoundsPage() {
 
   const reconciliationCycles = useMemo(() => {
     if (!activePopupGroupName || !allCycles) return [];
-    const allGroupCycles = allCycles.filter(c => {
-      const cNameClean = String(c?.name || "").replace(/group/gi, '').trim().toLowerCase();
-      const targetClean = activePopupGroupName.replace(/group/gi, '').trim().toLowerCase();
-      return cNameClean === targetClean;
+    
+    const filtered = allCycles.filter((c) => {
+      const mGroup = String(c?.name || "").trim().toLowerCase();
+      const gName = activePopupGroupName.toLowerCase();
+      const gNameClean = activePopupGroupName.replace(/Group/gi, '').trim().toLowerCase();
+      return (mGroup === gName || mGroup === gNameClean);
     });
 
-    const uniqueMap = new Map<string, any>();
-    allGroupCycles.forEach(c => {
-      const start = String(c?.startDate || "-");
-      const existing = uniqueMap.get(start);
-      if (!existing || (c.status === 'active' && existing.status !== 'active')) { uniqueMap.set(start, c); }
-    });
+    // Deduplicate by start date (exact same logic as Cycles Page)
+    const uniqueMap = new Map<string, any>()
+    filtered.forEach((c) => {
+      const start = String(c?.startDate || "-")
+      const existing = uniqueMap.get(start)
+      if (!existing || (c.status === 'active' && existing.status !== 'active')) {
+        uniqueMap.set(start, c)
+      }
+    })
+
+    const sortedUnique = Array.from(uniqueMap.values()).sort((a, b) => 
+      String(a.startDate).localeCompare(String(b.startDate))
+    );
+
+    console.log(`Auditing Group: ${activePopupGroupName}, Found ${sortedUnique.length} unique cycles.`);
     
-    const sortedFull = Array.from(uniqueMap.values()).sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
-    console.log(`Auditing Group: ${activePopupGroupName}, Found ${sortedFull.length} cycles.`);
-    
-    return sortedFull.map((c, i) => ({ ...c, displayLabel: `Cycle ${i + 1}` })).sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
+    return sortedUnique.map((c, i) => ({
+      ...c,
+      displayLabel: `Cycle ${i + 1}`
+    })).reverse(); // Newest first for selection ease
   }, [activePopupGroupName, allCycles]);
 
   const reconciliationTotal = useMemo(() => {
     if (!activePopupGroupName || !selectedReconciliationCycleId || !allPayments || !members || !allCycles) return 0;
     const cycle = allCycles.find(c => c.id === selectedReconciliationCycleId);
     if (!cycle) return 0;
-    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim() === String(activePopupGroupName).trim()).map(m => m.id));
+
+    // STRICT: Use exact dates from selectedCycle without recalculation
+    const startDate = cycle.startDate;
+    const endDate = cycle.endDate;
+
+    const groupMemberIds = new Set(members.filter(m => {
+      const mGroup = String(m?.chitGroup || "").trim().toLowerCase();
+      const gName = activePopupGroupName.toLowerCase();
+      const gNameClean = activePopupGroupName.replace(/Group/gi, '').trim().toLowerCase();
+      return (mGroup === gName || mGroup === gNameClean);
+    }).map(m => m.id));
+
     return allPayments
-      .filter(p => groupMemberIds.has(p.memberId) && (p.status === 'success' || p.status === 'paid') && getRecordDate(p) >= cycle.startDate && getRecordDate(p) <= cycle.endDate)
+      .filter(p => {
+        if (!groupMemberIds.has(p.memberId)) return false;
+        if (p.status !== 'success' && p.status !== 'paid') return false;
+        const pDate = getRecordDate(p);
+        // STRICT INCLUSIVE FILTER
+        return pDate && pDate >= startDate && pDate <= endDate;
+      })
       .reduce((acc, p) => acc + getPaymentAmount(p), 0);
   }, [activePopupGroupName, selectedReconciliationCycleId, allPayments, members, allCycles]);
 
@@ -501,7 +529,7 @@ export default function RoundsPage() {
     if (alreadyPaid) { toast({ variant: "destructive", title: "Duplicate Entry", description: "Already paid for this date." }); return; }
     setIsActionPending(true);
     try {
-      const activeCycle = (allCycles || []).find(c => String(c.name).trim() === String(currentRound.name).trim() && c.status === 'active');
+      const activeCycle = (allCycles || []).find(c => String(c.name).trim().toLowerCase() === String(currentRound.name).trim().toLowerCase() && c.status === 'active');
       const paymentRef = doc(collection(db, 'payments'));
       await addDoc(collection(db, 'payments'), {
         id: paymentRef.id,
@@ -661,7 +689,11 @@ export default function RoundsPage() {
                     <Select value={selectedReconciliationCycleId || ""} onValueChange={setSelectedReconciliationCycleId}>
                       <SelectTrigger className="h-10 text-xs font-bold rounded-xl border-muted/60"><SelectValue placeholder="Select operational cycle" /></SelectTrigger>
                       <SelectContent className="max-h-[300px]">
-                        {reconciliationCycles.length > 0 ? reconciliationCycles.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.displayLabel} ({format(parseISO(c.startDate), 'MMM dd')} - {format(parseISO(c.endDate), 'MMM dd')})</SelectItem>) : <div className="p-4 text-center text-[9px] font-bold uppercase text-muted-foreground italic">No cycles located</div>}
+                        {reconciliationCycles.length > 0 ? reconciliationCycles.map(c => (
+                          <SelectItem key={c.id} value={c.id} className="text-xs">
+                            {c.displayLabel} ({format(parseISO(c.startDate), 'dd MMM yyyy')} - {format(parseISO(c.endDate), 'dd MMM yyyy')})
+                          </SelectItem>
+                        )) : <div className="p-4 text-center text-[9px] font-bold uppercase text-muted-foreground italic">No cycles located</div>}
                       </SelectContent>
                     </Select>
                   </div>
