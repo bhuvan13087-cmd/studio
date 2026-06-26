@@ -3,8 +3,7 @@ rules_version = '2';
 /**
  * FIRESTORE SECURITY RULES - PROTOTYPING MODE
  * 
- * Updated to ensure all authenticated users have full administrative access.
- * Triggers deployment to resolve permission errors on collections.
+ * Simplified to ensure all authenticated users have full administrative access.
  */
 
 service cloud.firestore {
@@ -12,104 +11,50 @@ service cloud.firestore {
 
     // --- Helper Functions ---
 
-    /** @description Checks if the user is authenticated with Firebase Auth. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** @description Checks if the user is authorized. In this prototype, any signed-in user is an admin. */
     function isAdmin() {
       return isSignedIn();
     }
 
-    /** @description Verifies the document exists and the user is an authorized admin. */
-    function isExistingAdmin() {
-      return isAdmin() && resource != null;
-    }
-
-    /** @description Ensures relational integrity by matching internal ID field to the document path. */
-    function matchesPathId(idField) {
-      return request.resource.data.id == idField;
-    }
-
-    /** @description Ensures that once set, the internal ID field cannot be changed. */
-    function isIdImmutable() {
-      return request.resource.data.id == resource.data.id;
-    }
-
     // --- Collection Rules ---
 
-    /**
-     * @description Access control for the Admin designation collection.
-     */
     match /roles_admin/{adminUid} {
       allow get: if isSignedIn() && request.auth.uid == adminUid;
-      allow list: if false;
-      allow create, update, delete: if false;
+      allow list, create, update, delete: if false;
     }
 
-    /**
-     * @description Management of Chit Fund Members.
-     */
     match /members/{memberId} {
-      allow get, list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isExistingAdmin();
-      allow delete: if isExistingAdmin();
+      allow get, list, create, update, delete: if isAdmin();
     }
 
-    /**
-     * @description Management of payment transactions.
-     */
     match /payments/{paymentId} {
-      allow get, list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isExistingAdmin();
-      allow delete: if isExistingAdmin();
+      allow get, list, create, update, delete: if isAdmin();
     }
 
-    /**
-     * @description Records of completed Chit Rounds and winners.
-     */
     match /chitRounds/{roundId} {
-      allow get, list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isExistingAdmin();
-      allow delete: if isExistingAdmin();
+      allow get, list, create, update, delete: if isAdmin();
     }
 
-    /**
-     * @description System Audit Logs.
-     */
     match /auditLogs/{logId} {
       allow list, get, create: if isAdmin();
       allow update, delete: if false;
     }
 
-    /**
-     * @description Financial Period Locks.
-     */
     match /monthLocks/{lockId} {
       allow list, get, create, update, delete: if isAdmin();
     }
 
-    /**
-     * @description Activity Monitoring Cycles.
-     */
     match /cycles/{cycleId} {
       allow list, get, create, update, delete: if isAdmin();
     }
 
-    /**
-     * @description Monthly Collection Targets.
-     */
     match /monthlyTargets/{targetId} {
       allow list, get, create, update, delete: if isAdmin();
     }
     
-    /**
-     * @description System Metadata for automated tasks.
-     */
     match /systemMetadata/{docId} {
       allow get, list, create, update, delete: if isAdmin();
     }

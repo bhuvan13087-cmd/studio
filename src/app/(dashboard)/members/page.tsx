@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon, ChevronDown, ShieldCheck, AlertCircle, Save } from "lucide-react"
+import { Search, Phone, Calendar, CheckCircle2, Clock, Pencil, Loader2, Trash2, MoreVertical, Ban, History as HistoryIcon, ChevronDown, ShieldCheck, AlertCircle, Save, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {

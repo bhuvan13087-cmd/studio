@@ -152,7 +152,8 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
         }
       });
 
-      const nextNumber = maxNum + 1;
+      const uniqueStarts = Array.from(new Set(existingCycles.map((c: any) => c.startDate).filter(Boolean)));
+      const nextNumber = Math.max(maxNum + 1, uniqueStarts.length + 1);
       const todayStr = format(new Date(), 'yyyy-MM-dd');
 
       const newRef = doc(collection(db, 'cycles'));
@@ -183,6 +184,10 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
 
   const handleUpdateActiveCycle = async () => {
     if (!latestCycle) return;
+    if (latestCycle.status === 'completed') {
+      toast({ variant: "destructive", title: "Update Failed", description: "Cannot modify a completed cycle." });
+      return;
+    }
     setIsSaving(true);
     try {
       const updateData: any = {
@@ -592,7 +597,7 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
     const pAmt = Number(paymentData.amount);
     const tDate = paymentData.date; 
-    const alreadyPaid = allPayments.some(p => p.memberId === selectedMemberForPayment.id && getRecordDate(p) === tDate && (p.status === 'success' || p.status === 'paid'));
+    const alreadyPaid = (allPayments || []).some(p => p.memberId === selectedMemberForPayment.id && getRecordDate(p) === tDate && (p.status === 'success' || p.status === 'paid'));
     if (alreadyPaid) { toast({ variant: "destructive", title: "Duplicate Entry", description: "Already paid for this date." }); return; }
     setIsActionPending(true);
     try {
@@ -958,8 +963,8 @@ export default function RoundsPage() {
                 <Table>
                   <TableHeader className="bg-muted/30 sticky top-0"><TableRow><TableHead className="text-[8px] font-black uppercase tracking-widest h-7">Date</TableHead><TableHead className="text-[8px] font-black uppercase tracking-widest h-7">Paid</TableHead><TableHead className="text-[8px] font-black uppercase tracking-widest h-7 text-right">Mode</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {allPayments.filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid')).length > 0 ? (
-                      allPayments.filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid')).map((p, i) => (
+                    {(allPayments || []).filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid')).length > 0 ? (
+                      (allPayments || []).filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid')).map((p, i) => (
                         <TableRow key={i} className="hover:bg-muted/5 transition-colors border-b last:border-none">
                           <TableCell className="text-[10px] font-bold tabular-nums py-2">{getRecordDate(p) ? format(parseISO(getRecordDate(p)!), 'dd-MM-yyyy') : '-'}</TableCell>
                           <TableCell className="text-[10px] font-black text-emerald-600 tabular-nums py-2">₹{getPaymentAmount(p).toLocaleString()}</TableCell>
@@ -1105,7 +1110,7 @@ export default function RoundsPage() {
               </tr>
             </thead>
             <tbody>
-              {allPayments
+              {(allPayments || [])
                 .filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid'))
                 .map((p, i) => (
                   <tr key={i} style={{ borderBottom: '1px dashed #eee' }}>

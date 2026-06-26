@@ -125,14 +125,23 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
   const handleUpdateCycle = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!db || !editingCycle || isActionPending || !user) return
+    if (editingCycle.status === 'completed') {
+      toast({ variant: "destructive", title: "Update Failed", description: "Cannot modify a completed cycle." });
+      return;
+    }
 
     setIsActionPending(true)
     try {
       const batch = writeBatch(db);
       
-      const q = query(collection(db, 'cycles'), where('name', '==', groupName));
-      const querySnapshot = await getDocs(q);
-      const cycles = querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
+      const filtered = (allCycles || []).filter((c) => {
+        const mGroup = String(c?.name || "").trim().toLowerCase();
+        const gName = groupName.toLowerCase();
+        const gNameClean = groupName.replace(/Group/gi, '').trim().toLowerCase();
+        return (mGroup === gName || mGroup === gNameClean);
+      });
+      
+      const cycles = [...filtered];
       
       // Sort to identify the current sequence
       cycles.sort((a, b) => b.startDate.localeCompare(a.startDate));
@@ -148,7 +157,7 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
       const currentIdx = cycles.findIndex(c => c.id === editingCycle.id);
       const previousCycle = cycles[currentIdx + 1]; // Next in DESC sorted list is chronologically previous
       
-      if (previousCycle) {
+      if (previousCycle && previousCycle.status !== 'completed') {
         const nextStart = parseISO(editingCycle.startDate);
         const fixedEnd = format(subDays(nextStart, 1), 'yyyy-MM-dd');
         
@@ -212,7 +221,7 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
       </div>
 
       <div className="flex items-center gap-3">
-        {isActive && (
+        {isActive && cycle.status === 'active' && (
           <>
             <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter border-emerald-200 text-emerald-700 bg-emerald-50 h-5 px-1.5 hidden sm:flex">
               Active
