@@ -31,8 +31,16 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, isSameMonth, parseISO, startOfDay, eachDayOfInterval, isBefore, isAfter, max, isValid, differenceInDays, addDays } from "date-fns"
+import { format, startOfDay } from "date-fns"
 import { cn } from "@/lib/utils"
+import {
+  getPaymentAmount,
+  getPaymentDateStr,
+  getCreatedAtDateStr,
+  isPaymentSuccess,
+  findActiveCycle,
+  computeMemberStats,
+} from "@/lib/chit-engine"
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
@@ -72,116 +80,29 @@ export default function DashboardPage() {
     const now = startOfDay(new Date());
     const todayStr = format(now, 'yyyy-MM-dd')
 
-    const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
-    const getPDateStr = (p: any) => {
-      if (p.targetDate && typeof p.targetDate === 'string') return p.targetDate;
-      const raw = p.paymentDate || p.createdAt || p.date || p.paidDate;
-      if (!raw) return null;
-      try {
-        const d = raw.toDate ? raw.toDate() : new Date(raw);
-        if (isValid(d)) return format(d, 'yyyy-MM-dd');
-      } catch (e) {}
-      return null;
-    }
-
-    const getIntakeDateStr = (p: any) => {
-      const cAt = p.createdAt;
-      if (cAt) {
-        try {
-          const d = cAt.toDate ? cAt.toDate() : new Date(cAt);
-          if (isValid(d)) return format(d, 'yyyy-MM-dd');
-        } catch (e) {}
-      }
-      const pDt = p.paymentDate;
-      if (pDt) {
-        try {
-          const d = pDt.toDate ? pDt.toDate() : new Date(pDt);
-          if (isValid(d)) return format(d, 'yyyy-MM-dd');
-        } catch (e) {}
-      }
-      return getPDateStr(p);
-    };
 
     const collectedThisCycle = (payments || []).reduce((acc, p) => {
-      if (p.status !== 'paid' && p.status !== 'success' && p.status !== undefined) return acc;
+      if (!isPaymentSuccess(p, false)) return acc;
       const member = members?.find(m => m.id === p.memberId);
       if (!member) return acc;
-      const activeCycle = (allCycles || []).find(c => c.name === member.chitGroup && c.status === 'active');
+      const activeCycle = findActiveCycle(member.chitGroup, allCycles || []);
       if (!activeCycle) return acc;
-      const pDateStr = getPDateStr(p);
-      if (pDateStr && pDateStr >= activeCycle.startDate && pDateStr <= activeCycle.endDate) { return acc + getPAmount(p); }
+      const pDateStr = getPaymentDateStr(p);
+      if (pDateStr && pDateStr >= activeCycle.startDate && (activeCycle.endDate ? pDateStr <= activeCycle.endDate : true)) { return acc + getPaymentAmount(p); }
       return acc;
     }, 0);
 
     const collectedToday = (payments || []).reduce((acc, p) => {
-      if (p.status !== 'paid' && p.status !== 'success' && p.status !== undefined) return acc;
-      const intakeDate = getIntakeDateStr(p);
-      if (intakeDate === todayStr) { return acc + getPAmount(p); }
+      if (!isPaymentSuccess(p, false)) return acc;
+      const intakeDate = getCreatedAtDateStr(p);
+      if (intakeDate === todayStr) { return acc + getPaymentAmount(p); }
       return acc;
     }, 0);
 
+    // strict=false: dashboard historically counts payments with no status field as paid
     const membersWithCalculatedStats = (members || []).filter(m => m.status !== 'inactive').map(m => {
-      const activeCycle = (allCycles || []).find(c => c.name === m.chitGroup && c.status === 'active');
-      const mPayments = (payments || []).filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid' || !p.status));
-      const scheme = (rounds || []).find(r => r.name === m.chitGroup);
-      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
-      
-      let pendingDaysCount = 0;
-      let memberStatus: 'paid' | 'pending' | 'waiting' = 'pending';
-
-      if (!activeCycle) {
-        return { ...m, calculatedPendingDays: 0, calculatedPendingAmount: 0, memberStatus: 'paid' as const };
-      }
-
-      if (resolvedType === 'Daily') {
-        if (m.joinDate) {
-          try {
-            const rawJoinDate = parseISO(m.joinDate);
-            const cycleStart = parseISO(activeCycle.startDate);
-            const cycleEnd = parseISO(activeCycle.endDate);
-            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
-            const effectiveEnd = isBefore(now, cycleEnd) ? now : cycleEnd;
-            if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) {
-              const interval = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd });
-              interval.forEach(day => {
-                const dStr = format(day, 'yyyy-MM-dd');
-                const dayPaymentSum = mPayments.filter(p => getPDateStr(p) === dStr).reduce((acc, p) => acc + getPAmount(p), 0);
-                if (dayPaymentSum < (m.monthlyAmount || 800)) pendingDaysCount++;
-              });
-            }
-          } catch {}
-        }
-        memberStatus = mPayments.filter(p => getPDateStr(p) === todayStr).reduce((acc, p) => acc + getPAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
-      } else {
-        const hasPaidThisCycle = mPayments.some(p => {
-          const pDate = getPDateStr(p);
-          return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
-        });
-        if (hasPaidThisCycle) {
-          memberStatus = 'paid';
-          pendingDaysCount = 0;
-        } else {
-          const cycleStart = parseISO(activeCycle.startDate);
-          const cycleEnd = parseISO(activeCycle.endDate);
-          const numericDueDate = scheme?.dueDate || 5;
-          let isPastDue = !isSameMonth(now, cycleStart) || now.getDate() > numericDueDate;
-          let dueDateLimit = startOfDay(addDays(cycleStart, numericDueDate - 1));
-          
-          if (!isPastDue) {
-            memberStatus = 'waiting';
-            pendingDaysCount = 0;
-          } else {
-            memberStatus = 'pending';
-            const rawJoinDate = parseISO(m.joinDate);
-            const countFrom = addDays(dueDateLimit, 1);
-            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart, countFrom]));
-            const effectiveEnd = isBefore(now, cycleEnd) ? now : cycleEnd;
-            if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) { pendingDaysCount = differenceInDays(effectiveEnd, effectiveStart) + 1; } else { pendingDaysCount = 0; }
-          }
-        }
-      }
-
-      return { ...m, calculatedPendingDays: pendingDaysCount, calculatedPendingAmount: pendingDaysCount * (m.monthlyAmount || 800), memberStatus: memberStatus };
+      const stats = computeMemberStats(m, payments || [], allCycles || [], rounds || [], false);
+      return { ...m, ...stats };
     });
 
     const dailyPendingList = membersWithCalculatedStats.filter(m => m.memberStatus === 'pending' && (m.paymentType || (rounds || []).find(r => r.name === m.chitGroup)?.collectionType) === 'Daily');
@@ -251,8 +172,8 @@ export default function DashboardPage() {
            {recentPaymentsList.length > 0 ? (
              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                {recentPaymentsList.map((payment, i) => {
-                 const pAmt = Number(payment.amountPaid || payment.amount || 0);
-                 const pDateStr = payment.targetDate || (payment.paymentDate ? (payment.paymentDate.toDate ? format(payment.paymentDate.toDate(), 'yyyy-MM-dd') : payment.paymentDate.split('T')[0]) : '-');
+                 const pAmt = getPaymentAmount(payment);
+                 const pDateStr = getPaymentDateStr(payment) || '-';
                  return (
                    <div key={i} className="flex flex-col p-5 rounded-2xl bg-muted/20 hover:bg-muted/40 transition-all border border-transparent hover:border-border/60 group">
                       <div className="flex items-center justify-between mb-3"><Badge className="bg-emerald-100 text-emerald-700 border-none text-[9px] font-black uppercase tracking-widest">Captured</Badge><span className="text-[10px] text-muted-foreground font-bold tabular-nums">{pDateStr}</span></div>

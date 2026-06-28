@@ -32,8 +32,15 @@ import { Calendar } from "@/components/ui/calendar"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { format, parseISO, getMonth, getYear, subDays, isValid, startOfDay, isBefore, max, isSameMonth } from "date-fns"
+import { format, parseISO, getMonth, getYear, subDays, isValid, isSameMonth } from "date-fns"
 import { cn } from "@/lib/utils"
+import {
+  getPaymentAmount,
+  getPaymentDateStr,
+  getCreatedAtDateStr,
+  isPaymentSuccess,
+  findActiveCycle,
+} from "@/lib/chit-engine"
 
 const MONTHS_MASTER = [
   { value: "0", label: "January" }, { value: "1", label: "February" }, { value: "2", label: "March" },
@@ -70,35 +77,6 @@ export default function ReportsPage() {
 
   useEffect(() => { setMounted(true) }, [])
 
-  const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
-  const getPDateStr = (p: any) => {
-    if (p.targetDate && typeof p.targetDate === 'string') return p.targetDate;
-    const raw = p.paymentDate || p.createdAt || p.date || p.paidDate;
-    if (!raw) return null;
-    try {
-      const d = raw.toDate ? raw.toDate() : new Date(raw);
-      if (isValid(d)) return format(d, 'yyyy-MM-dd');
-    } catch (e) {}
-    return null;
-  }
-
-  const getIntakeDateStr = (p: any) => {
-    const cAt = p.createdAt;
-    if (cAt) {
-      try {
-        const d = cAt.toDate ? cAt.toDate() : new Date(cAt);
-        if (isValid(d)) return format(d, 'yyyy-MM-dd');
-      } catch (e) {}
-    }
-    const pDt = p.paymentDate;
-    if (pDt) {
-      try {
-        const d = pDt.toDate ? pDt.toDate() : new Date(pDt);
-        if (isValid(d)) return format(d, 'yyyy-MM-dd');
-      } catch (e) {}
-    }
-    return getPDateStr(p);
-  };
 
   const filteredData = useMemo(() => {
     if (!mounted || !members || !payments || !rounds || !allCycles) return null;
@@ -117,36 +95,40 @@ export default function ReportsPage() {
     const targetIds = new Set(targetMembers.map(m => m.id));
 
     const checkPending = (m: any, date: Date, dateStr: string) => {
-      const activeCycle = allCycles.find(c => c.name === m.chitGroup && c.status === 'active');
-      if (!activeCycle || dateStr < activeCycle.startDate || dateStr > activeCycle.endDate) return false;
-      const scheme = rounds.find(r => r.name === m.chitGroup);
+      const activeCycle = findActiveCycle(m.chitGroup, allCycles || []);
+      if (!activeCycle || dateStr < activeCycle.startDate || (activeCycle.endDate && dateStr > activeCycle.endDate)) return false;
+      const scheme = (rounds || []).find((r: any) => String(r.name || '').trim().toLowerCase() === String(m.chitGroup || '').trim().toLowerCase());
       const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
-      const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid' || !p.status));
+      const mPayments = (payments || []).filter(p => p.memberId === m.id && isPaymentSuccess(p, false));
       if (resolvedType === 'Daily') {
-        return mPayments.filter(p => getPDateStr(p) === dateStr).reduce((acc, p) => acc + getPAmount(p), 0) < (m.monthlyAmount || 800);
+        return mPayments.filter(p => getPaymentDateStr(p) === dateStr).reduce((acc, p) => acc + getPaymentAmount(p), 0) < (m.monthlyAmount || 800);
       } else {
-        const hasPaidThisCycle = mPayments.some(p => getPDateStr(p) >= activeCycle.startDate && getPDateStr(p) <= activeCycle.endDate);
+        const hasPaidThisCycle = mPayments.some(p => {
+          const pDate = getPaymentDateStr(p);
+          return pDate != null && pDate >= activeCycle.startDate && (activeCycle.endDate ? pDate <= activeCycle.endDate : true);
+        });
         return !hasPaidThisCycle && (!isSameMonth(date, parseISO(activeCycle.startDate)) || date.getDate() > (scheme?.dueDate || 5));
       }
     };
 
-    const focusDatePayments = payments.filter(p => {
-      if (p.status && p.status !== 'paid' && p.status !== 'success') return false;
-      return getIntakeDateStr(p) === focusDateStr;
+    const focusDatePayments = (payments || []).filter(p => {
+      if (!isPaymentSuccess(p, false)) return false;
+      return getCreatedAtDateStr(p) === focusDateStr;
     });
 
     const collectionDataByMonth = Array.from({ length: 12 }).map((_, i) => {
       const monthLabel = MONTHS_MASTER.find(m => m.value === i.toString())?.label || "";
-      const monthPayments = payments.filter(p => {
-        const intakeDateStr = getIntakeDateStr(p);
+      const monthPayments = (payments || []).filter(p => {
+        if (!isPaymentSuccess(p, false)) return false;
+        const intakeDateStr = getCreatedAtDateStr(p);
         if (!intakeDateStr) return false;
         const d = parseISO(intakeDateStr);
-        return (p.status === 'paid' || p.status === 'success' || !p.status) && targetIds.has(p.memberId) && getYear(d).toString() === selectedYear && getMonth(d) === i;
+        return targetIds.has(p.memberId) && getYear(d).toString() === selectedYear && getMonth(d) === i;
       });
-      return { month: `${monthLabel} ${selectedYear}`, amount: monthPayments.reduce((acc, p) => acc + getPAmount(p), 0) };
+      return { month: `${monthLabel} ${selectedYear}`, amount: monthPayments.reduce((acc, p) => acc + getPaymentAmount(p), 0) };
     }).filter(row => row.month.startsWith(MONTHS_MASTER.find(m => m.value === selectedMonth)?.label || ""));
 
-    return { collectionData: collectionDataByMonth, unpaidToday: targetMembers.filter(m => checkPending(m, focusDate, focusDateStr)), unpaidYesterday: targetMembers.filter(m => checkPending(m, yesterday, yesterdayStr)), focusStats: { collection: focusDatePayments.reduce((acc, p) => acc + getPAmount(p), 0), txCount: focusDatePayments.length, pendingCount: targetMembers.filter(m => checkPending(m, focusDate, focusDateStr)).length, dateLabel: format(focusDate, 'EEEE, dd MMMM yyyy') } };
+    return { collectionData: collectionDataByMonth, unpaidToday: targetMembers.filter(m => checkPending(m, focusDate, focusDateStr)), unpaidYesterday: targetMembers.filter(m => checkPending(m, yesterday, yesterdayStr)), focusStats: { collection: focusDatePayments.reduce((acc, p) => acc + getPaymentAmount(p), 0), txCount: focusDatePayments.length, pendingCount: targetMembers.filter(m => checkPending(m, focusDate, focusDateStr)).length, dateLabel: format(focusDate, 'EEEE, dd MMMM yyyy') } };
   }, [mounted, reportType, selectedMonth, selectedYear, selectedDate, members, payments, rounds, allCycles]);
 
   if (!mounted || membersLoading || paymentsLoading || roundsLoading) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)

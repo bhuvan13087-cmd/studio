@@ -63,6 +63,16 @@ import { useRole } from "@/hooks/use-role"
 import { format, parseISO, isSameMonth, eachDayOfInterval, isBefore, isAfter, startOfDay, endOfDay, differenceInDays, addDays, max, isValid, subDays } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
+import {
+  getPaymentAmount,
+  getPaymentDateStr,
+  getCreatedAtDateStr,
+  isPaymentSuccess,
+  findActiveCycle,
+  computeMemberStats,
+  computeTotalPaidInActiveCycle,
+  handlePopupBlur,
+} from "@/lib/chit-engine"
 
 const INITIAL_CHIT_STATE = { 
   name: "", 
@@ -92,13 +102,6 @@ const getInitials = (name: string) => {
   return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase();
 };
 
-const handlePopupBlur = (e: any) => {
-  const ae = document.activeElement;
-  if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae instanceof HTMLSelectElement) {
-    ae.blur();
-    e.preventDefault();
-  }
-};
 
 function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: any }) {
   const [startDate, setStartDate] = useState("")
@@ -314,6 +317,7 @@ export default function RoundsPage() {
   const [selectedReconciliationCycleId, setSelectedReconciliationCycleId] = useState<string | null>(null)
   
   const [isDailyAuditOpen, setIsDailyAuditOpen] = useState(false)
+  const [isTodayCollectionDetailOpen, setIsTodayCollectionDetailOpen] = useState(false)
   const [auditDate, setAuditDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
   const [historyMember, setHistoryMember] = useState<any>(null)
@@ -351,83 +355,12 @@ export default function RoundsPage() {
     };
   }, []);
 
-  const getPaymentAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
-  
-  const getRecordDate = (p: any) => {
-    if (p.targetDate) return p.targetDate;
-    if (p.paymentDate) {
-      const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : parseISO(p.paymentDate);
-      if (isValid(d)) return format(d, 'yyyy-MM-dd');
-    }
-    return null;
-  };
 
   const membersWithCalculatedStats = useMemo(() => {
     if (!members || !allPayments || !chitSchemes) return [];
-    const now = startOfDay(new Date());
-    const todayStr = format(now, 'yyyy-MM-dd');
-    const today = now;
-
-    return members.map(m => {
-      const activeCycle = (allCycles || []).find(c => String(c.name).trim().toLowerCase() === String(m.chitGroup).trim().toLowerCase() && c.status === 'active');
-      const mPayments = allPayments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
-      const scheme = chitSchemes.find(r => String(r.name).trim().toLowerCase() === String(m.chitGroup).trim().toLowerCase());
-      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
-      
-      let pendingDaysCount = 0;
-      let memberStatus: 'paid' | 'pending' | 'waiting' = 'pending';
-
-      if (!activeCycle) {
-        return { ...m, calculatedPendingDays: 0, calculatedPendingAmount: 0, memberStatus: 'paid' as const };
-      }
-
-      if (resolvedType === 'Daily') {
-        if (m.joinDate && m.status !== 'inactive') {
-          try {
-            const rawJoinDate = parseISO(m.joinDate);
-            const cycleStart = parseISO(activeCycle.startDate);
-            const cycleEnd = activeCycle.endDate ? parseISO(activeCycle.endDate) : today;
-            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart]));
-            const effectiveEnd = isBefore(today, cycleEnd) ? today : cycleEnd;
-            if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) {
-              const interval = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd });
-              interval.forEach(day => {
-                const dStr = format(day, 'yyyy-MM-dd');
-                const dayPaymentSum = mPayments.filter(p => getRecordDate(p) === dStr).reduce((acc, p) => acc + getPaymentAmount(p), 0);
-                if (dayPaymentSum < (m.monthlyAmount || 800)) { pendingDaysCount++; }
-              });
-            }
-          } catch (e) {}
-        }
-        memberStatus = mPayments.filter(p => getRecordDate(p) === todayStr).reduce((acc, p) => acc + getPaymentAmount(p), 0) >= (m.monthlyAmount || 800) ? 'paid' : 'pending';
-      } else {
-        const hasPaidThisCycle = mPayments.some(p => {
-          const pDate = getRecordDate(p);
-          return pDate && pDate >= activeCycle.startDate && (activeCycle.endDate ? pDate <= activeCycle.endDate : true);
-        });
-        
-        if (hasPaidThisCycle) {
-          memberStatus = 'paid';
-          pendingDaysCount = 0;
-        } else {
-          const cycleStart = parseISO(activeCycle.startDate);
-          const numericDueDate = scheme?.dueDate || 5;
-          let isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate;
-          if (!isPastDue) { memberStatus = 'waiting'; } else {
-            memberStatus = 'pending';
-            const rawJoinDate = parseISO(m.joinDate);
-            const dueDateLimit = startOfDay(addDays(cycleStart, numericDueDate - 1));
-            const countFrom = addDays(dueDateLimit, 1);
-            const effectiveStart = startOfDay(max([rawJoinDate, cycleStart, countFrom]));
-            const effectiveEnd = activeCycle.endDate && isBefore(parseISO(activeCycle.endDate), today) ? parseISO(activeCycle.endDate) : today;
-            if (isBefore(effectiveStart, addDays(effectiveEnd, 1))) {
-              pendingDaysCount = differenceInDays(effectiveEnd, effectiveStart) + 1;
-            }
-          }
-        }
-      }
-
-      return { ...m, calculatedPendingDays: pendingDaysCount, calculatedPendingAmount: pendingDaysCount * (m.monthlyAmount || 800), memberStatus: memberStatus };
+    return members.map((m) => {
+      const stats = computeMemberStats(m, allPayments, allCycles || [], chitSchemes);
+      return { ...m, ...stats };
     });
   }, [members, allPayments, chitSchemes, allCycles]);
 
@@ -437,21 +370,9 @@ export default function RoundsPage() {
   const totalPaidByMember = useMemo(() => {
     const map = new Map<string, number>();
     if (!allPayments || !members || !allCycles) return map;
-    allPayments.forEach(p => {
-      if ((p.status === 'paid' || p.status === 'success')) {
-        const member = members.find(m => m.id === p.memberId);
-        if (!member) return;
-        const activeCycle = (allCycles || []).find(c => String(c.name).trim().toLowerCase() === String(member.chitGroup).trim().toLowerCase() && c.status === 'active');
-        if (!activeCycle) return;
-        const pDate = getRecordDate(p);
-        if (pDate && pDate >= activeCycle.startDate && (activeCycle.endDate ? pDate <= activeCycle.endDate : true)) {
-          const amt = getPaymentAmount(p);
-          if (amt > 0) {
-            const current = map.get(p.memberId) || 0;
-            map.set(p.memberId, current + amt);
-          }
-        }
-      }
+    members.forEach((m) => {
+      const total = computeTotalPaidInActiveCycle(m.id, m.chitGroup, allPayments, allCycles);
+      if (total > 0) map.set(m.id, total);
     });
     return map;
   }, [allPayments, members, allCycles]);
@@ -459,11 +380,11 @@ export default function RoundsPage() {
   const missedDatesForSelectedMember = useMemo(() => {
     if (!selectedPendingMember || !allPayments || !allCycles || !chitSchemes) return [];
     const m = selectedPendingMember;
-    const activeCycle = (allCycles || []).find(c => String(c.name).trim().toLowerCase() === String(m.chitGroup).trim().toLowerCase() && c.status === 'active');
+    const activeCycle = findActiveCycle(m.chitGroup, allCycles || []);
     if (!activeCycle) return [];
-    const scheme = chitSchemes.find(r => String(r.name).trim().toLowerCase() === String(m.chitGroup).trim().toLowerCase());
+    const scheme = chitSchemes.find(r => String(r.name || '').trim().toLowerCase() === String(m.chitGroup || '').trim().toLowerCase());
     const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
-    const mPayments = allPayments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
+    const mPayments = allPayments.filter((p) => p.memberId === m.id && isPaymentSuccess(p));
     const missed: string[] = [];
     const today = startOfDay(new Date());
 
@@ -479,7 +400,7 @@ export default function RoundsPage() {
             const interval = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd });
             interval.forEach(day => {
               const dStr = format(day, 'yyyy-MM-dd');
-              const daySum = mPayments.filter(p => getRecordDate(p) === dStr).reduce((acc, p) => acc + getPaymentAmount(p), 0);
+              const daySum = mPayments.filter((p) => getPaymentDateStr(p) === dStr).reduce((acc, p) => acc + getPaymentAmount(p), 0);
               if (daySum < (m.monthlyAmount || 800)) { missed.push(dStr); }
             });
           }
@@ -496,25 +417,60 @@ export default function RoundsPage() {
 
   const getGroupCollectionForDate = (groupName: string, dateStr: string) => {
     if (!allPayments || !members) return 0;
-    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim().toLowerCase() === String(groupName).trim().toLowerCase()).map(m => m.id));
+    const normalised = String(groupName || '').trim().toLowerCase();
+    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup || '').trim().toLowerCase() === normalised).map(m => m.id));
     return allPayments
       .filter(p => {
         if (!groupMemberIds.has(p.memberId)) return false;
-        if (p.status !== 'success' && p.status !== 'paid') return false;
-        const d = p.createdAt?.toDate ? p.createdAt.toDate() : (p.paymentDate?.toDate ? p.paymentDate.toDate() : new Date(p.paymentDate || p.createdAt));
-        return format(d, 'yyyy-MM-dd') === dateStr || getRecordDate(p) === dateStr;
+        if (!isPaymentSuccess(p)) return false;
+        return getCreatedAtDateStr(p) === dateStr || getPaymentDateStr(p) === dateStr;
       })
       .reduce((acc, p) => acc + getPaymentAmount(p), 0);
   };
 
   const getGroupTodayCollection = (groupName: string) => getGroupCollectionForDate(groupName, format(new Date(), 'yyyy-MM-dd'));
 
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+  const todayPaymentsForGroup = useMemo(() => {
+    if (!allPayments || !currentRound || !assignedMembers) return [];
+    const groupMemberIds = new Set(assignedMembers.map(m => m.id));
+    return allPayments.filter(p => {
+      if (!groupMemberIds.has(p.memberId)) return false;
+      if (!isPaymentSuccess(p)) return false;
+      return getCreatedAtDateStr(p) === todayStr || getPaymentDateStr(p) === todayStr;
+    });
+  }, [allPayments, currentRound, assignedMembers, todayStr]);
+
+  const todayTotalCollectionAmount = useMemo(() => {
+    return todayPaymentsForGroup.reduce((sum, p) => sum + getPaymentAmount(p), 0);
+  }, [todayPaymentsForGroup]);
+
+  const todayPaidMembersCount = useMemo(() => {
+    return new Set(todayPaymentsForGroup.map(p => p.memberId)).size;
+  }, [todayPaymentsForGroup]);
+
+  const pendingMembersForGroup = useMemo(() => {
+    if (!assignedMembers) return [];
+    return assignedMembers.filter(m => m.calculatedPendingAmount > 0);
+  }, [assignedMembers]);
+
+  const totalPendingAmountForGroup = useMemo(() => {
+    return pendingMembersForGroup.reduce((sum, m) => sum + m.calculatedPendingAmount, 0);
+  }, [pendingMembersForGroup]);
+
   const getGroupActiveCycleCollection = (groupName: string) => {
-    const activeCycle = (allCycles || []).find(c => String(c.name).trim().toLowerCase() === String(groupName).trim().toLowerCase() && c.status === 'active');
+    const activeCycle = findActiveCycle(groupName, allCycles || []);
     if (!activeCycle || !allPayments || !members) return 0;
-    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup).trim().toLowerCase() === String(groupName).trim().toLowerCase()).map(m => m.id));
+    const normalised = String(groupName || '').trim().toLowerCase();
+    const groupMemberIds = new Set(members.filter(m => String(m.chitGroup || '').trim().toLowerCase() === normalised).map(m => m.id));
     return allPayments
-      .filter(p => groupMemberIds.has(p.memberId) && (p.status === 'success' || p.status === 'paid') && getRecordDate(p) >= activeCycle.startDate && (activeCycle.endDate ? getRecordDate(p) <= activeCycle.endDate : true))
+      .filter(p => {
+        if (!groupMemberIds.has(p.memberId)) return false;
+        if (!isPaymentSuccess(p)) return false;
+        const pDate = getPaymentDateStr(p);
+        return pDate != null && pDate >= activeCycle.startDate && (activeCycle.endDate ? pDate <= activeCycle.endDate : true);
+      })
       .reduce((acc, p) => acc + getPaymentAmount(p), 0);
   };
 
@@ -564,8 +520,8 @@ export default function RoundsPage() {
       if (!groupMemberIds.has(p.memberId)) return false;
       if (p.status && !['success', 'paid', 'verified'].includes(p.status.toLowerCase())) return false;
       if (p.cycleId === cycleIdInternal) return true;
-      const pDate = getRecordDate(p);
-      return pDate && pDate >= startDate && (endDate ? pDate <= endDate : true);
+      const pDate = getPaymentDateStr(p);
+      return pDate != null && pDate >= startDate && (endDate ? pDate <= endDate : true);
     });
 
     return cyclePayments.reduce((acc, p) => acc + getPaymentAmount(p), 0);
@@ -597,7 +553,7 @@ export default function RoundsPage() {
     if (!db || !selectedMemberForPayment || !currentRound || isActionPending) return;
     const pAmt = Number(paymentData.amount);
     const tDate = paymentData.date; 
-    const alreadyPaid = (allPayments || []).some(p => p.memberId === selectedMemberForPayment.id && getRecordDate(p) === tDate && (p.status === 'success' || p.status === 'paid'));
+    const alreadyPaid = (allPayments || []).some(p => p.memberId === selectedMemberForPayment.id && getPaymentDateStr(p) === tDate && isPaymentSuccess(p));
     if (alreadyPaid) { toast({ variant: "destructive", title: "Duplicate Entry", description: "Already paid for this date." }); return; }
     setIsActionPending(true);
     try {
@@ -888,8 +844,11 @@ export default function RoundsPage() {
           <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between min-h-[38px]"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Pending Count</CardTitle></CardHeader>
           <CardContent className="p-2.5 pt-0 flex-1 flex flex-col justify-center"><div className="text-lg font-bold tabular-nums text-amber-600 tracking-tight">{assignedMembers.filter(m => m.memberStatus === 'pending').length}</div></CardContent>
         </Card>
-        <Card className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl h-full flex flex-col">
-          <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between min-h-[38px]"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle><Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" onClick={() => setIsDailyAuditOpen(true)}><Wallet className="size-3" /></Button></CardHeader>
+        <Card 
+          className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl h-full flex flex-col cursor-pointer hover:shadow-md hover:border-emerald-500/30 transition-all active:scale-[0.99]"
+          onClick={() => setIsTodayCollectionDetailOpen(true)}
+        >
+          <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between min-h-[38px]"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle><Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" onClick={(e) => { e.stopPropagation(); setIsTodayCollectionDetailOpen(true); }}><Wallet className="size-3" /></Button></CardHeader>
           <CardContent className="p-2.5 pt-0 flex-1 flex flex-col justify-center"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent>
         </Card>
       </div>
@@ -1012,6 +971,130 @@ export default function RoundsPage() {
               </div>
               <DialogFooter><Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-bold h-10 rounded-xl text-xs uppercase tracking-widest bg-primary hover:bg-primary/90 text-white">Close Audit</Button></DialogFooter>
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isTodayCollectionDetailOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsTodayCollectionDetailOpen(o); }}>
+        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
+          {currentRound && (
+            <div className="flex flex-col bg-white">
+              <DialogTitle className="sr-only">Today's Collection Detailed View - {currentRound.name}</DialogTitle>
+              
+              {/* Header */}
+              <div className="bg-primary/5 p-4 text-center relative border-b border-border/40">
+                <div className="mx-auto mb-2 h-12 w-12 rounded-2xl bg-white text-emerald-600 flex items-center justify-center shadow-lg border-2 border-emerald-100 ring-4 ring-emerald-50">
+                  <Wallet className="size-6" />
+                </div>
+                <div className="space-y-0.5">
+                  <h3 className="text-lg font-black uppercase tracking-tight text-primary leading-tight text-center">Today's Collection</h3>
+                  <DialogDescription className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">{getDisplayName(currentRound.name)} Breakdown</DialogDescription>
+                </div>
+              </div>
+
+              {/* Summary Stats Grid */}
+              <div className="p-4 bg-muted/20 grid grid-cols-2 gap-3 border-b border-border/40">
+                <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col justify-center">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-emerald-600/80 mb-0.5">Total Collection</span>
+                  <div className="text-xl font-black text-emerald-700 tabular-nums tracking-tighter">₹{todayTotalCollectionAmount.toLocaleString()}</div>
+                  <span className="text-[9px] text-emerald-600 font-semibold mt-0.5">{todayPaidMembersCount} members paid</span>
+                </div>
+                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-100 flex flex-col justify-center">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-amber-600/80 mb-0.5">Total Pending</span>
+                  <div className="text-xl font-black text-amber-700 tabular-nums tracking-tighter">₹{totalPendingAmountForGroup.toLocaleString()}</div>
+                  <span className="text-[9px] text-amber-600 font-semibold mt-0.5">{pendingMembersForGroup.length} members pending</span>
+                </div>
+              </div>
+
+              {/* Main Content with Tabs/ScrollAreas */}
+              <div className="p-4 space-y-4 bg-white max-h-[380px] overflow-y-auto">
+                {/* Section 1: Paid Details */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5 font-headline">
+                      <CheckCircle2 className="size-3.5 text-emerald-500" /> Paid Today ({todayPaymentsForGroup.length})
+                    </h4>
+                  </div>
+                  <div className="space-y-1.5">
+                    {todayPaymentsForGroup.length > 0 ? (
+                      todayPaymentsForGroup.map((p) => {
+                        const formattedDateTime = (() => {
+                          let d: Date | null = null;
+                          if (p.createdAt) {
+                            d = p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
+                          } else if (p.paymentDate) {
+                            d = p.paymentDate.toDate ? p.paymentDate.toDate() : new Date(p.paymentDate);
+                          }
+                          return d && isValid(d) ? format(d, 'dd-MM-yyyy hh:mm a') : 'N/A';
+                        })();
+                        return (
+                          <div key={p.id || Math.random().toString()} className="flex items-center justify-between p-2.5 bg-muted/10 rounded-xl border border-border/30 hover:bg-muted/20 transition-colors">
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-bold text-foreground truncate">{p.memberName || 'Unknown Member'}</span>
+                              <span className="text-[8px] font-black text-muted-foreground/50 uppercase tracking-widest truncate">ID: {p.memberId || 'N/A'}</span>
+                            </div>
+                            <div className="flex flex-col items-end text-right">
+                              <span className="text-xs font-black text-emerald-600 tabular-nums">₹{getPaymentAmount(p).toLocaleString()}</span>
+                              <span className="text-[8px] text-muted-foreground font-semibold tabular-nums mt-0.5">{formattedDateTime}</span>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter px-1 h-3.5 border-emerald-500/20 bg-emerald-500/5 text-emerald-600">
+                                  {p.status || 'success'}
+                                </Badge>
+                                {p.method && (
+                                  <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter px-1 h-3.5 border-primary/20 bg-primary/5 text-primary">
+                                    {p.method}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="p-6 text-center border border-dashed rounded-xl bg-muted/5">
+                        <span className="text-[9px] font-extrabold uppercase text-muted-foreground/60 tracking-widest">No payments recorded today</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Section 2: Pending Details */}
+                <div className="space-y-2 pt-2 border-t border-dashed border-border/60">
+                  <div className="flex items-center justify-between px-1">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5 font-headline">
+                      <AlertCircle className="size-3.5 text-amber-500" /> Pending Collection ({pendingMembersForGroup.length})
+                    </h4>
+                  </div>
+                  <div className="space-y-1.5">
+                    {pendingMembersForGroup.length > 0 ? (
+                      pendingMembersForGroup.map((m) => (
+                        <div key={m.id} className="flex items-center justify-between p-2.5 bg-muted/10 rounded-xl border border-border/30 hover:bg-muted/20 transition-colors">
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-bold text-foreground truncate">{m.name}</span>
+                            <span className="text-[8px] font-black text-muted-foreground/50 uppercase tracking-widest truncate">ID: {m.id}</span>
+                          </div>
+                          <div className="flex flex-col items-end text-right">
+                            <span className="text-xs font-black text-amber-600 tabular-nums">₹{(m.calculatedPendingAmount || 0).toLocaleString()}</span>
+                            <span className="text-[8px] text-amber-500 font-semibold uppercase tracking-widest mt-0.5">{m.calculatedPendingDays || 0} days pending</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-6 text-center border border-dashed rounded-xl bg-emerald-50/20 border-emerald-200/50">
+                        <span className="text-[9px] font-extrabold uppercase text-emerald-600 tracking-widest">All members paid in full!</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-3 bg-muted/10 border-t border-border/40">
+                <Button onClick={() => setIsTodayCollectionDetailOpen(false)} className="w-full font-black uppercase tracking-widest h-10 rounded-xl shadow-sm text-xs bg-primary hover:bg-primary/90 text-white animate-in">
+                  Close Details
+                </Button>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>

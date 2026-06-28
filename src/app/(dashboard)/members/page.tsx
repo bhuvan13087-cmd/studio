@@ -51,19 +51,17 @@ import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, doc, serverTimestamp, query, orderBy, updateDoc } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, startOfDay, eachDayOfInterval, isBefore, isAfter, max, isValid, isSameMonth, differenceInDays, addDays } from "date-fns"
+import { format, parseISO } from "date-fns"
 import { createAuditLog } from "@/firebase/logging"
 import { withTimeout } from "@/lib/utils"
+import {
+  computeMemberStats,
+  computeTotalPaidInActiveCycle,
+  handlePopupBlur,
+} from "@/lib/chit-engine"
 
 const PAGE_SIZE = 50
 
-const handlePopupBlur = (e: any) => {
-  const ae = document.activeElement;
-  if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae instanceof HTMLSelectElement) {
-    ae.blur();
-    e.preventDefault();
-  }
-};
 
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -103,48 +101,11 @@ export default function MembersPage() {
 
   const membersWithCalculatedStats = useMemo(() => {
     if (!members || !payments || !chitRounds || !allCycles) return [];
-    const now = startOfDay(new Date());
-    const todayStr = format(now, 'yyyy-MM-dd');
-    const today = now;
 
-    return members.map(m => {
-      const activeCycle = (allCycles || []).find(c => c.name === m.chitGroup && c.status === 'active');
-      const mPayments = payments.filter(p => p.memberId === m.id && (p.status === 'success' || p.status === 'paid'));
-      const scheme = (chitRounds || []).find(r => r.name === m.chitGroup);
-      const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
-      
-      let memberStatus: 'paid' | 'pending' | 'waiting' = 'pending';
-
-      if (!activeCycle) {
-        return { ...m, memberStatus: 'paid' as const, totalPaidSum: 0 };
-      }
-
-      if (resolvedType === 'Daily') {
-        const isPaidToday = mPayments.filter(p => p.targetDate === todayStr).reduce((acc, p) => acc + (p.amountPaid || 0), 0) >= (m.monthlyAmount || 800);
-        memberStatus = isPaidToday ? 'paid' : 'pending';
-      } else {
-        const hasPaidThisCycle = mPayments.some(p => {
-          const pDate = p.targetDate || (p.paymentDate?.toDate ? format(p.paymentDate.toDate(), 'yyyy-MM-dd') : null);
-          return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
-        });
-        if (hasPaidThisCycle) { memberStatus = 'paid'; } else {
-          const cycleStart = parseISO(activeCycle.startDate);
-          const numericDueDate = scheme?.dueDate || 5;
-          let isPastDue = !isSameMonth(today, cycleStart) || today.getDate() > numericDueDate;
-          if (!isPastDue) { memberStatus = 'waiting'; } else { memberStatus = 'pending'; }
-        }
-      }
-
-      return { 
-        ...m, 
-        memberStatus: memberStatus, 
-        totalPaidSum: mPayments
-          .filter(p => {
-            const pDate = p.targetDate || (p.paymentDate?.toDate ? format(p.paymentDate.toDate(), 'yyyy-MM-dd') : null);
-            return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
-          })
-          .reduce((acc, p) => acc + (p.amountPaid || 0), 0) 
-      };
+    return members.map((m) => {
+      const stats = computeMemberStats(m, payments, allCycles || [], chitRounds || []);
+      const totalPaidSum = computeTotalPaidInActiveCycle(m.id, m.chitGroup, payments, allCycles || []);
+      return { ...m, ...stats, totalPaidSum };
     });
   }, [members, payments, chitRounds, allCycles]);
 

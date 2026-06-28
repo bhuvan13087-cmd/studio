@@ -51,19 +51,18 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
 import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc, writeBatch } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, isValid } from "date-fns"
+import { format, parseISO, isValid } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
+import {
+  getPaymentAmount,
+  getPaymentDateStr,
+  computeTotalPaidInActiveCycle,
+  handlePopupBlur,
+} from "@/lib/chit-engine"
 
 const PAGE_SIZE = 50
 
-const handlePopupBlur = (e: any) => {
-  const ae = document.activeElement;
-  if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae instanceof HTMLSelectElement) {
-    ae.blur();
-    e.preventDefault();
-  }
-};
 
 export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -118,29 +117,13 @@ export default function PaymentsPage() {
     };
   }, []);
 
-  const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
-  const getPDateStr = (p: any) => {
-    if (p.targetDate) return p.targetDate;
-    const d = p.paymentDate?.toDate ? p.paymentDate.toDate() : (p.paymentDate ? new Date(p.paymentDate) : null);
-    if (d && !isNaN(d.getTime())) return d.toISOString().split('T')[0];
-    return null;
-  }
 
   const totalPaidByMember = useMemo(() => {
     const map = new Map<string, number>();
     if (!allCycles || !members) return map;
-    payments.forEach(p => {
-      if (p.status === 'paid' || p.status === 'success' || !p.status) {
-        const member = members.find(m => m.id === p.memberId);
-        if (!member) return;
-        const activeCycle = (allCycles || []).find(c => c.name === member.chitGroup && c.status === 'active');
-        if (!activeCycle) return;
-        const pDate = getPDateStr(p);
-        if (pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate) {
-          const current = map.get(p.memberId) || 0;
-          map.set(p.memberId, current + getPAmount(p));
-        }
-      }
+    members.forEach((m) => {
+      const total = computeTotalPaidInActiveCycle(m.id, m.chitGroup, payments, allCycles || [], false);
+      if (total > 0) map.set(m.id, total);
     });
     return map;
   }, [payments, members, allCycles]);
@@ -161,7 +144,7 @@ export default function PaymentsPage() {
       const batch = writeBatch(db);
       const originalPaymentRef = doc(db, 'payments', paymentToCorrect.id);
       const oldMember = members.find(m => m.id === paymentToCorrect.memberId);
-      const oldAmount = getPAmount(paymentToCorrect);
+      const oldAmount = getPaymentAmount(paymentToCorrect);
       
       if (correctionData.type === 'wrong-amount') {
         const newAmount = Number(correctionData.amount);
@@ -186,7 +169,7 @@ export default function PaymentsPage() {
         }
         
         const newPaymentRef = doc(collection(db, 'payments'));
-        const pDateStr = getPDateStr(paymentToCorrect) || format(new Date(), 'yyyy-MM-dd');
+        const pDateStr = getPaymentDateStr(paymentToCorrect) || format(new Date(), 'yyyy-MM-dd');
         batch.set(newPaymentRef, {
           id: newPaymentRef.id,
           memberId: newMember.id,
@@ -235,9 +218,9 @@ export default function PaymentsPage() {
     setIsActionPending(true)
     try {
       const member = members.find(m => m.id === paymentToDelete.memberId);
-      if (member) { const memberRef = doc(db, 'members', member.id); await withTimeout(updateDoc(memberRef, { totalPaid: Math.max(0, (member.totalPaid || 0) - getPAmount(paymentToDelete)) })); }
+      if (member) { const memberRef = doc(db, 'members', member.id); await withTimeout(updateDoc(memberRef, { totalPaid: Math.max(0, (member.totalPaid || 0) - getPaymentAmount(paymentToDelete)) })); }
       await withTimeout(deleteDoc(doc(db, 'payments', paymentToDelete.id)));
-      await createAuditLog(db, user, `Deleted payment record of ₹${getPAmount(paymentToDelete)} for ${paymentToDelete.memberName}`);
+      await createAuditLog(db, user, `Deleted payment record of ₹${getPaymentAmount(paymentToDelete)} for ${paymentToDelete.memberName}`);
       handleModalClose(setIsDeletePaymentDialogOpen, () => setPaymentToDelete(null));
       toast({ title: "Record Deleted", description: "Payment removed successfully." });
     } catch (error: any) { toast({ variant: "destructive", title: "Error", description: error.message || "Failed to delete record." }); } finally { setIsActionPending(false); }
@@ -252,7 +235,7 @@ export default function PaymentsPage() {
       if (!member) return false;
       const activeCycle = (allCycles || []).find(c => c.name === member.chitGroup && c.status === 'active');
       if (!activeCycle) return false;
-      const pDate = getPDateStr(p);
+      const pDate = getPaymentDateStr(p);
       return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
     });
 
@@ -290,14 +273,14 @@ export default function PaymentsPage() {
         const amountPaidInCycle = !activeCycle ? 0 : memberPayments
           .filter(p => {
             if (!(p.status === 'paid' || p.status === 'success' || !p.status)) return false;
-            const pDate = getPDateStr(p);
+            const pDate = getPaymentDateStr(p);
             return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
           })
-          .reduce((acc, p) => acc + getPAmount(p), 0);
+          .reduce((acc, p) => acc + getPaymentAmount(p), 0);
 
         const hasPaidToday = memberPayments.some(p => 
           (p.status === 'paid' || p.status === 'success' || !p.status) && 
-          getPDateStr(p) === todayStr
+          getPaymentDateStr(p) === todayStr
         );
         
         return { id: member.id, name: member.name, chitName: member.chitGroup || "N/A", totalAmount: member.monthlyAmount || 0, amountPaid: amountPaidInCycle, status: hasPaidToday ? "Paid" : "Unpaid" };
@@ -338,11 +321,11 @@ export default function PaymentsPage() {
                     <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground animate-pulse">Loading active history...</TableCell></TableRow>
                   ) : visiblePayments.length > 0 ? (
                     visiblePayments.map((p) => {
-                      const pDateStr = getPDateStr(p) || "-";
+                      const pDateStr = getPaymentDateStr(p) || "-";
                       const [m, y] = p.month ? p.month.split(' ') : [format(new Date(), 'MMMM'), format(new Date(), 'yyyy')];
                       const isLocked = monthLocks?.some(l => l.year === y && l.monthName === m);
                       const isCorrected = p.status === 'corrected';
-                      const pAmt = getPAmount(p);
+                      const pAmt = getPaymentAmount(p);
                       return (
                         <TableRow key={p.id} className={cn("hover:bg-muted/10 transition-colors", isCorrected && "opacity-60 bg-muted/5")}>
                           <TableCell className="text-[10px] sm:text-xs font-medium tabular-nums text-muted-foreground"><div className="flex items-center gap-1.5">{isLocked && <span title="Month Locked"><Lock className="size-2.5 text-amber-600" /></span>}{pDateStr !== "-" && isValid(parseISO(pDateStr)) ? format(parseISO(pDateStr), 'dd-MM-yyyy') : pDateStr}</div></TableCell>
@@ -433,7 +416,7 @@ export default function PaymentsPage() {
                     <span className="font-semibold">{paymentToCorrect.memberName}</span>
                     <span className="font-bold text-emerald-600">₹{getPAmount(paymentToCorrect).toLocaleString()}</span>
                   </div>
-                  <div className="text-[10px] text-muted-foreground">{getPDateStr(paymentToCorrect) && isValid(parseISO(getPDateStr(paymentToCorrect)!)) ? format(parseISO(getPDateStr(paymentToCorrect)!), 'dd-MM-yyyy') : "No target date"}</div>
+                  <div className="text-[10px] text-muted-foreground">{getPaymentDateStr(paymentToCorrect) && isValid(parseISO(getPaymentDateStr(paymentToCorrect)!)) ? format(parseISO(getPaymentDateStr(paymentToCorrect)!), 'dd-MM-yyyy') : "No target date"}</div>
                 </div>
 
                 <div className="grid gap-4">
@@ -559,13 +542,13 @@ export default function PaymentsPage() {
                       if (!member) return false;
                       const activeCycle = (allCycles || []).find(c => c.name === member.chitGroup && c.status === 'active');
                       if (!activeCycle) return false;
-                      const pDate = getPDateStr(p);
+                      const pDate = getPaymentDateStr(p);
                       return pDate && pDate >= activeCycle.startDate && pDate <= activeCycle.endDate;
                     }).map((e, i) => (
                       <TableRow key={i}>
                         <TableCell className="text-sm font-semibold">{e.month || 'Current Cycle'}</TableCell>
-                        <TableCell className="text-sm font-bold text-emerald-600">₹{getPAmount(e).toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{getPDateStr(e) && isValid(parseISO(getPDateStr(e)!)) ? format(parseISO(getPDateStr(e)!), 'dd-MM-yyyy') : (getPDateStr(e) || "-")}</TableCell>
+                        <TableCell className="text-sm font-bold text-emerald-600">₹{getPaymentAmount(e).toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground font-medium">{getPaymentDateStr(e) && isValid(parseISO(getPaymentDateStr(e)!)) ? format(parseISO(getPaymentDateStr(e)!), 'dd-MM-yyyy') : (getPaymentDateStr(e) || "-")}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
