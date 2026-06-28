@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet, CalendarDays, Edit3, Printer, X, Save, Phone } from "lucide-react"
+import { History, Plus, Users, ChevronLeft, Loader2, IndianRupee, UserPlus, Info, Clock, AlertCircle, CheckCircle2, LayoutDashboard, Search, RefreshCcw, TrendingUp, MoreVertical, Pencil, Trash2, User, Calendar, Wallet, CalendarDays, Edit3, Printer, X, Save, Phone, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -442,6 +442,25 @@ export default function RoundsPage() {
     });
   }, [allPayments, currentRound, assignedMembers, todayStr]);
 
+  const auditDatePayments = useMemo(() => {
+    if (!allPayments || !members || !currentRound || !auditDate) return [];
+    const normalised = String(currentRound.name || '').trim().toLowerCase();
+    const groupMembersFiltered = members.filter(m => String(m.chitGroup || '').trim().toLowerCase() === normalised);
+    const groupMemberIds = new Set(groupMembersFiltered.map(m => m.id));
+    
+    const paymentsForDate = allPayments.filter(p => {
+      if (!groupMemberIds.has(p.memberId)) return false;
+      if (!isPaymentSuccess(p)) return false;
+      return getCreatedAtDateStr(p) === auditDate || getPaymentDateStr(p) === auditDate;
+    });
+
+    return [...paymentsForDate].sort((a, b) => {
+      const nameA = String(a.memberName || '').trim().toLowerCase();
+      const nameB = String(b.memberName || '').trim().toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  }, [allPayments, members, currentRound, auditDate]);
+
   const todayTotalCollectionAmount = useMemo(() => {
     return todayPaymentsForGroup.reduce((sum, p) => sum + getPaymentAmount(p), 0);
   }, [todayPaymentsForGroup]);
@@ -848,7 +867,27 @@ export default function RoundsPage() {
           className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl h-full flex flex-col cursor-pointer hover:shadow-md hover:border-emerald-500/30 transition-all active:scale-[0.99]"
           onClick={() => setIsTodayCollectionDetailOpen(true)}
         >
-          <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between min-h-[38px]"><CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle><Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" onClick={(e) => { e.stopPropagation(); setIsTodayCollectionDetailOpen(true); }}><Wallet className="size-3" /></Button></CardHeader>
+          <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between min-h-[38px]">
+            <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle>
+            <div className="flex items-center gap-1.5">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" 
+                onClick={(e) => { e.stopPropagation(); setIsDailyAuditOpen(true); }}
+              >
+                <Eye className="size-3" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" 
+                onClick={(e) => { e.stopPropagation(); setIsTodayCollectionDetailOpen(true); }}
+              >
+                <Wallet className="size-3" />
+              </Button>
+            </div>
+          </CardHeader>
           <CardContent className="p-2.5 pt-0 flex-1 flex flex-col justify-center"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent>
         </Card>
       </div>
@@ -961,16 +1000,80 @@ export default function RoundsPage() {
       </Dialog>
 
       <Dialog open={isDailyAuditOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsDailyAuditOpen(o); }}>
-        <DialogContent className="sm:max-w-[320px]" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
+        <DialogContent className="sm:max-w-[340px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl bg-white" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
           {currentRound && (
-            <>
-              <DialogHeader><DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight text-primary"><Wallet className="size-4" />Audit Ledger</DialogTitle></DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-muted-foreground">Select Date</Label><div className="relative"><CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" /><Input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className="pl-9 h-10 font-bold text-xs rounded-xl border-muted/60" /></div></div>
-                <div className="flex flex-col items-center justify-center p-5 bg-emerald-50 rounded-2xl border border-dashed border-emerald-200 text-center"><p className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-600/60 mb-1.5">Daily Intake</p><div className="text-3xl font-black text-emerald-600 tabular-nums tracking-tighter">₹{getGroupCollectionForDate(currentRound.name, auditDate).toLocaleString()}</div></div>
+            <div className="flex flex-col">
+              {/* Header */}
+              <div className="bg-primary/5 p-4 text-center relative border-b border-border/40">
+                <div className="mx-auto mb-2 h-10 w-10 rounded-2xl bg-white text-primary flex items-center justify-center shadow-md border border-primary/10">
+                  <Eye className="size-5" />
+                </div>
+                <DialogTitle className="text-base font-black uppercase tracking-tight text-primary leading-tight text-center">Collection Details</DialogTitle>
+                <DialogDescription className="sr-only">Detailed collection breakdown by member for the selected date.</DialogDescription>
               </div>
-              <DialogFooter><Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-bold h-10 rounded-xl text-xs uppercase tracking-widest bg-primary hover:bg-primary/90 text-white">Close Audit</Button></DialogFooter>
-            </>
+
+              <div className="p-4 space-y-4 bg-white">
+                {/* Date Picker */}
+                <div className="space-y-1.5">
+                  <Label className="text-[9px] font-black uppercase text-muted-foreground ml-1">Selected Date</Label>
+                  <div className="relative">
+                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                    <Input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className="pl-9 h-10 font-bold text-xs rounded-xl border-muted/60" />
+                  </div>
+                </div>
+
+                {/* Member-wise Collection List */}
+                <div className="border border-border/40 rounded-2xl overflow-hidden">
+                  <div className="max-h-[200px] overflow-y-auto custom-scrollbar p-3 bg-muted/5">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-border/40">
+                          <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 pl-1">Member Name</th>
+                          <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 text-right pr-1">Amount Paid</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditDatePayments.length > 0 ? (
+                          auditDatePayments.map((p: any, i: number) => {
+                            const pAmt = getPaymentAmount(p);
+                            return (
+                              <tr key={p.id || i} className="border-b border-border/10 last:border-none hover:bg-muted/5 transition-colors">
+                                <td className="py-2 text-xs font-bold text-foreground/80 pl-1">{p.memberName || 'Unknown Member'}</td>
+                                <td className="py-2 text-xs font-black text-emerald-600 text-right pr-1 tabular-nums">₹{pAmt.toLocaleString()}</td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={2} className="py-8 text-center text-[10px] font-bold uppercase text-muted-foreground/50 italic">
+                              No collections recorded on this date.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Bottom Total Collection */}
+                <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between shadow-inner relative overflow-hidden group">
+                  <div className="absolute -right-3 -bottom-3 opacity-5 transition-transform duration-500">
+                    <IndianRupee className="size-12 text-emerald-900" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80">Total Collection</span>
+                  <p className="text-base font-black text-emerald-700 tabular-nums tracking-tighter relative z-10">
+                    ₹{getGroupCollectionForDate(currentRound.name, auditDate).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-3 bg-muted/10 border-t border-border/40">
+                <Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-black uppercase tracking-widest h-10 rounded-xl shadow-sm text-xs bg-primary hover:bg-primary/90 text-white">
+                  Close Details
+                </Button>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>
