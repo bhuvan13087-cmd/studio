@@ -461,6 +461,18 @@ export default function RoundsPage() {
     });
   }, [allPayments, members, currentRound, auditDate]);
 
+  const auditDatePendingMembers = useMemo(() => {
+    if (!assignedMembers || !auditDate) return [];
+    const paidMemberIds = new Set(auditDatePayments.map(p => p.memberId));
+    return assignedMembers
+      .filter(m => !paidMemberIds.has(m.id))
+      .sort((a, b) => {
+        const nameA = String(a.name || '').trim().toLowerCase();
+        const nameB = String(b.name || '').trim().toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+  }, [assignedMembers, auditDatePayments, auditDate]);
+
   const todayTotalCollectionAmount = useMemo(() => {
     return todayPaymentsForGroup.reduce((sum, p) => sum + getPaymentAmount(p), 0);
   }, [todayPaymentsForGroup]);
@@ -1000,11 +1012,11 @@ export default function RoundsPage() {
       </Dialog>
 
       <Dialog open={isDailyAuditOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsDailyAuditOpen(o); }}>
-        <DialogContent className="sm:max-w-[340px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl bg-white" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
+        <DialogContent className="sm:max-w-[360px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl bg-white" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
           {currentRound && (
-            <div className="flex flex-col">
+            <div className="flex flex-col max-h-[90vh]">
               {/* Header */}
-              <div className="bg-primary/5 p-4 text-center relative border-b border-border/40">
+              <div className="bg-primary/5 p-4 text-center relative border-b border-border/40 shrink-0">
                 <div className="mx-auto mb-2 h-10 w-10 rounded-2xl bg-white text-primary flex items-center justify-center shadow-md border border-primary/10">
                   <Eye className="size-5" />
                 </div>
@@ -1012,7 +1024,8 @@ export default function RoundsPage() {
                 <DialogDescription className="sr-only">Detailed collection breakdown by member for the selected date.</DialogDescription>
               </div>
 
-              <div className="p-4 space-y-4 bg-white">
+              {/* Scrollable Content */}
+              <div className="p-4 space-y-4 bg-white overflow-y-auto custom-scrollbar flex-1">
                 {/* Date Picker */}
                 <div className="space-y-1.5">
                   <Label className="text-[9px] font-black uppercase text-muted-foreground ml-1">Selected Date</Label>
@@ -1022,41 +1035,83 @@ export default function RoundsPage() {
                   </div>
                 </div>
 
-                {/* Member-wise Collection List */}
-                <div className="border border-border/40 rounded-2xl overflow-hidden">
-                  <div className="max-h-[200px] overflow-y-auto custom-scrollbar p-3 bg-muted/5">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-border/40">
-                          <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 pl-1">Member Name</th>
-                          <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 text-right pr-1">Amount Paid</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {auditDatePayments.length > 0 ? (
-                          auditDatePayments.map((p: any, i: number) => {
-                            const pAmt = getPaymentAmount(p);
-                            return (
-                              <tr key={p.id || i} className="border-b border-border/10 last:border-none hover:bg-muted/5 transition-colors">
-                                <td className="py-2 text-xs font-bold text-foreground/80 pl-1">{p.memberName || 'Unknown Member'}</td>
-                                <td className="py-2 text-xs font-black text-emerald-600 text-right pr-1 tabular-nums">₹{pAmt.toLocaleString()}</td>
-                              </tr>
-                            );
-                          })
-                        ) : (
-                          <tr>
-                            <td colSpan={2} className="py-8 text-center text-[10px] font-bold uppercase text-muted-foreground/50 italic">
-                              No collections recorded on this date.
-                            </td>
+                {/* Paid Members Section */}
+                <div className="space-y-1.5">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 flex items-center gap-1.5 ml-1">
+                    <CheckCircle2 className="size-3.5" /> Paid Members ({auditDatePayments.length})
+                  </h4>
+                  <div className="border border-border/40 rounded-2xl overflow-hidden bg-muted/5">
+                    <div className="max-h-[140px] overflow-y-auto custom-scrollbar p-3">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-border/40">
+                            <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 pl-1">Member Name</th>
+                            <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 text-right pr-1">Amount Paid</th>
                           </tr>
-                        )}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {auditDatePayments.length > 0 ? (
+                            auditDatePayments.map((p: any, i: number) => {
+                              const pAmt = getPaymentAmount(p);
+                              return (
+                                <tr key={p.id || i} className="border-b border-border/10 last:border-none hover:bg-muted/5 transition-colors">
+                                  <td className="py-2 text-xs font-bold text-foreground/80 pl-1">{p.memberName || 'Unknown Member'}</td>
+                                  <td className="py-2 text-xs font-black text-emerald-600 text-right pr-1 tabular-nums">₹{pAmt.toLocaleString()}</td>
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            <tr>
+                              <td colSpan={2} className="py-8 text-center text-[10px] font-bold uppercase text-muted-foreground/50 italic">
+                                No payments recorded on this date.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pending Members Section */}
+                <div className="space-y-1.5">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center gap-1.5 ml-1">
+                    <Clock className="size-3.5" /> Pending Members ({auditDatePendingMembers.length})
+                  </h4>
+                  <div className="border border-border/40 rounded-2xl overflow-hidden bg-muted/5">
+                    <div className="max-h-[140px] overflow-y-auto custom-scrollbar p-3">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-border/40">
+                            <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 pl-1">Member Name</th>
+                            <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 text-right pr-1">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {auditDatePendingMembers.length > 0 ? (
+                            auditDatePendingMembers.map((m: any, i: number) => {
+                              return (
+                                <tr key={m.id || i} className="border-b border-border/10 last:border-none hover:bg-muted/5 transition-colors">
+                                  <td className="py-2 text-xs font-bold text-foreground/80 pl-1">{m.name || 'Unknown Member'}</td>
+                                  <td className="py-2 text-[10px] font-black text-amber-600 text-right pr-1 uppercase tracking-widest">Pending</td>
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            <tr>
+                              <td colSpan={2} className="py-8 text-center text-[10px] font-bold uppercase text-muted-foreground/50 italic">
+                                No pending members on this date.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
 
                 {/* Bottom Total Collection */}
-                <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between shadow-inner relative overflow-hidden group">
+                <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between shadow-inner relative overflow-hidden group shrink-0">
                   <div className="absolute -right-3 -bottom-3 opacity-5 transition-transform duration-500">
                     <IndianRupee className="size-12 text-emerald-900" />
                   </div>
@@ -1068,7 +1123,7 @@ export default function RoundsPage() {
               </div>
 
               {/* Footer */}
-              <div className="p-3 bg-muted/10 border-t border-border/40">
+              <div className="p-3 bg-muted/10 border-t border-border/40 shrink-0">
                 <Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-black uppercase tracking-widest h-10 rounded-xl shadow-sm text-xs bg-primary hover:bg-primary/90 text-white">
                   Close Details
                 </Button>
