@@ -102,9 +102,21 @@ export default function MembersPage() {
   const membersWithCalculatedStats = useMemo(() => {
     if (!members || !payments || !chitRounds || !allCycles) return [];
 
+    // Group payments by memberId to optimize performance to O(M+P)
+    const paymentsByMember = new Map<string, any[]>();
+    payments.forEach(p => {
+      if (p.memberId) {
+        if (!paymentsByMember.has(p.memberId)) {
+          paymentsByMember.set(p.memberId, []);
+        }
+        paymentsByMember.get(p.memberId)!.push(p);
+      }
+    });
+
     return members.map((m) => {
-      const stats = computeMemberStats(m, payments, allCycles || [], chitRounds || []);
-      const totalPaidSum = computeTotalPaidInActiveCycle(m.id, m.chitGroup, payments, allCycles || []);
+      const memberPayments = paymentsByMember.get(m.id) || [];
+      const stats = computeMemberStats(m, memberPayments, allCycles || [], chitRounds || []);
+      const totalPaidSum = computeTotalPaidInActiveCycle(m.id, m.chitGroup, memberPayments, allCycles || []);
       return { ...m, ...stats, totalPaidSum };
     });
   }, [members, payments, chitRounds, allCycles]);

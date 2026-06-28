@@ -458,7 +458,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
       {/* Today Collection Member Detail Dialog */}
       <Dialog open={isInfoPopupOpen} onOpenChange={(open) => { if (!open) document.body.style.pointerEvents = 'auto'; setIsInfoPopupOpen(open); }}>
-        <DialogContent className="sm:max-w-[340px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl bg-white" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
+        <DialogContent className="sm:max-w-[340px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl bg-white" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
           <div className="flex flex-col">
             {/* Header */}
             <div className="bg-primary/5 p-4 text-center relative border-b border-border/40">

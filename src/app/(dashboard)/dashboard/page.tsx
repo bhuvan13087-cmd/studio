@@ -80,15 +80,40 @@ export default function DashboardPage() {
     const now = startOfDay(new Date());
     const todayStr = format(now, 'yyyy-MM-dd')
 
+    // 1. Map members by ID for fast lookup
+    const membersMap = new Map<string, any>();
+    (members || []).forEach(m => membersMap.set(m.id, m));
 
+    // 2. Pre-index active cycles by group name
+    const activeCyclesByGroup = new Map<string, any>();
+    (allCycles || []).forEach(c => {
+      if (c.status === 'active' && c.name) {
+        activeCyclesByGroup.set(String(c.name).trim().toLowerCase(), c);
+      }
+    });
+
+    // 3. Group payments by member ID
+    const paymentsByMember = new Map<string, any[]>();
+    (payments || []).forEach(p => {
+      if (p.memberId) {
+        if (!paymentsByMember.has(p.memberId)) {
+          paymentsByMember.set(p.memberId, []);
+        }
+        paymentsByMember.get(p.memberId)!.push(p);
+      }
+    });
+
+    // 4. Calculate collectedThisCycle in O(P)
     const collectedThisCycle = (payments || []).reduce((acc, p) => {
       if (!isPaymentSuccess(p, false)) return acc;
-      const member = members?.find(m => m.id === p.memberId);
+      const member = membersMap.get(p.memberId);
       if (!member) return acc;
-      const activeCycle = findActiveCycle(member.chitGroup, allCycles || []);
+      const activeCycle = activeCyclesByGroup.get(String(member.chitGroup || '').trim().toLowerCase());
       if (!activeCycle) return acc;
       const pDateStr = getPaymentDateStr(p);
-      if (pDateStr && pDateStr >= activeCycle.startDate && (activeCycle.endDate ? pDateStr <= activeCycle.endDate : true)) { return acc + getPaymentAmount(p); }
+      if (pDateStr && pDateStr >= activeCycle.startDate && (activeCycle.endDate ? pDateStr <= activeCycle.endDate : true)) {
+        return acc + getPaymentAmount(p);
+      }
       return acc;
     }, 0);
 
@@ -101,18 +126,27 @@ export default function DashboardPage() {
 
     // strict=false: dashboard historically counts payments with no status field as paid
     const membersWithCalculatedStats = (members || []).filter(m => m.status !== 'inactive').map(m => {
-      const stats = computeMemberStats(m, payments || [], allCycles || [], rounds || [], false);
+      const memberPayments = paymentsByMember.get(m.id) || [];
+      const stats = computeMemberStats(m, memberPayments, allCycles || [], rounds || [], false);
       return { ...m, ...stats };
     });
 
     const dailyPendingList = membersWithCalculatedStats.filter(m => m.memberStatus === 'pending' && (m.paymentType || (rounds || []).find(r => r.name === m.chitGroup)?.collectionType) === 'Daily');
     const monthlyOverdueList = membersWithCalculatedStats.filter(m => m.memberStatus === 'pending' && (m.paymentType || (rounds || []).find(r => r.name === m.chitGroup)?.collectionType) === 'Monthly');
 
-    return { activeMembersCount: members?.filter(m => m.status !== 'inactive').length || 0, collectedThisMonth: collectedThisCycle, collectedToday, dailyPendingCount: dailyPendingList.length, monthlyOverdueCount: monthlyOverdueList.length, schemeSummaries: ['A', 'B', 'C', 'D'].map(name => {
-      const schemeInfo = (rounds || []).find(r => r.name === name) || { name, collectionType: 'Daily', monthlyAmount: 800, dueDate: 5 };
-      const groupMembers = membersWithCalculatedStats.filter(m => m.chitGroup === name);
-      return { ...schemeInfo, totalPendingDays: groupMembers.reduce((acc, m) => acc + m.calculatedPendingDays, 0), memberCount: groupMembers.length, members: groupMembers };
-    }), recentPaymentsList: (payments || []).slice(0, 5) }
+    return { 
+      activeMembersCount: members?.filter(m => m.status !== 'inactive').length || 0, 
+      collectedThisMonth: collectedThisCycle, 
+      collectedToday, 
+      dailyPendingCount: dailyPendingList.length, 
+      monthlyOverdueCount: monthlyOverdueList.length, 
+      schemeSummaries: ['A', 'B', 'C', 'D'].map(name => {
+        const schemeInfo = (rounds || []).find(r => r.name === name) || { name, collectionType: 'Daily', monthlyAmount: 800, dueDate: 5 };
+        const groupMembers = membersWithCalculatedStats.filter(m => m.chitGroup === name);
+        return { ...schemeInfo, totalPendingDays: groupMembers.reduce((acc, m) => acc + m.calculatedPendingDays, 0), memberCount: groupMembers.length, members: groupMembers };
+      }), 
+      recentPaymentsList: (payments || []).slice(0, 5) 
+    }
   }, [mounted, members, payments, rounds, allCycles, membersLoading, paymentsLoading, roundsLoading])
 
   if (!mounted || !dashboardData) { return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>) }

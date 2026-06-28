@@ -414,7 +414,7 @@ export default function PaymentsPage() {
                   <Label className="text-[10px] font-bold uppercase text-muted-foreground">Original Record</Label>
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold">{paymentToCorrect.memberName}</span>
-                    <span className="font-bold text-emerald-600">₹{getPAmount(paymentToCorrect).toLocaleString()}</span>
+                    <span className="font-bold text-emerald-600">₹{getPaymentAmount(paymentToCorrect).toLocaleString()}</span>
                   </div>
                   <div className="text-[10px] text-muted-foreground">{getPaymentDateStr(paymentToCorrect) && isValid(parseISO(getPaymentDateStr(paymentToCorrect)!)) ? format(parseISO(getPaymentDateStr(paymentToCorrect)!), 'dd-MM-yyyy') : "No target date"}</div>
                 </div>
@@ -561,7 +561,7 @@ export default function PaymentsPage() {
       </Dialog>
 
       <AlertDialog open={isDeletePaymentDialogOpen} onOpenChange={(open) => { if (!open) { setPaymentToDelete(null); document.body.style.pointerEvents = 'auto'; } setIsDeletePaymentDialogOpen(open); }}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Transaction?</AlertDialogTitle><AlertDialogDescription>Permanently remove this payment of <strong>₹{getPAmount(paymentToDelete || {}).toLocaleString()}</strong>? This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isActionPending} onClick={() => setIsDeletePaymentDialogOpen(false)}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeletePayment} disabled={isActionPending}>{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete Transaction?</AlertDialogTitle><AlertDialogDescription>Permanently remove this payment of <strong>₹{getPaymentAmount(paymentToDelete || {}).toLocaleString()}</strong>? This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isActionPending} onClick={() => setIsDeletePaymentDialogOpen(false)}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive hover:bg-destructive/90 font-bold" onClick={handleDeletePayment} disabled={isActionPending}>{isActionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
     </div>
   )

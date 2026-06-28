@@ -317,7 +317,6 @@ export default function RoundsPage() {
   const [selectedReconciliationCycleId, setSelectedReconciliationCycleId] = useState<string | null>(null)
   
   const [isDailyAuditOpen, setIsDailyAuditOpen] = useState(false)
-  const [isTodayCollectionDetailOpen, setIsTodayCollectionDetailOpen] = useState(false)
   const [auditDate, setAuditDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
   const [historyMember, setHistoryMember] = useState<any>(null)
@@ -358,8 +357,21 @@ export default function RoundsPage() {
 
   const membersWithCalculatedStats = useMemo(() => {
     if (!members || !allPayments || !chitSchemes) return [];
+    
+    // Group payments by memberId to optimize performance to O(M+P)
+    const paymentsByMember = new Map<string, any[]>();
+    allPayments.forEach(p => {
+      if (p.memberId) {
+        if (!paymentsByMember.has(p.memberId)) {
+          paymentsByMember.set(p.memberId, []);
+        }
+        paymentsByMember.get(p.memberId)!.push(p);
+      }
+    });
+
     return members.map((m) => {
-      const stats = computeMemberStats(m, allPayments, allCycles || [], chitSchemes);
+      const memberPayments = paymentsByMember.get(m.id) || [];
+      const stats = computeMemberStats(m, memberPayments, allCycles || [], chitSchemes);
       return { ...m, ...stats };
     });
   }, [members, allPayments, chitSchemes, allCycles]);
@@ -370,8 +382,20 @@ export default function RoundsPage() {
   const totalPaidByMember = useMemo(() => {
     const map = new Map<string, number>();
     if (!allPayments || !members || !allCycles) return map;
+
+    const paymentsByMember = new Map<string, any[]>();
+    allPayments.forEach(p => {
+      if (p.memberId) {
+        if (!paymentsByMember.has(p.memberId)) {
+          paymentsByMember.set(p.memberId, []);
+        }
+        paymentsByMember.get(p.memberId)!.push(p);
+      }
+    });
+
     members.forEach((m) => {
-      const total = computeTotalPaidInActiveCycle(m.id, m.chitGroup, allPayments, allCycles);
+      const memberPayments = paymentsByMember.get(m.id) || [];
+      const total = computeTotalPaidInActiveCycle(m.id, m.chitGroup, memberPayments, allCycles);
       if (total > 0) map.set(m.id, total);
     });
     return map;
@@ -415,17 +439,19 @@ export default function RoundsPage() {
     return "Group " + name.replace(/Group/gi, '').trim();
   };
 
-  const getGroupCollectionForDate = (groupName: string, dateStr: string) => {
-    if (!allPayments || !members) return 0;
+  const getGroupPaymentsForDate = (groupName: string, dateStr: string) => {
+    if (!allPayments || !members) return [];
     const normalised = String(groupName || '').trim().toLowerCase();
     const groupMemberIds = new Set(members.filter(m => String(m.chitGroup || '').trim().toLowerCase() === normalised).map(m => m.id));
-    return allPayments
-      .filter(p => {
-        if (!groupMemberIds.has(p.memberId)) return false;
-        if (!isPaymentSuccess(p)) return false;
-        return getCreatedAtDateStr(p) === dateStr || getPaymentDateStr(p) === dateStr;
-      })
-      .reduce((acc, p) => acc + getPaymentAmount(p), 0);
+    return allPayments.filter(p => {
+      if (!groupMemberIds.has(p.memberId)) return false;
+      if (!isPaymentSuccess(p)) return false;
+      return getCreatedAtDateStr(p) === dateStr || getPaymentDateStr(p) === dateStr;
+    });
+  };
+
+  const getGroupCollectionForDate = (groupName: string, dateStr: string) => {
+    return getGroupPaymentsForDate(groupName, dateStr).reduce((acc, p) => acc + getPaymentAmount(p), 0);
   };
 
   const getGroupTodayCollection = (groupName: string) => getGroupCollectionForDate(groupName, format(new Date(), 'yyyy-MM-dd'));
@@ -433,27 +459,13 @@ export default function RoundsPage() {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
   const todayPaymentsForGroup = useMemo(() => {
-    if (!allPayments || !currentRound || !assignedMembers) return [];
-    const groupMemberIds = new Set(assignedMembers.map(m => m.id));
-    return allPayments.filter(p => {
-      if (!groupMemberIds.has(p.memberId)) return false;
-      if (!isPaymentSuccess(p)) return false;
-      return getCreatedAtDateStr(p) === todayStr || getPaymentDateStr(p) === todayStr;
-    });
-  }, [allPayments, currentRound, assignedMembers, todayStr]);
+    if (!currentRound) return [];
+    return getGroupPaymentsForDate(currentRound.name, todayStr);
+  }, [allPayments, members, currentRound, todayStr]);
 
   const auditDatePayments = useMemo(() => {
-    if (!allPayments || !members || !currentRound || !auditDate) return [];
-    const normalised = String(currentRound.name || '').trim().toLowerCase();
-    const groupMembersFiltered = members.filter(m => String(m.chitGroup || '').trim().toLowerCase() === normalised);
-    const groupMemberIds = new Set(groupMembersFiltered.map(m => m.id));
-    
-    const paymentsForDate = allPayments.filter(p => {
-      if (!groupMemberIds.has(p.memberId)) return false;
-      if (!isPaymentSuccess(p)) return false;
-      return getCreatedAtDateStr(p) === auditDate || getPaymentDateStr(p) === auditDate;
-    });
-
+    if (!currentRound || !auditDate) return [];
+    const paymentsForDate = getGroupPaymentsForDate(currentRound.name, auditDate);
     return [...paymentsForDate].sort((a, b) => {
       const nameA = String(a.memberName || '').trim().toLowerCase();
       const nameB = String(b.memberName || '').trim().toLowerCase();
@@ -472,6 +484,10 @@ export default function RoundsPage() {
         return nameA.localeCompare(nameB);
       });
   }, [assignedMembers, auditDatePayments, auditDate]);
+
+  const auditDateTotalCollection = useMemo(() => {
+    return auditDatePayments.reduce((acc, p) => acc + getPaymentAmount(p), 0);
+  }, [auditDatePayments]);
 
   const todayTotalCollectionAmount = useMemo(() => {
     return todayPaymentsForGroup.reduce((sum, p) => sum + getPaymentAmount(p), 0);
@@ -877,30 +893,19 @@ export default function RoundsPage() {
         </Card>
         <Card 
           className="shadow-sm border-l-4 border-l-emerald-500 bg-card rounded-xl h-full flex flex-col cursor-pointer hover:shadow-md hover:border-emerald-500/30 transition-all active:scale-[0.99]"
-          onClick={() => setIsTodayCollectionDetailOpen(true)}
+          onClick={() => { setAuditDate(format(new Date(), 'yyyy-MM-dd')); setIsDailyAuditOpen(true); }}
         >
           <CardHeader className="p-2.5 pb-1 flex flex-row items-center justify-between min-h-[38px]">
             <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle>
-            <div className="flex items-center gap-1.5">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" 
-                onClick={(e) => { e.stopPropagation(); setIsDailyAuditOpen(true); }}
-              >
-                <Eye className="size-3" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600" 
-                onClick={(e) => { e.stopPropagation(); setIsTodayCollectionDetailOpen(true); }}
-              >
-                <Wallet className="size-3" />
-              </Button>
-            </div>
           </CardHeader>
-          <CardContent className="p-2.5 pt-0 flex-1 flex flex-col justify-center"><div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight">₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</div></CardContent>
+          <CardContent className="p-2.5 pt-0 flex-1 flex flex-col justify-center">
+            <div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight flex items-center gap-2">
+              <span>₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</span>
+              <span className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600 flex items-center justify-center shrink-0">
+                <Eye className="size-3.5" />
+              </span>
+            </div>
+          </CardContent>
         </Card>
       </div>
 
@@ -976,7 +981,7 @@ export default function RoundsPage() {
                     {(allPayments || []).filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid')).length > 0 ? (
                       (allPayments || []).filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid')).map((p, i) => (
                         <TableRow key={i} className="hover:bg-muted/5 transition-colors border-b last:border-none">
-                          <TableCell className="text-[10px] font-bold tabular-nums py-2">{getRecordDate(p) ? format(parseISO(getRecordDate(p)!), 'dd-MM-yyyy') : '-'}</TableCell>
+                          <TableCell className="text-[10px] font-bold tabular-nums py-2">{getPaymentDateStr(p) ? format(parseISO(getPaymentDateStr(p)!), 'dd-MM-yyyy') : '-'}</TableCell>
                           <TableCell className="text-[10px] font-black text-emerald-600 tabular-nums py-2">₹{getPaymentAmount(p).toLocaleString()}</TableCell>
                           <TableCell className="text-[8px] font-bold text-muted-foreground text-right uppercase tracking-widest">{p.method || 'Cash'}</TableCell>
                         </TableRow>
@@ -1117,7 +1122,7 @@ export default function RoundsPage() {
                   </div>
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80">Total Collection</span>
                   <p className="text-base font-black text-emerald-700 tabular-nums tracking-tighter relative z-10">
-                    ₹{getGroupCollectionForDate(currentRound.name, auditDate).toLocaleString()}
+                    ₹{auditDateTotalCollection.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -1125,130 +1130,6 @@ export default function RoundsPage() {
               {/* Footer */}
               <div className="p-3 bg-muted/10 border-t border-border/40 shrink-0">
                 <Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-black uppercase tracking-widest h-10 rounded-xl shadow-sm text-xs bg-primary hover:bg-primary/90 text-white">
-                  Close Details
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isTodayCollectionDetailOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsTodayCollectionDetailOpen(o); }}>
-        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
-          {currentRound && (
-            <div className="flex flex-col bg-white">
-              <DialogTitle className="sr-only">Today's Collection Detailed View - {currentRound.name}</DialogTitle>
-              
-              {/* Header */}
-              <div className="bg-primary/5 p-4 text-center relative border-b border-border/40">
-                <div className="mx-auto mb-2 h-12 w-12 rounded-2xl bg-white text-emerald-600 flex items-center justify-center shadow-lg border-2 border-emerald-100 ring-4 ring-emerald-50">
-                  <Wallet className="size-6" />
-                </div>
-                <div className="space-y-0.5">
-                  <h3 className="text-lg font-black uppercase tracking-tight text-primary leading-tight text-center">Today's Collection</h3>
-                  <DialogDescription className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">{getDisplayName(currentRound.name)} Breakdown</DialogDescription>
-                </div>
-              </div>
-
-              {/* Summary Stats Grid */}
-              <div className="p-4 bg-muted/20 grid grid-cols-2 gap-3 border-b border-border/40">
-                <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col justify-center">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-emerald-600/80 mb-0.5">Total Collection</span>
-                  <div className="text-xl font-black text-emerald-700 tabular-nums tracking-tighter">₹{todayTotalCollectionAmount.toLocaleString()}</div>
-                  <span className="text-[9px] text-emerald-600 font-semibold mt-0.5">{todayPaidMembersCount} members paid</span>
-                </div>
-                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-100 flex flex-col justify-center">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-amber-600/80 mb-0.5">Total Pending</span>
-                  <div className="text-xl font-black text-amber-700 tabular-nums tracking-tighter">₹{totalPendingAmountForGroup.toLocaleString()}</div>
-                  <span className="text-[9px] text-amber-600 font-semibold mt-0.5">{pendingMembersForGroup.length} members pending</span>
-                </div>
-              </div>
-
-              {/* Main Content with Tabs/ScrollAreas */}
-              <div className="p-4 space-y-4 bg-white max-h-[380px] overflow-y-auto">
-                {/* Section 1: Paid Details */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between px-1">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5 font-headline">
-                      <CheckCircle2 className="size-3.5 text-emerald-500" /> Paid Today ({todayPaymentsForGroup.length})
-                    </h4>
-                  </div>
-                  <div className="space-y-1.5">
-                    {todayPaymentsForGroup.length > 0 ? (
-                      todayPaymentsForGroup.map((p) => {
-                        const formattedDateTime = (() => {
-                          let d: Date | null = null;
-                          if (p.createdAt) {
-                            d = p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
-                          } else if (p.paymentDate) {
-                            d = p.paymentDate.toDate ? p.paymentDate.toDate() : new Date(p.paymentDate);
-                          }
-                          return d && isValid(d) ? format(d, 'dd-MM-yyyy hh:mm a') : 'N/A';
-                        })();
-                        return (
-                          <div key={p.id || Math.random().toString()} className="flex items-center justify-between p-2.5 bg-muted/10 rounded-xl border border-border/30 hover:bg-muted/20 transition-colors">
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-xs font-bold text-foreground truncate">{p.memberName || 'Unknown Member'}</span>
-                              <span className="text-[8px] font-black text-muted-foreground/50 uppercase tracking-widest truncate">ID: {p.memberId || 'N/A'}</span>
-                            </div>
-                            <div className="flex flex-col items-end text-right">
-                              <span className="text-xs font-black text-emerald-600 tabular-nums">₹{getPaymentAmount(p).toLocaleString()}</span>
-                              <span className="text-[8px] text-muted-foreground font-semibold tabular-nums mt-0.5">{formattedDateTime}</span>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter px-1 h-3.5 border-emerald-500/20 bg-emerald-500/5 text-emerald-600">
-                                  {p.status || 'success'}
-                                </Badge>
-                                {p.method && (
-                                  <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter px-1 h-3.5 border-primary/20 bg-primary/5 text-primary">
-                                    {p.method}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="p-6 text-center border border-dashed rounded-xl bg-muted/5">
-                        <span className="text-[9px] font-extrabold uppercase text-muted-foreground/60 tracking-widest">No payments recorded today</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Section 2: Pending Details */}
-                <div className="space-y-2 pt-2 border-t border-dashed border-border/60">
-                  <div className="flex items-center justify-between px-1">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5 font-headline">
-                      <AlertCircle className="size-3.5 text-amber-500" /> Pending Collection ({pendingMembersForGroup.length})
-                    </h4>
-                  </div>
-                  <div className="space-y-1.5">
-                    {pendingMembersForGroup.length > 0 ? (
-                      pendingMembersForGroup.map((m) => (
-                        <div key={m.id} className="flex items-center justify-between p-2.5 bg-muted/10 rounded-xl border border-border/30 hover:bg-muted/20 transition-colors">
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-bold text-foreground truncate">{m.name}</span>
-                            <span className="text-[8px] font-black text-muted-foreground/50 uppercase tracking-widest truncate">ID: {m.id}</span>
-                          </div>
-                          <div className="flex flex-col items-end text-right">
-                            <span className="text-xs font-black text-amber-600 tabular-nums">₹{(m.calculatedPendingAmount || 0).toLocaleString()}</span>
-                            <span className="text-[8px] text-amber-500 font-semibold uppercase tracking-widest mt-0.5">{m.calculatedPendingDays || 0} days pending</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-6 text-center border border-dashed rounded-xl bg-emerald-50/20 border-emerald-200/50">
-                        <span className="text-[9px] font-extrabold uppercase text-emerald-600 tracking-widest">All members paid in full!</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-3 bg-muted/10 border-t border-border/40">
-                <Button onClick={() => setIsTodayCollectionDetailOpen(false)} className="w-full font-black uppercase tracking-widest h-10 rounded-xl shadow-sm text-xs bg-primary hover:bg-primary/90 text-white animate-in">
                   Close Details
                 </Button>
               </div>
@@ -1355,7 +1236,7 @@ export default function RoundsPage() {
                 .filter(p => p.memberId === historyMember.id && (p.status === 'success' || p.status === 'paid'))
                 .map((p, i) => (
                   <tr key={i} style={{ borderBottom: '1px dashed #eee' }}>
-                    <td style={{ padding: '4px 0' }}>{getRecordDate(p) ? format(parseISO(getRecordDate(p)!), 'dd-MM-yyyy') : '-'}</td>
+                    <td style={{ padding: '4px 0' }}>{getPaymentDateStr(p) ? format(parseISO(getPaymentDateStr(p)!), 'dd-MM-yyyy') : '-'}</td>
                     <td style={{ textAlign: 'right', padding: '4px 0' }}>₹{getPaymentAmount(p).toLocaleString()}</td>
                   </tr>
                 ))}
