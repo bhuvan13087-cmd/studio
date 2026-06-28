@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ChevronLeft, CalendarDays, IndianRupee, History, Search, Filter, CheckCircle2, Clock, User, Lock, Wallet, Printer } from "lucide-react"
+import { Loader2, ChevronLeft, CalendarDays, IndianRupee, History, Search, Filter, CheckCircle2, Clock, User, Lock, Wallet, Printer, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -40,6 +40,8 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
   
   const [isProfileOpen, setIsProfileOpen] = React.useState(false)
   const [selectedProfileMember, setSelectedProfileMember] = React.useState<any>(null)
+  
+  const [isInfoPopupOpen, setIsInfoPopupOpen] = React.useState(false)
 
   const db = useFirestore()
 
@@ -202,6 +204,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
     return {
       groupMembers,
       cyclePayments,
+      filteredPayments,
       totalCollection,
       dailyCollection,
       membersWithStatus,
@@ -286,7 +289,20 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">{selectedDate ? 'Daily Intake' : 'Verified Total'}</p>
+                  <div className="flex items-center justify-end gap-1.5 mb-0.5">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">{selectedDate ? 'Daily Intake' : 'Verified Total'}</p>
+                    {selectedDate && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 rounded-full hover:bg-muted text-muted-foreground/80 hover:text-foreground transition-all shrink-0"
+                        onClick={() => setIsInfoPopupOpen(true)}
+                        type="button"
+                      >
+                        <Info className="size-3.5 text-primary" />
+                      </Button>
+                    )}
+                  </div>
                   <p className="text-3xl font-black text-primary tabular-nums tracking-tighter">₹{auditData.dailyCollection.toLocaleString()}</p>
                 </div>
               </div>
@@ -437,6 +453,64 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Today Collection Member Detail Dialog */}
+      <Dialog open={isInfoPopupOpen} onOpenChange={(open) => { if (!open) document.body.style.pointerEvents = 'auto'; setIsInfoPopupOpen(open); }}>
+        <DialogContent className="sm:max-w-[340px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl bg-white" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
+          <div className="flex flex-col">
+            {/* Header */}
+            <div className="bg-primary/5 p-4 text-center relative border-b border-border/40">
+              <div className="mx-auto mb-2 h-10 w-10 rounded-2xl bg-white text-primary flex items-center justify-center shadow-md border border-primary/10">
+                <Info className="size-5" />
+              </div>
+              <h3 className="text-sm font-black uppercase tracking-tight text-primary leading-tight text-center">Selected Date</h3>
+              <p className="text-xs font-bold tabular-nums text-foreground/75 mt-0.5">
+                {selectedDate ? format(parseISO(selectedDate), 'dd-MM-yyyy') : ''}
+              </p>
+            </div>
+
+            {/* Content Table */}
+            <div className="p-4 bg-white">
+              <div className="max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-border/60">
+                      <th className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 pb-2">Member Name</th>
+                      <th className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 pb-2 text-right">Amount Paid</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditData && auditData.filteredPayments && auditData.filteredPayments.length > 0 ? (
+                      auditData.filteredPayments.map((p: any, i: number) => {
+                        const pAmt = Number(p.amountPaid || p.amount || 0);
+                        return (
+                          <tr key={p.id || i} className="border-b border-border/20 last:border-none hover:bg-muted/5 transition-colors">
+                            <td className="py-2.5 text-xs font-bold text-foreground/80">{p.memberName || 'Unknown Member'}</td>
+                            <td className="py-2.5 text-xs font-black text-emerald-600 text-right tabular-nums">₹{pAmt.toLocaleString()}</td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={2} className="py-8 text-center text-[10px] font-bold uppercase text-muted-foreground/55 italic">
+                          No payments recorded on this date.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 bg-muted/10 border-t border-border/40">
+              <Button onClick={() => setIsInfoPopupOpen(false)} className="w-full font-black uppercase tracking-widest h-10 rounded-xl shadow-sm text-xs bg-primary hover:bg-primary/90 text-white">
+                Close Details
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
