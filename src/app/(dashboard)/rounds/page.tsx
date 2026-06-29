@@ -401,6 +401,71 @@ export default function RoundsPage() {
     return map;
   }, [allPayments, members, allCycles]);
 
+  const groupActiveCycleCollections = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!allCycles || !allPayments || !members || !chitSchemes) return map;
+
+    const activeCycleByGroup = new Map<string, any>();
+    chitSchemes.forEach(group => {
+      const normalised = String(group.name || '').trim().toLowerCase();
+      const activeCycle = findActiveCycle(group.name, allCycles);
+      if (activeCycle) {
+        activeCycleByGroup.set(normalised, activeCycle);
+      }
+    });
+
+    const groupNameByMember = new Map<string, string>();
+    members.forEach(m => {
+      if (m.id && m.chitGroup) {
+        groupNameByMember.set(m.id, String(m.chitGroup).trim().toLowerCase());
+      }
+    });
+
+    chitSchemes.forEach(group => {
+      map.set(String(group.name || '').trim().toLowerCase(), 0);
+    });
+
+    allPayments.forEach(p => {
+      if (!isPaymentSuccess(p)) return;
+      const memberGroup = groupNameByMember.get(p.memberId);
+      if (!memberGroup) return;
+
+      const activeCycle = activeCycleByGroup.get(memberGroup);
+      if (!activeCycle) return;
+
+      const pDate = getPaymentDateStr(p);
+      if (pDate != null && pDate >= activeCycle.startDate && (activeCycle.endDate ? pDate <= activeCycle.endDate : true)) {
+        const amt = getPaymentAmount(p);
+        map.set(memberGroup, (map.get(memberGroup) || 0) + amt);
+      }
+    });
+
+    return map;
+  }, [allCycles, allPayments, members, chitSchemes]);
+
+  const groupPendingCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    membersWithCalculatedStats.forEach(m => {
+      if (m.status !== 'inactive' && m.memberStatus === 'pending' && m.chitGroup) {
+        const groupName = String(m.chitGroup).trim().toLowerCase();
+        map.set(groupName, (map.get(groupName) || 0) + 1);
+      }
+    });
+    return map;
+  }, [membersWithCalculatedStats]);
+
+  const groupOccupancy = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!members) return map;
+    members.forEach(m => {
+      if (m.status !== 'inactive' && m.chitGroup) {
+        const groupName = String(m.chitGroup).trim().toLowerCase();
+        map.set(groupName, (map.get(groupName) || 0) + 1);
+      }
+    });
+    return map;
+  }, [members]);
+
   const missedDatesForSelectedMember = useMemo(() => {
     if (!selectedPendingMember || !allPayments || !allCycles || !chitSchemes) return [];
     const m = selectedPendingMember;
@@ -446,7 +511,7 @@ export default function RoundsPage() {
     return allPayments.filter(p => {
       if (!groupMemberIds.has(p.memberId)) return false;
       if (!isPaymentSuccess(p)) return false;
-      return getCreatedAtDateStr(p) === dateStr || getPaymentDateStr(p) === dateStr;
+      return getPaymentDateStr(p) === dateStr;
     });
   };
 
@@ -506,9 +571,8 @@ export default function RoundsPage() {
     return pendingMembersForGroup.reduce((sum, m) => sum + m.calculatedPendingAmount, 0);
   }, [pendingMembersForGroup]);
 
-  const getGroupActiveCycleCollection = (groupName: string) => {
-    const activeCycle = findActiveCycle(groupName, allCycles || []);
-    if (!activeCycle || !allPayments || !members) return 0;
+  const getGroupCycleCollection = (groupName: string, cycle: any) => {
+    if (!cycle || !allPayments || !members) return 0;
     const normalised = String(groupName || '').trim().toLowerCase();
     const groupMemberIds = new Set(members.filter(m => String(m.chitGroup || '').trim().toLowerCase() === normalised).map(m => m.id));
     return allPayments
@@ -516,9 +580,14 @@ export default function RoundsPage() {
         if (!groupMemberIds.has(p.memberId)) return false;
         if (!isPaymentSuccess(p)) return false;
         const pDate = getPaymentDateStr(p);
-        return pDate != null && pDate >= activeCycle.startDate && (activeCycle.endDate ? pDate <= activeCycle.endDate : true);
+        return pDate != null && pDate >= cycle.startDate && (cycle.endDate ? pDate <= cycle.endDate : true);
       })
       .reduce((acc, p) => acc + getPaymentAmount(p), 0);
+  };
+
+  const getGroupActiveCycleCollection = (groupName: string) => {
+    const normalised = String(groupName || '').trim().toLowerCase();
+    return groupActiveCycleCollections.get(normalised) || 0;
   };
 
   const reconciliationCycles = useMemo(() => {
@@ -547,32 +616,6 @@ export default function RoundsPage() {
       displayLabel: `Cycle ${i + 1}`
     })).reverse();
   }, [activePopupGroupName, allCycles]);
-
-  const reconciliationTotal = useMemo(() => {
-    if (!activePopupGroupName || !selectedReconciliationCycleId || !allPayments || !members || !allCycles) return 0;
-    const cycle = allCycles.find(c => c.id === selectedReconciliationCycleId);
-    if (!cycle) return 0;
-
-    const startDate = cycle.startDate;
-    const endDate = cycle.endDate;
-    const cycleIdInternal = cycle.id;
-
-    const gNameClean = String(activePopupGroupName).replace(/group/gi, '').trim().toLowerCase();
-    const groupMemberIds = new Set(members.filter(m => {
-      const mGroup = String(m?.chitGroup || "").replace(/group/gi, '').trim().toLowerCase();
-      return mGroup === gNameClean;
-    }).map(m => m.id));
-
-    const cyclePayments = (allPayments || []).filter(p => {
-      if (!groupMemberIds.has(p.memberId)) return false;
-      if (p.status && !['success', 'paid', 'verified'].includes(p.status.toLowerCase())) return false;
-      if (p.cycleId === cycleIdInternal) return true;
-      const pDate = getPaymentDateStr(p);
-      return pDate != null && pDate >= startDate && (endDate ? pDate <= endDate : true);
-    });
-
-    return cyclePayments.reduce((acc, p) => acc + getPaymentAmount(p), 0);
-  }, [activePopupGroupName, selectedReconciliationCycleId, allPayments, members, allCycles]);
 
   const groupCyclesForActive = (allCycles || []).filter(c => {
     const cNameClean = String(c?.name || "").replace(/group/gi, '').trim().toLowerCase();
@@ -714,8 +757,9 @@ export default function RoundsPage() {
             const activeCycle = groupCycles.find(c => c.status === 'active');
             const cycleNumber = activeCycle ? uniqueStarts.indexOf(activeCycle.startDate) + 1 : null;
             
-            const currentOccupancy = members?.filter(m => m.status !== 'inactive' && String(m.chitGroup).trim().toLowerCase() === String(group.name).trim().toLowerCase()).length || 0;
-            const groupPendingCount = membersWithCalculatedStats.filter(m => String(m.chitGroup).trim().toLowerCase() === String(group.name).trim().toLowerCase() && m.status !== 'inactive' && m.memberStatus === 'pending').length;
+            const groupNameLower = String(group.name || '').trim().toLowerCase();
+            const currentOccupancy = groupOccupancy.get(groupNameLower) || 0;
+            const groupPendingCount = groupPendingCounts.get(groupNameLower) || 0;
 
             const isExpired = activeCycle && activeCycle.endDate && isAfter(startOfDay(new Date()), startOfDay(parseISO(activeCycle.endDate)));
 
@@ -775,32 +819,63 @@ export default function RoundsPage() {
         </div>
 
         <Dialog open={isCollectionPopupOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsCollectionPopupOpen(o); }}>
-          <DialogContent className="sm:max-w-[340px]" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
+          <DialogContent className="sm:max-w-[420px] rounded-[1.5rem] p-0 overflow-hidden border-none shadow-2xl bg-white" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
             {activePopupGroupName && (
-              <>
-                <DialogHeader><DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight text-primary"><Wallet className="size-4" />Total Collections</DialogTitle><DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">{getDisplayName(activePopupGroupName)} Audit</DialogDescription></DialogHeader>
-                <div className="space-y-4 py-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-[9px] font-black uppercase text-muted-foreground ml-1">Select Audit Period</Label>
-                    <Select value={selectedReconciliationCycleId || ""} onValueChange={setSelectedReconciliationCycleId}>
-                      <SelectTrigger className="h-10 text-xs font-bold rounded-xl border-muted/60"><SelectValue placeholder="Select operational cycle" /></SelectTrigger>
-                      <SelectContent className="max-h-[300px]">
-                        {reconciliationCycles.length > 0 ? reconciliationCycles.map(c => (
-                          <SelectItem key={c.id} value={c.id} className="text-xs">
-                            {c.displayLabel} ({format(parseISO(c.startDate), 'dd MMM yyyy')} - {c.endDate ? format(parseISO(c.endDate), 'dd MMM yyyy') : '...'})
-                          </SelectItem>
-                        )) : <div className="p-4 text-center text-[9px] font-bold uppercase text-muted-foreground italic">No cycles available</div>}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex flex-col items-center justify-center p-6 bg-emerald-50 rounded-2xl border border-dashed border-emerald-200 text-center relative overflow-hidden group">
-                    <div className="absolute -right-3 -bottom-3 opacity-5 group-hover:scale-110 transition-transform duration-500"><IndianRupee className="size-16 text-emerald-900" /></div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-600/60 mb-2 relative z-10">Total Collection</p>
-                    <div className="text-3xl font-black text-emerald-600 tabular-nums tracking-tighter relative z-10">₹{reconciliationTotal.toLocaleString()}</div>
-                  </div>
+              <div className="flex flex-col max-h-[85vh]">
+                <div className="bg-primary/5 p-4 text-center border-b border-border/40 shrink-0">
+                  <DialogTitle className="flex items-center justify-center gap-2 text-base font-headline uppercase tracking-tight text-primary">
+                    <Wallet className="size-4" /> Total Collections
+                  </DialogTitle>
+                  <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mt-1">
+                    {getDisplayName(activePopupGroupName)} Operational Audit
+                  </DialogDescription>
                 </div>
-                <DialogFooter><Button onClick={() => setIsCollectionPopupOpen(false)} className="w-full font-black uppercase tracking-widest h-11 rounded-xl shadow-md">Close Audit</Button></DialogFooter>
-              </>
+
+                <div className="p-4 overflow-y-auto custom-scrollbar flex-1 bg-white space-y-3">
+                  {reconciliationCycles.length > 0 ? (
+                    [...reconciliationCycles].reverse().map((c) => {
+                      const totalAmount = getGroupCycleCollection(activePopupGroupName, c);
+                      return (
+                        <div key={c.id} className="p-4 rounded-2xl bg-muted/25 border border-border/40 hover:bg-muted/40 transition-all flex flex-col justify-between gap-3 relative overflow-hidden group shadow-sm">
+                          <div className="absolute -right-3 -bottom-3 opacity-5 group-hover:scale-110 transition-transform duration-500">
+                            <IndianRupee className="size-12 text-primary" />
+                          </div>
+                          <div className="flex items-center justify-between relative z-10">
+                            <span className="text-xs font-black uppercase text-primary tracking-wider">{c.displayLabel}</span>
+                            <span className={cn("text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full", c.status === 'active' ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-muted text-muted-foreground/80 border border-muted-foreground/10")}>
+                              {c.status === 'active' ? 'Active' : 'Completed'}
+                            </span>
+                          </div>
+                          <div className="flex items-end justify-between relative z-10">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[8px] font-black uppercase text-muted-foreground tracking-widest">Cycle Period</span>
+                              <span className="text-[10px] font-bold text-foreground/80 tabular-nums">
+                                {format(parseISO(c.startDate), 'dd MMM yyyy')} - {c.endDate ? format(parseISO(c.endDate), 'dd MMM yyyy') : 'In Progress'}
+                              </span>
+                            </div>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-[8px] font-black uppercase text-emerald-600/70 tracking-widest">Collection</span>
+                              <span className="text-base font-black text-emerald-600 tabular-nums">
+                                ₹{totalAmount.toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-8 text-center text-xs font-bold uppercase text-muted-foreground/50 italic">
+                      No operational cycles registered.
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-3 bg-muted/10 border-t border-border/40 shrink-0">
+                  <Button onClick={() => setIsCollectionPopupOpen(false)} className="w-full font-black uppercase tracking-widest h-11 rounded-xl shadow-md bg-primary hover:bg-primary/90 text-white text-xs active:scale-[0.98] transition-all">
+                    Close Audit
+                  </Button>
+                </div>
+              </div>
             )}
           </DialogContent>
         </Dialog>
@@ -899,10 +974,12 @@ export default function RoundsPage() {
             <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Today Collection</CardTitle>
           </CardHeader>
           <CardContent className="p-2.5 pt-0 flex-1 flex flex-col justify-center">
-            <div className="text-lg font-bold tabular-nums text-emerald-600 tracking-tight flex items-center gap-2">
-              <span>₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}</span>
-              <span className="h-6 w-6 rounded-full hover:bg-emerald-50 text-emerald-600/70 hover:text-emerald-600 flex items-center justify-center shrink-0">
-                <Eye className="size-3.5" />
+            <div className="flex items-center justify-between w-full">
+              <span className="text-xl font-black tabular-nums text-emerald-600 tracking-tight">
+                ₹{getGroupTodayCollection(currentRound?.name).toLocaleString()}
+              </span>
+              <span className="h-7 w-7 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 flex items-center justify-center shrink-0 shadow-sm transition-colors">
+                <Eye className="size-4" />
               </span>
             </div>
           </CardContent>
@@ -1017,119 +1094,92 @@ export default function RoundsPage() {
       </Dialog>
 
       <Dialog open={isDailyAuditOpen} onOpenChange={(o) => { if(!o) document.body.style.pointerEvents = 'auto'; setIsDailyAuditOpen(o); }}>
-        <DialogContent className="sm:max-w-[360px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl bg-white" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
+        <DialogContent className="sm:max-w-[620px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl bg-white" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={handlePopupBlur} onEscapeKeyDown={handlePopupBlur}>
           {currentRound && (
             <div className="flex flex-col max-h-[90vh]">
               {/* Header */}
-              <div className="bg-primary/5 p-4 text-center relative border-b border-border/40 shrink-0">
-                <div className="mx-auto mb-2 h-10 w-10 rounded-2xl bg-white text-primary flex items-center justify-center shadow-md border border-primary/10">
-                  <Eye className="size-5" />
-                </div>
-                <DialogTitle className="text-base font-black uppercase tracking-tight text-primary leading-tight text-center">Collection Details</DialogTitle>
+              <div className="bg-primary/5 p-4 text-center border-b border-border/40 shrink-0">
+                <DialogTitle className="text-base font-headline uppercase tracking-tight text-primary text-center">Collection Details</DialogTitle>
                 <DialogDescription className="sr-only">Detailed collection breakdown by member for the selected date.</DialogDescription>
+                <div className="mt-3 flex flex-col items-center justify-center gap-1.5">
+                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border shadow-sm">
+                    <CalendarDays className="size-4 text-primary" />
+                    <span className="text-xs font-black text-primary uppercase tracking-wider">{isValid(parseISO(auditDate)) ? format(parseISO(auditDate), 'dd MMM yyyy') : auditDate}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground font-medium">
+                    <span>Change Date:</span>
+                    <Input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className="h-6 w-28 p-1 font-bold text-[10px] rounded-md border-muted/40 cursor-pointer" />
+                  </div>
+                </div>
               </div>
 
-              {/* Scrollable Content */}
-              <div className="p-4 space-y-4 bg-white overflow-y-auto custom-scrollbar flex-1">
-                {/* Date Picker */}
-                <div className="space-y-1.5">
-                  <Label className="text-[9px] font-black uppercase text-muted-foreground ml-1">Selected Date</Label>
-                  <div className="relative">
-                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-                    <Input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className="pl-9 h-10 font-bold text-xs rounded-xl border-muted/60" />
-                  </div>
-                </div>
-
-                {/* Paid Members Section */}
-                <div className="space-y-1.5">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 flex items-center gap-1.5 ml-1">
+              {/* Scrollable Content: Split into two columns */}
+              <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto custom-scrollbar flex-1 bg-white">
+                {/* Left Section: Paid Members */}
+                <div className="flex flex-col h-full bg-emerald-50/20 rounded-2xl border border-emerald-100/50 p-3 min-h-[220px]">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 flex items-center gap-1.5 mb-2 ml-1 pb-1.5 border-b border-emerald-100/30">
                     <CheckCircle2 className="size-3.5" /> Paid Members ({auditDatePayments.length})
                   </h4>
-                  <div className="border border-border/40 rounded-2xl overflow-hidden bg-muted/5">
-                    <div className="max-h-[140px] overflow-y-auto custom-scrollbar p-3">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-border/40">
-                            <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 pl-1">Member Name</th>
-                            <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 text-right pr-1">Amount Paid</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {auditDatePayments.length > 0 ? (
-                            auditDatePayments.map((p: any, i: number) => {
-                              const pAmt = getPaymentAmount(p);
-                              return (
-                                <tr key={p.id || i} className="border-b border-border/10 last:border-none hover:bg-muted/5 transition-colors">
-                                  <td className="py-2 text-xs font-bold text-foreground/80 pl-1">{p.memberName || 'Unknown Member'}</td>
-                                  <td className="py-2 text-xs font-black text-emerald-600 text-right pr-1 tabular-nums">₹{pAmt.toLocaleString()}</td>
-                                </tr>
-                              );
-                            })
-                          ) : (
-                            <tr>
-                              <td colSpan={2} className="py-8 text-center text-[10px] font-bold uppercase text-muted-foreground/50 italic">
-                                No payments recorded on this date.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 max-h-[220px] space-y-1.5">
+                    {auditDatePayments.length > 0 ? (
+                      auditDatePayments.map((p: any, i: number) => {
+                        const pAmt = getPaymentAmount(p);
+                        return (
+                          <div key={p.id || i} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-emerald-100/20 shadow-sm">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-foreground/80">{p.memberName || 'Unknown Member'}</span>
+                              {p.method && <span className="text-[8px] font-bold text-muted-foreground/60 uppercase tracking-widest">{p.method}</span>}
+                            </div>
+                            <span className="text-xs font-black text-emerald-600 tabular-nums">₹{pAmt.toLocaleString()}</span>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-4">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground/40 italic">No payments recorded</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Pending Members Section */}
-                <div className="space-y-1.5">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center gap-1.5 ml-1">
+                {/* Right Section: Pending Members */}
+                <div className="flex flex-col h-full bg-amber-50/20 rounded-2xl border border-amber-100/50 p-3 min-h-[220px]">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center gap-1.5 mb-2 ml-1 pb-1.5 border-b border-amber-100/30">
                     <Clock className="size-3.5" /> Pending Members ({auditDatePendingMembers.length})
                   </h4>
-                  <div className="border border-border/40 rounded-2xl overflow-hidden bg-muted/5">
-                    <div className="max-h-[140px] overflow-y-auto custom-scrollbar p-3">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-border/40">
-                            <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 pl-1">Member Name</th>
-                            <th className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 text-right pr-1">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {auditDatePendingMembers.length > 0 ? (
-                            auditDatePendingMembers.map((m: any, i: number) => {
-                              return (
-                                <tr key={m.id || i} className="border-b border-border/10 last:border-none hover:bg-muted/5 transition-colors">
-                                  <td className="py-2 text-xs font-bold text-foreground/80 pl-1">{m.name || 'Unknown Member'}</td>
-                                  <td className="py-2 text-[10px] font-black text-amber-600 text-right pr-1 uppercase tracking-widest">Pending</td>
-                                </tr>
-                              );
-                            })
-                          ) : (
-                            <tr>
-                              <td colSpan={2} className="py-8 text-center text-[10px] font-bold uppercase text-muted-foreground/50 italic">
-                                No pending members on this date.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 max-h-[220px] space-y-1.5">
+                    {auditDatePendingMembers.length > 0 ? (
+                      auditDatePendingMembers.map((m: any, i: number) => {
+                        return (
+                          <div key={m.id || i} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-amber-100/20 shadow-sm">
+                            <span className="text-xs font-bold text-foreground/80">{m.name || 'Unknown Member'}</span>
+                            <span className="px-2 py-0.5 rounded bg-amber-50 border border-amber-100 text-[8px] font-black text-amber-600 uppercase tracking-wider">Pending</span>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-4">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground/40 italic">No pending members</p>
+                      </div>
+                    )}
                   </div>
                 </div>
+              </div>
 
-                {/* Bottom Total Collection */}
-                <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between shadow-inner relative overflow-hidden group shrink-0">
-                  <div className="absolute -right-3 -bottom-3 opacity-5 transition-transform duration-500">
-                    <IndianRupee className="size-12 text-emerald-900" />
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80">Total Collection</span>
-                  <p className="text-base font-black text-emerald-700 tabular-nums tracking-tighter relative z-10">
-                    ₹{auditDateTotalCollection.toLocaleString()}
-                  </p>
+              {/* Bottom: Total Collection Banner */}
+              <div className="p-4 bg-emerald-500 text-white flex items-center justify-between shadow-inner relative overflow-hidden shrink-0">
+                <div className="absolute -right-3 -bottom-3 opacity-10">
+                  <IndianRupee className="size-16 text-white" />
                 </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-100 z-10">Total Collection</span>
+                <p className="text-xl font-black text-white tabular-nums tracking-tight relative z-10">
+                  ₹{auditDateTotalCollection.toLocaleString()}
+                </p>
               </div>
 
               {/* Footer */}
               <div className="p-3 bg-muted/10 border-t border-border/40 shrink-0">
-                <Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-black uppercase tracking-widest h-10 rounded-xl shadow-sm text-xs bg-primary hover:bg-primary/90 text-white">
+                <Button onClick={() => setIsDailyAuditOpen(false)} className="w-full font-black uppercase tracking-widest h-10 rounded-xl shadow-sm text-xs bg-primary hover:bg-primary/90 text-white active:scale-[0.98] transition-all">
                   Close Details
                 </Button>
               </div>

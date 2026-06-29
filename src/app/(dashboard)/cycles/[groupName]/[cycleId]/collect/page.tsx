@@ -130,8 +130,7 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
         const resolvedType = (m.paymentType || scheme?.collectionType || "Daily");
         const schemeAmt = Number(m.monthlyAmount || scheme?.monthlyAmount || 800);
         
-        const isCycleCompleted = selectedCycle?.status === 'completed';
-        // Filter payments belonging to this member
+        // Filter payments belonging to this member strictly within this cycle range (inclusive)
         const mPayments = paymentsData.filter(p => {
           if (p.memberId !== m.id) return false;
           
@@ -139,15 +138,8 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
           const pStatus = String(p?.status || "").toLowerCase();
           if (pStatus !== 'success' && pStatus !== 'paid' && pStatus !== 'verified') return false;
           
-          // For completed cycles, calculate strictly using that cycle's payments linked by cycleId.
-          if (isCycleCompleted) {
-            return p.cycleId === cycleIdInternal;
-          }
-          
-          // For active/open cycles, maintain original date range fallback logic untouched.
-          if (p.cycleId === cycleIdInternal) return true;
           const pDate = getPDateStr(p);
-          return pDate && pDate >= startDate && pDate <= endDate;
+          return pDate && pDate >= startDate && (endDate ? pDate <= endDate : true);
         });
 
         const totalPaidInCycle = mPayments.reduce((s, p) => s + (p.amountPaid || 0), 0);

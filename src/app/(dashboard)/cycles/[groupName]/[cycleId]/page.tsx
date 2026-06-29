@@ -121,22 +121,14 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
 
     const getPAmount = (p: any) => Number(p.amountPaid || p.amount || 0);
 
-    // Filter payments strictly within this cycle range OR matching cycle ID
-    const isCycleCompleted = selectedCycle?.status === 'completed';
+    // Filter payments strictly within this cycle range (inclusive)
     const cyclePayments = (Array.isArray(paymentsData) ? paymentsData : [])
       .filter(p => {
         if (!memberIds.has(p.memberId)) return false
         if (p.status && !['success', 'paid', 'verified'].includes(p.status.toLowerCase())) return false
         
-        // For completed cycles, calculate strictly using that cycle's payments linked by cycleId.
-        if (isCycleCompleted) {
-          return p.cycleId === cycleIdInternal;
-        }
-        
-        // For active/open cycles, maintain the original date range fallback logic untouched.
-        if (p.cycleId === cycleIdInternal) return true;
         const recordDate = getPDateStr(p);
-        return recordDate && recordDate >= startDate && recordDate <= endDate;
+        return recordDate && recordDate >= startDate && (endDate ? recordDate <= endDate : true);
       })
 
     const totalCollection = cyclePayments.reduce((sum, p) => sum + getPAmount(p), 0)
