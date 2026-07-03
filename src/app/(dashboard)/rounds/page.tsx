@@ -318,6 +318,7 @@ export default function RoundsPage() {
   
   const [isDailyAuditOpen, setIsDailyAuditOpen] = useState(false)
   const [auditDate, setAuditDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [isAuditDatePickerOpen, setIsAuditDatePickerOpen] = useState(false)
 
   const [historyMember, setHistoryMember] = useState<any>(null)
   const [selectedMemberForPayment, setSelectedMemberForPayment] = useState<any>(null)
@@ -1102,14 +1103,47 @@ export default function RoundsPage() {
                 <DialogTitle className="text-base font-headline uppercase tracking-tight text-primary text-center">Collection Details</DialogTitle>
                 <DialogDescription className="sr-only">Detailed collection breakdown by member for the selected date.</DialogDescription>
                 <div className="mt-3 flex flex-col items-center justify-center gap-1.5">
-                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border shadow-sm">
-                    <CalendarDays className="size-4 text-primary" />
-                    <span className="text-xs font-black text-primary uppercase tracking-wider">{isValid(parseISO(auditDate)) ? format(parseISO(auditDate), 'dd MMM yyyy') : auditDate}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground font-medium">
-                    <span>Change Date:</span>
-                    <Input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className="h-6 w-28 p-1 font-bold text-[10px] rounded-md border-muted/40 cursor-pointer" />
-                  </div>
+                  <Popover open={isAuditDatePickerOpen} onOpenChange={setIsAuditDatePickerOpen} modal={true}>
+                    <PopoverTrigger asChild>
+                      <div className="flex flex-col items-center justify-center gap-1.5 cursor-pointer">
+                        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border shadow-sm hover:bg-muted/5 transition-colors">
+                          <CalendarDays className="size-4 text-primary" />
+                          <span className="text-xs font-black text-primary uppercase tracking-wider">{isValid(parseISO(auditDate)) ? format(parseISO(auditDate), 'dd MMM yyyy') : auditDate}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground font-medium">
+                          <span>Change Date:</span>
+                          <div className="relative flex items-center">
+                            <Input
+                              type="text"
+                              readOnly
+                              value={isValid(parseISO(auditDate)) ? format(parseISO(auditDate), 'dd MMM yyyy') : auditDate}
+                              className="h-6 w-28 pl-6 pr-1 font-bold text-[10px] rounded-md border-muted/40 cursor-pointer text-center bg-white"
+                            />
+                            <Calendar className="absolute left-1.5 size-3.5 text-primary pointer-events-none" />
+                          </div>
+                        </div>
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-auto p-0"
+                      align="center"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <CalendarPicker
+                        mode="single"
+                        selected={isValid(parseISO(auditDate)) ? parseISO(auditDate) : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            setAuditDate(format(date, 'yyyy-MM-dd'))
+                            setIsAuditDatePickerOpen(false)
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
