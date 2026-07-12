@@ -106,7 +106,6 @@ const getInitials = (name: string) => {
 function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: any }) {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [status, setStatus] = useState("active")
   const [isOpen, setIsOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
@@ -114,21 +113,30 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
   const { user } = useUser()
   const { toast } = useToast()
 
-  const isActive = latestCycle && latestCycle.status === 'active';
+  const nextCycleNumber = latestCycle ? (Number(latestCycle.cycleNumber) || 0) + 1 : 1;
 
   useEffect(() => {
     if (isOpen) {
-      if (isActive) {
-        setStartDate(latestCycle.startDate || "")
-        setEndDate(latestCycle.endDate || "")
-        setStatus(latestCycle.status || "active")
+      if (latestCycle) {
+        const prevStart = parseISO(latestCycle.startDate);
+        const prevEnd = latestCycle.endDate ? parseISO(latestCycle.endDate) : parseISO(latestCycle.startDate);
+        const duration = differenceInDays(prevEnd, prevStart);
+
+        // nextStartDate = latestEndDate + 1 day (Rule 1)
+        const nextStart = latestCycle.endDate ? addDays(parseISO(latestCycle.endDate), 1) : new Date();
+        // nextEndDate = nextStartDate + groupDuration (Rule 1)
+        const nextEnd = addDays(nextStart, duration);
+
+        setStartDate(format(nextStart, 'yyyy-MM-dd'));
+        setEndDate(format(nextEnd, 'yyyy-MM-dd'));
       } else {
-        setStartDate(format(new Date(), 'yyyy-MM-dd'))
-        setEndDate("")
-        setStatus("active")
+        const nextStart = new Date();
+        const nextEnd = addDays(nextStart, 30);
+        setStartDate(format(nextStart, 'yyyy-MM-dd'));
+        setEndDate(format(nextEnd, 'yyyy-MM-dd'));
       }
     }
-  }, [isOpen, latestCycle, isActive])
+  }, [isOpen, latestCycle]);
 
   const handleLaunchNewCycle = async () => {
     if (isSaving) return;
@@ -142,51 +150,31 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
         throw new Error(`Group "${group.name}" is not supported for cycle launch.`);
       }
 
-      // 1. Fetch cycles of this group outside the transaction callback to prepare sequence check
+      // Read only the latest cycle of the selected group using indexed query (Rule 7)
       const querySnapshot = await getDocs(
         query(collection(db, 'cycles'), where('name', '==', group.name))
       );
-      const allCyclesDocs = querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
+      const groupCycles = querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
+      groupCycles.sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
+
+      const activeCycles = groupCycles.filter((c: any) => c.status === 'active');
       
-      const gNameClean = cleanGroupName.replace(/group/gi, '').trim().toLowerCase();
-      const existingCycles = allCyclesDocs.filter((c: any) => {
-        const cNameClean = String(c?.name || c?.group || c?.groupName || "").replace(/group/gi, '').trim().toLowerCase();
-        return cNameClean === gNameClean;
-      });
-
-      // Sort by cycleNumber
-      existingCycles.sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
-
-      const activeCycles = existingCycles.filter((c: any) => c.status === 'active');
-      if (activeCycles.length !== 1) {
+      // Rule 5: Exactly ONE active cycle must exist if we have existing cycles
+      if (groupCycles.length > 0 && activeCycles.length !== 1) {
         throw new Error("Invalid active cycle state.");
       }
 
-      const latestCycle = existingCycles[existingCycles.length - 1];
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const verifiedLatestCycle = groupCycles[groupCycles.length - 1];
+      const nextNumber = verifiedLatestCycle ? (Number(verifiedLatestCycle.cycleNumber) || 0) + 1 : 1;
 
-      if (latestCycle) {
-        if (!latestCycle.endDate) {
-          throw new Error(`Previous cycle (Cycle ${latestCycle.cycleNumber}) is open-ended. Please set its End Date first.`);
-        }
-        if (latestCycle.endDate > todayStr) {
-          throw new Error(`Previous cycle (Cycle ${latestCycle.cycleNumber}) is still in progress (ends on ${latestCycle.endDate}). You cannot launch a new cycle until it ends.`);
-        }
-      }
-
-      let nextNumber = 1;
-      if (latestCycle) {
-        nextNumber = (Number(latestCycle.cycleNumber) || 0) + 1;
-      }
-
-      // Check duplicate cycle number in existing local records
-      const duplicateExists = existingCycles.some(c => Number(c.cycleNumber) === nextNumber);
+      // Rule 3 & 4: Duplicate verification
+      const duplicateExists = groupCycles.some(c => Number(c.cycleNumber) === nextNumber);
       if (duplicateExists) {
         throw new Error("Cycle already created.");
       }
 
       // Check sequence continuity (no gaps)
-      const seenNumbers = new Set(existingCycles.map(c => Number(c.cycleNumber)).filter(n => !isNaN(n)));
+      const seenNumbers = new Set(groupCycles.map(c => Number(c.cycleNumber)).filter(n => !isNaN(n)));
       const missing = [];
       for (let i = 1; i < nextNumber; i++) {
         if (!seenNumbers.has(i)) {
@@ -197,21 +185,8 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
         throw new Error(`Sequence broken. Missing cycle numbers: ${missing.join(', ')}. Please run database recovery first.`);
       }
 
-      // Calculate new cycle dates (endDate = calculated duration from previous)
-      let nextStartStr = todayStr;
-      let nextEndStr = null;
-      if (latestCycle) {
-        const prevStart = parseISO(latestCycle.startDate);
-        const prevEnd = parseISO(latestCycle.endDate);
-        const duration = differenceInDays(prevEnd, prevStart);
-        const nextEnd = addDays(parseISO(nextStartStr), duration);
-        nextEndStr = format(nextEnd, 'yyyy-MM-dd');
-      } else {
-        nextEndStr = format(addDays(parseISO(nextStartStr), 30), 'yyyy-MM-dd');
-      }
-
       await runTransaction(db, async (transaction) => {
-        // Read & Lock the Group document (Rule 2)
+        // 1. Lock chitRounds document (Rule 5)
         const groupRef = doc(db, 'chitRounds', group.id);
         const groupDoc = await transaction.get(groupRef);
         if (!groupDoc.exists()) {
@@ -224,33 +199,33 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
           throw new Error("A newer cycle was already launched by another administrator.");
         }
 
-        // Read & Lock the latest cycle document if it exists (Rule 2)
-        if (latestCycle) {
-          const latestCycleRef = doc(db, 'cycles', latestCycle.id);
+        // 2. Read latest cycle inside transaction (Rule 5)
+        if (verifiedLatestCycle) {
+          const latestCycleRef = doc(db, 'cycles', verifiedLatestCycle.id);
           const latestCycleDoc = await transaction.get(latestCycleRef);
           if (latestCycleDoc.exists()) {
             const latestData = latestCycleDoc.data();
             if (Number(latestData.cycleNumber) >= nextNumber) {
               throw new Error("A newer cycle was already launched by another administrator.");
             }
-            if (latestData.status === 'completed' && latestCycle.status === 'active') {
+            if (latestData.status === 'completed' && verifiedLatestCycle.status === 'active') {
               throw new Error("Previous cycle status has changed. Try again.");
             }
           }
         }
 
-        const newCycleRef = doc(collection(db, 'cycles')); // Rule 4: doc(newAutoId) only, never setDoc(existingCycleId)
+        const newCycleRef = doc(collection(db, 'cycles')); // Rule 3: new auto-generated ID
 
-        // Update previous active cycle to completed atomically (Rule 6)
-        if (latestCycle && latestCycle.status === 'active') {
-          transaction.update(doc(db, 'cycles', latestCycle.id), {
+        // 3. Complete previous cycle atomically (Rule 2 & 5)
+        if (verifiedLatestCycle && verifiedLatestCycle.status === 'active') {
+          transaction.update(doc(db, 'cycles', verifiedLatestCycle.id), {
             status: 'completed',
             completedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           });
         }
 
-        // Create new active cycle with required production fields (Rule 7)
+        // 4. Create new cycle (Rule 3)
         transaction.set(newCycleRef, {
           id: newCycleRef.id,
           name: group.name,
@@ -259,8 +234,8 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
           groupName: group.name,
           cycleNumber: nextNumber,
           cycle: `Cycle ${nextNumber}`,
-          startDate: nextStartStr,
-          endDate: nextEndStr,
+          startDate,
+          endDate,
           status: "active",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -268,7 +243,7 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
           createdBy: user?.email || "admin"
         });
 
-        // Update group document to lock concurrent transactions (Rule 8)
+        // 5. Update group document to lock concurrent transactions (Rule 5 & 8)
         transaction.update(groupRef, {
           updatedAt: new Date().toISOString(),
           lastLaunchedCycle: nextNumber,
@@ -276,21 +251,18 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
         });
       });
 
-      // Post verification (Rule 10)
-      const postQuery = await getDocs(collection(db, 'cycles'));
+      // Post-commit reload and verification (Rule 6 & 8)
+      const postQuery = await getDocs(
+        query(collection(db, 'cycles'), where('name', '==', group.name))
+      );
       const postCycles = postQuery.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
-      const postGroupCycles = postCycles.filter((c: any) => {
-        const cNameClean = String(c?.name || c?.group || c?.groupName || "").replace(/group/gi, '').trim().toLowerCase();
-        return cNameClean === gNameClean;
-      });
+      postCycles.sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
 
-      postGroupCycles.sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
+      const newLatestCycle = postCycles[postCycles.length - 1];
+      const prevLatestCycle = postCycles[postCycles.length - 2];
+      const postActiveCycles = postCycles.filter((c: any) => c.status === 'active');
 
-      const newLatestCycle = postGroupCycles[postGroupCycles.length - 1];
-      const prevLatestCycle = postGroupCycles[postGroupCycles.length - 2];
-      const postActiveCycles = postGroupCycles.filter((c: any) => c.status === 'active');
-
-      if (postGroupCycles.length !== (existingCycles.length + 1)) {
+      if (postCycles.length !== (groupCycles.length + 1)) {
         throw new Error("Verification failed: Cycle count did not increase by exactly 1.");
       }
       if (!newLatestCycle || Number(newLatestCycle.cycleNumber) !== nextNumber) {
@@ -307,7 +279,7 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
       }
 
       // Check duplicate cycleNumber
-      const postNumbers = postGroupCycles.map(c => Number(c.cycleNumber));
+      const postNumbers = postCycles.map(c => Number(c.cycleNumber));
       const duplicates = postNumbers.filter((item, index) => postNumbers.indexOf(item) !== index);
       if (duplicates.length > 0) {
         throw new Error("Verification failed: Duplicate cycleNumber detected.");
@@ -324,46 +296,11 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
     }
   };
 
-  const handleUpdateActiveCycle = async () => {
-    if (isSaving) return;
-    setIsSaving(true);
-    document.body.style.pointerEvents = 'none';
-
-    try {
-      if (!latestCycle) return;
-      if (latestCycle.status === 'completed') {
-        toast({ variant: "destructive", title: "Update Failed", description: "Cannot modify a completed cycle." });
-        return;
-      }
-
-      const updateData: any = {
-        startDate,
-        endDate: endDate || null,
-        status,
-        updatedAt: new Date().toISOString()
-      };
-      
-      if (status === 'completed' && !latestCycle.completedAt) {
-        updateData.completedAt = new Date().toISOString();
-      }
-
-      await updateDoc(doc(db, 'cycles', latestCycle.id), updateData);
-      await createAuditLog(db, user, `Updated Cycle Boundaries for ${group.name} (${latestCycle.cycle})`);
-      toast({ title: "Registry Updated", description: "Operational timeline synchronized." });
-      setIsOpen(false);
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Update Error", description: error.message || "Failed to update record." });
-    } finally {
-      setIsSaving(false);
-      document.body.style.pointerEvents = 'auto';
-    }
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if(!open) document.body.style.pointerEvents = 'auto'; setIsOpen(open); }}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className={cn("h-8 w-8 rounded-full transition-colors", isActive ? "text-primary/70 hover:text-primary hover:bg-primary/10" : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50")}>
-          {isActive ? <CalendarDays className="size-4" /> : <Plus className="size-4" />}
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full transition-colors text-primary/70 hover:text-primary hover:bg-primary/10">
+          <CalendarDays className="size-4" />
         </Button>
       </DialogTrigger>
       <DialogContent 
@@ -374,62 +311,41 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-headline uppercase tracking-tight text-primary">
-            {isActive ? <Edit3 className="size-4" /> : <TrendingUp className="size-4" />}
-            {isActive ? 'Update Cycle' : 'Launch Next Cycle'}
+            <TrendingUp className="size-4" />
+            Launch Next Cycle
           </DialogTitle>
           <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-            {isActive ? 'Modify existing operational boundaries.' : 'Establish the next sequential audit period.'}
+            Establish the next sequential audit period.
           </DialogDescription>
         </DialogHeader>
 
-        {isActive ? (
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Start Date</Label>
-                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 text-xs rounded-xl font-bold" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">End Date</Label>
-                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 text-xs rounded-xl font-bold" />
-              </div>
+        <div className="grid gap-4 py-4">
+          <div className="p-4 bg-emerald-50 rounded-2xl border border-dashed border-emerald-200 text-center">
+            <p className="text-[10px] font-black uppercase text-emerald-600/70 mb-1">New Cycle Number</p>
+            <p className="text-2xl font-black text-emerald-700 uppercase tracking-tighter">
+              Cycle {nextCycleNumber}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Start Date</Label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 text-xs rounded-xl font-bold" />
             </div>
             <div className="space-y-1">
-              <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Cycle Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="h-10 text-xs font-bold rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active" className="text-xs">Active (Collect Payments)</SelectItem>
-                  <SelectItem value="completed" className="text-xs">Completed (Archive Period)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">End Date</Label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 text-xs rounded-xl font-bold" />
             </div>
           </div>
-        ) : (
-          <div className="py-6 space-y-6">
-            <div className="p-4 bg-emerald-50 rounded-2xl border border-dashed border-emerald-200 text-center">
-              <p className="text-[10px] font-black uppercase text-emerald-600/70 mb-1">New Cycle Identifier</p>
-              <p className="text-2xl font-black text-emerald-700 uppercase tracking-tighter">
-                Cycle Step-Up
-              </p>
-            </div>
-            <div className="flex items-start gap-3 bg-muted/30 p-3 rounded-xl">
-              <Info className="size-4 text-primary shrink-0 mt-0.5" />
-              <p className="text-[10px] font-bold text-muted-foreground leading-relaxed">
-                Start date will be automatically set to today. End date remains open until manually set by admin.
-              </p>
-            </div>
-          </div>
-        )}
+        </div>
 
         <DialogFooter>
           <Button 
-            onClick={isActive ? handleUpdateActiveCycle : handleLaunchNewCycle} 
+            onClick={handleLaunchNewCycle} 
             disabled={isSaving} 
             className="w-full font-black uppercase tracking-[0.1em] h-12 rounded-xl active:scale-[0.98] transition-all shadow-md"
           >
             {isSaving ? <Loader2 className="size-3 mr-2 animate-spin" /> : <CheckCircle2 className="size-3 mr-2" />}
-            {isActive ? 'Update Registry' : 'Launch Period'}
+            Launch Period
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -917,6 +833,9 @@ export default function RoundsPage() {
 
             const isExpired = activeCycle && activeCycle.endDate && isAfter(startOfDay(new Date()), startOfDay(parseISO(activeCycle.endDate)));
 
+            const sortedCycles = [...groupCycles].sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
+            const latestCycle = sortedCycles[sortedCycles.length - 1];
+
             return (
               <Card key={group.id} className="group hover:shadow-xl transition-all border-border/60 overflow-hidden flex flex-col relative bg-card shadow-sm rounded-2xl">
                 <div className="absolute top-3 right-3 flex items-center gap-2">
@@ -933,7 +852,7 @@ export default function RoundsPage() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors" onClick={() => { setActivePopupGroupName(group.name); setSelectedReconciliationCycleId(activeCycle?.id || null); setIsCollectionPopupOpen(true); }}><Wallet className="size-4" /></Button>
-                  <GroupCycleControl group={group} latestCycle={activeCycle} />
+                  <GroupCycleControl group={group} latestCycle={latestCycle} />
                 </div>
                 <CardHeader className="p-5 pb-3 space-y-1.5 border-b border-border/40">
                   <div className="flex items-center gap-2">
