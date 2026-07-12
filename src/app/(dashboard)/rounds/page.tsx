@@ -143,7 +143,9 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
       }
 
       // 1. Fetch cycles of this group outside the transaction callback to prepare sequence check
-      const querySnapshot = await getDocs(collection(db, 'cycles'));
+      const querySnapshot = await getDocs(
+        query(collection(db, 'cycles'), where('name', '==', group.name))
+      );
       const allCyclesDocs = querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
       
       const gNameClean = cleanGroupName.replace(/group/gi, '').trim().toLowerCase();
