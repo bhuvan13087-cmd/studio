@@ -180,6 +180,7 @@ export default function PaymentsPage() {
           paymentDate: paymentToCorrect.paymentDate || new Date().toISOString(),
           status: "success",
           method: paymentToCorrect.method || "Cash",
+          cycleId: paymentToCorrect.cycleId || null,
           createdAt: serverTimestamp()
         });
         batch.update(doc(db, 'members', newMember.id), {
@@ -217,9 +218,17 @@ export default function PaymentsPage() {
     if (isLocked) { toast({ variant: "destructive", title: "Locked", description: "Cannot delete record from a locked month." }); return; }
     setIsActionPending(true)
     try {
+      const batch = writeBatch(db);
       const member = members.find(m => m.id === paymentToDelete.memberId);
-      if (member) { const memberRef = doc(db, 'members', member.id); await withTimeout(updateDoc(memberRef, { totalPaid: Math.max(0, (member.totalPaid || 0) - getPaymentAmount(paymentToDelete)) })); }
-      await withTimeout(deleteDoc(doc(db, 'payments', paymentToDelete.id)));
+      if (member) {
+        const memberRef = doc(db, 'members', member.id);
+        batch.update(memberRef, {
+          totalPaid: Math.max(0, (member.totalPaid || 0) - getPaymentAmount(paymentToDelete))
+        });
+      }
+      batch.delete(doc(db, 'payments', paymentToDelete.id));
+      await withTimeout(batch.commit());
+      
       await createAuditLog(db, user, `Deleted payment record of ₹${getPaymentAmount(paymentToDelete)} for ${paymentToDelete.memberName}`);
       handleModalClose(setIsDeletePaymentDialogOpen, () => setPaymentToDelete(null));
       toast({ title: "Record Deleted", description: "Payment removed successfully." });

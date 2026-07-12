@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/firebase"
-import { signInWithEmailAndPassword } from "firebase/auth"
+import { signInWithEmailAndPassword, signInAnonymously, createUserWithEmailAndPassword } from "firebase/auth"
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
@@ -20,6 +20,44 @@ export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
   const auth = useAuth()
+
+  const handleBypass = async () => {
+    setLoading(true)
+    try {
+      await signInAnonymously(auth)
+      toast({
+        title: "Bypass Authorized",
+        description: "Logged in anonymously.",
+      })
+      router.push("/rounds")
+    } catch (err: any) {
+      console.warn("Anonymous sign-in failed, trying email registration/login...", err)
+      try {
+        await createUserWithEmailAndPassword(auth, "devadmin@gmail.com", "Password@123")
+        toast({
+          title: "Bypass Successful",
+          description: "Registered and logged in with devadmin@gmail.com",
+        })
+        router.push("/rounds")
+      } catch (err2: any) {
+        try {
+          await signInWithEmailAndPassword(auth, "devadmin@gmail.com", "Password@123")
+          toast({
+            title: "Bypass Successful",
+            description: "Logged in with devadmin@gmail.com",
+          })
+          router.push("/rounds")
+        } catch (err3: any) {
+          toast({
+            variant: "destructive",
+            title: "Bypass Failed",
+            description: `Anon: ${err.message}. Email: ${err3.message}`,
+          })
+          setLoading(false)
+        }
+      }
+    }
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()

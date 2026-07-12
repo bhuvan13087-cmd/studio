@@ -58,7 +58,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Calendar as CalendarPicker } from "@/components/ui/calendar"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc, addDoc, getDocs, where, setDoc } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc, addDoc, getDocs, where, setDoc, runTransaction, increment } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, isSameMonth, eachDayOfInterval, isBefore, isAfter, startOfDay, endOfDay, differenceInDays, addDays, max, isValid, subDays } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
@@ -131,48 +131,185 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
   }, [isOpen, latestCycle, isActive])
 
   const handleLaunchNewCycle = async () => {
+    if (isSaving) return;
     setIsSaving(true);
+    document.body.style.pointerEvents = 'none';
+
     try {
+      const cleanGroupName = String(group.name || "").trim().toUpperCase();
+      const allowedGroups = ["A GROUP", "B GROUP", "C GROUP", "H GROUP", "D GROUP"];
+      if (!allowedGroups.includes(cleanGroupName)) {
+        throw new Error(`Group "${group.name}" is not supported for cycle launch.`);
+      }
+
+      // 1. Fetch cycles of this group outside the transaction callback to prepare sequence check
       const querySnapshot = await getDocs(collection(db, 'cycles'));
       const allCyclesDocs = querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
       
-      const gNameClean = String(group.name).replace(/group/gi, '').trim().toLowerCase();
+      const gNameClean = cleanGroupName.replace(/group/gi, '').trim().toLowerCase();
       const existingCycles = allCyclesDocs.filter((c: any) => {
-        const cNameClean = String(c?.name || "").replace(/group/gi, '').trim().toLowerCase();
+        const cNameClean = String(c?.name || c?.group || c?.groupName || "").replace(/group/gi, '').trim().toLowerCase();
         return cNameClean === gNameClean;
       });
-      
-      let maxNum = 0;
-      existingCycles.forEach((c: any) => {
-        const num = Number(c.cycleNumber) || 0;
-        if (num > maxNum) maxNum = num;
-        if (c.cycle && typeof c.cycle === 'string') {
-          const match = c.cycle.match(/Cycle (\d+)/);
-          if (match) {
-            const mNum = Number(match[1]);
-            if (mNum > maxNum) maxNum = mNum;
-          }
-        }
-      });
 
-      const uniqueStarts = Array.from(new Set(existingCycles.map((c: any) => c.startDate).filter(Boolean)));
-      const nextNumber = Math.max(maxNum + 1, uniqueStarts.length + 1);
+      // Sort by cycleNumber
+      existingCycles.sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
+
+      const activeCycles = existingCycles.filter((c: any) => c.status === 'active');
+      if (activeCycles.length !== 1) {
+        throw new Error("Invalid active cycle state.");
+      }
+
+      const latestCycle = existingCycles[existingCycles.length - 1];
       const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-      const newRef = doc(collection(db, 'cycles'));
-      await setDoc(newRef, {
-        id: newRef.id,
-        name: group.name,
-        group: group.name,
-        cycleNumber: nextNumber,
-        cycle: `Cycle ${nextNumber}`,
-        startDate: todayStr,
-        endDate: null,
-        status: "active",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        completedAt: null
+      if (latestCycle) {
+        if (!latestCycle.endDate) {
+          throw new Error(`Previous cycle (Cycle ${latestCycle.cycleNumber}) is open-ended. Please set its End Date first.`);
+        }
+        if (latestCycle.endDate > todayStr) {
+          throw new Error(`Previous cycle (Cycle ${latestCycle.cycleNumber}) is still in progress (ends on ${latestCycle.endDate}). You cannot launch a new cycle until it ends.`);
+        }
+      }
+
+      let nextNumber = 1;
+      if (latestCycle) {
+        nextNumber = (Number(latestCycle.cycleNumber) || 0) + 1;
+      }
+
+      // Check duplicate cycle number in existing local records
+      const duplicateExists = existingCycles.some(c => Number(c.cycleNumber) === nextNumber);
+      if (duplicateExists) {
+        throw new Error("Cycle already created.");
+      }
+
+      // Check sequence continuity (no gaps)
+      const seenNumbers = new Set(existingCycles.map(c => Number(c.cycleNumber)).filter(n => !isNaN(n)));
+      const missing = [];
+      for (let i = 1; i < nextNumber; i++) {
+        if (!seenNumbers.has(i)) {
+          missing.push(i);
+        }
+      }
+      if (missing.length > 0) {
+        throw new Error(`Sequence broken. Missing cycle numbers: ${missing.join(', ')}. Please run database recovery first.`);
+      }
+
+      // Calculate new cycle dates (endDate = calculated duration from previous)
+      let nextStartStr = todayStr;
+      let nextEndStr = null;
+      if (latestCycle) {
+        const prevStart = parseISO(latestCycle.startDate);
+        const prevEnd = parseISO(latestCycle.endDate);
+        const duration = differenceInDays(prevEnd, prevStart);
+        const nextEnd = addDays(parseISO(nextStartStr), duration);
+        nextEndStr = format(nextEnd, 'yyyy-MM-dd');
+      } else {
+        nextEndStr = format(addDays(parseISO(nextStartStr), 30), 'yyyy-MM-dd');
+      }
+
+      await runTransaction(db, async (transaction) => {
+        // Read & Lock the Group document (Rule 2)
+        const groupRef = doc(db, 'chitRounds', group.id);
+        const groupDoc = await transaction.get(groupRef);
+        if (!groupDoc.exists()) {
+          throw new Error("Group document does not exist.");
+        }
+
+        const groupData = groupDoc.data();
+        const lastLaunched = Number(groupData.lastLaunchedCycle) || 0;
+        if (lastLaunched >= nextNumber) {
+          throw new Error("A newer cycle was already launched by another administrator.");
+        }
+
+        // Read & Lock the latest cycle document if it exists (Rule 2)
+        if (latestCycle) {
+          const latestCycleRef = doc(db, 'cycles', latestCycle.id);
+          const latestCycleDoc = await transaction.get(latestCycleRef);
+          if (latestCycleDoc.exists()) {
+            const latestData = latestCycleDoc.data();
+            if (Number(latestData.cycleNumber) >= nextNumber) {
+              throw new Error("A newer cycle was already launched by another administrator.");
+            }
+            if (latestData.status === 'completed' && latestCycle.status === 'active') {
+              throw new Error("Previous cycle status has changed. Try again.");
+            }
+          }
+        }
+
+        const newCycleRef = doc(collection(db, 'cycles')); // Rule 4: doc(newAutoId) only, never setDoc(existingCycleId)
+
+        // Update previous active cycle to completed atomically (Rule 6)
+        if (latestCycle && latestCycle.status === 'active') {
+          transaction.update(doc(db, 'cycles', latestCycle.id), {
+            status: 'completed',
+            completedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+
+        // Create new active cycle with required production fields (Rule 7)
+        transaction.set(newCycleRef, {
+          id: newCycleRef.id,
+          name: group.name,
+          group: group.name,
+          groupId: group.id,
+          groupName: group.name,
+          cycleNumber: nextNumber,
+          cycle: `Cycle ${nextNumber}`,
+          startDate: nextStartStr,
+          endDate: nextEndStr,
+          status: "active",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          completedAt: null,
+          createdBy: user?.email || "admin"
+        });
+
+        // Update group document to lock concurrent transactions (Rule 8)
+        transaction.update(groupRef, {
+          updatedAt: new Date().toISOString(),
+          lastLaunchedCycle: nextNumber,
+          currentCycleId: newCycleRef.id
+        });
       });
+
+      // Post verification (Rule 10)
+      const postQuery = await getDocs(collection(db, 'cycles'));
+      const postCycles = postQuery.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
+      const postGroupCycles = postCycles.filter((c: any) => {
+        const cNameClean = String(c?.name || c?.group || c?.groupName || "").replace(/group/gi, '').trim().toLowerCase();
+        return cNameClean === gNameClean;
+      });
+
+      postGroupCycles.sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
+
+      const newLatestCycle = postGroupCycles[postGroupCycles.length - 1];
+      const prevLatestCycle = postGroupCycles[postGroupCycles.length - 2];
+      const postActiveCycles = postGroupCycles.filter((c: any) => c.status === 'active');
+
+      if (postGroupCycles.length !== (existingCycles.length + 1)) {
+        throw new Error("Verification failed: Cycle count did not increase by exactly 1.");
+      }
+      if (!newLatestCycle || Number(newLatestCycle.cycleNumber) !== nextNumber) {
+        throw new Error("Verification failed: New highest cycleNumber is incorrect.");
+      }
+      if (newLatestCycle.status !== 'active') {
+        throw new Error("Verification failed: New cycle is not active.");
+      }
+      if (prevLatestCycle && prevLatestCycle.status !== 'completed') {
+        throw new Error("Verification failed: Old cycle was not completed.");
+      }
+      if (postActiveCycles.length !== 1) {
+        throw new Error("Verification failed: Active cycle count is not exactly 1.");
+      }
+
+      // Check duplicate cycleNumber
+      const postNumbers = postGroupCycles.map(c => Number(c.cycleNumber));
+      const duplicates = postNumbers.filter((item, index) => postNumbers.indexOf(item) !== index);
+      if (duplicates.length > 0) {
+        throw new Error("Verification failed: Duplicate cycleNumber detected.");
+      }
 
       await createAuditLog(db, user, `Launched New Operational Period: ${group.name} - Cycle ${nextNumber}`);
       toast({ title: "New Cycle Launched", description: `Group ${group.name} is now in Cycle ${nextNumber}.` });
@@ -186,13 +323,17 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
   };
 
   const handleUpdateActiveCycle = async () => {
-    if (!latestCycle) return;
-    if (latestCycle.status === 'completed') {
-      toast({ variant: "destructive", title: "Update Failed", description: "Cannot modify a completed cycle." });
-      return;
-    }
+    if (isSaving) return;
     setIsSaving(true);
+    document.body.style.pointerEvents = 'none';
+
     try {
+      if (!latestCycle) return;
+      if (latestCycle.status === 'completed') {
+        toast({ variant: "destructive", title: "Update Failed", description: "Cannot modify a completed cycle." });
+        return;
+      }
+
       const updateData: any = {
         startDate,
         endDate: endDate || null,
@@ -650,8 +791,10 @@ export default function RoundsPage() {
     try {
       const activeCycle = (allCycles || []).find(c => String(c.name).trim().toLowerCase() === String(currentRound.name).trim().toLowerCase() && c.status === 'active');
       
+      const batch = writeBatch(db);
       const paymentRef = doc(collection(db, 'payments'));
-      await addDoc(collection(db, 'payments'), {
+      
+      batch.set(paymentRef, {
         id: paymentRef.id,
         memberId: selectedMemberForPayment.id,
         memberName: selectedMemberForPayment.name,
@@ -664,6 +807,14 @@ export default function RoundsPage() {
         cycleId: activeCycle?.id || null,
         createdAt: serverTimestamp()
       });
+
+      const memberRef = doc(db, 'members', selectedMemberForPayment.id);
+      batch.update(memberRef, {
+        totalPaid: increment(pAmt)
+      });
+
+      await batch.commit();
+
       await createAuditLog(db, user, `Processed Payment ₹${pAmt} for ${selectedMemberForPayment.name} (${tDate})`);
       setIsQuickPaymentDialogOpen(false);
       toast({ title: "Payment Recorded", description: "Record attributed to operational cycle." });

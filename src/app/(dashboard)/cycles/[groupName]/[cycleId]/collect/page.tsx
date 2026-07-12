@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, increment } from "firebase/firestore"
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, increment, writeBatch } from "firebase/firestore"
 import { useRouter } from "next/navigation"
 import { format, parseISO, isValid, eachDayOfInterval, isAfter, max, startOfDay } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
@@ -199,7 +199,11 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
     setIsActionPending(true)
     try {
       const now = new Date()
+      const batch = writeBatch(db)
+      const paymentRef = doc(collection(db, 'payments'))
+      
       const paymentRecord = {
+        id: paymentRef.id,
         memberId: selectedMember.id,
         memberName: selectedMember.name,
         month: format(now, 'MMMM yyyy'),
@@ -214,12 +218,14 @@ export default function HistoryCollectionPage({ params }: { params: Promise<{ gr
         createdAt: serverTimestamp()
       }
 
-      // 1. Create a payment record linked to the cycle
-      await addDoc(collection(db, 'payments'), paymentRecord)
-      // 2. Increment member cumulative totalPaid
-      await updateDoc(doc(db, 'members', selectedMember.id), {
+      // 1. Create a payment record linked to the cycle atomically
+      batch.set(paymentRef, paymentRecord)
+      // 2. Increment member cumulative totalPaid atomically
+      batch.update(doc(db, 'members', selectedMember.id), {
         totalPaid: increment(Number(paymentData.amount))
       })
+      
+      await batch.commit()
       await createAuditLog(db, user, `Settled Historical Arrears ₹${paymentData.amount} for ${selectedMember.name} in ${groupName} (${selectedCycle.startDate} Cycle)`)
 
       toast({ title: "Payment Recorded", description: "Arrears settled for historical record." })
