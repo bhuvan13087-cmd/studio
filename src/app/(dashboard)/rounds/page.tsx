@@ -150,30 +150,26 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
         throw new Error(`Group "${group.name}" is not supported for cycle launch.`);
       }
 
-      // 1. Query latest cycle using indexed query (limit 1)
-      const latestQuery = query(
-        collection(db, 'cycles'),
-        where('groupId', '==', group.id),
-        orderBy('cycleNumber', 'desc'),
-        limit(1)
-      );
-      const latestSnapshot = await getDocs(latestQuery);
-      const preLatestCycle = latestSnapshot.empty ? null : { ...latestSnapshot.docs[0].data() as any, id: latestSnapshot.docs[0].id };
-
-      // 2. Query active cycles using indexed query
-      const activeQuery = query(
-        collection(db, 'cycles'),
-        where('groupId', '==', group.id),
-        where('status', '==', 'active')
-      );
-      const activeSnapshot = await getDocs(activeQuery);
-      const preActiveCycles = activeSnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
-
-      // 3. Query all cycles of the group to get pre-commit count (used for verification only)
-      const preQuery = await getDocs(
+      // 1. Fetch cycles matching groupId and cycles matching name (for historical compatibility)
+      const queryGroup = await getDocs(
         query(collection(db, 'cycles'), where('groupId', '==', group.id))
       );
-      const preCommitCount = preQuery.size;
+      
+      const queryName = await getDocs(
+        query(collection(db, 'cycles'), where('name', '==', group.name))
+      );
+
+      // 2. Merge and deduplicate by document ID in memory
+      const mergedMap = new Map<string, any>();
+      queryGroup.docs.forEach(doc => mergedMap.set(doc.id, { ...doc.data() as any, id: doc.id }));
+      queryName.docs.forEach(doc => mergedMap.set(doc.id, { ...doc.data() as any, id: doc.id }));
+
+      const groupCycles = Array.from(mergedMap.values());
+      groupCycles.sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
+
+      const preCommitCount = groupCycles.length;
+      const preLatestCycle = groupCycles.length > 0 ? groupCycles[groupCycles.length - 1] : null;
+      const preActiveCycles = groupCycles.filter(c => c.status === 'active');
 
       const highestExistingCycleNumber = preLatestCycle ? (Number(preLatestCycle.cycleNumber) || 0) : 0;
       const nextNumber = highestExistingCycleNumber + 1;
@@ -301,10 +297,17 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
       });
 
       // Post-commit reload and verification checks
-      const postQuery = await getDocs(
+      const postQueryGroup = await getDocs(
         query(collection(db, 'cycles'), where('groupId', '==', group.id))
       );
-      const postCycles = postQuery.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
+      const postQueryName = await getDocs(
+        query(collection(db, 'cycles'), where('name', '==', group.name))
+      );
+      const postMergedMap = new Map<string, any>();
+      postQueryGroup.docs.forEach(doc => postMergedMap.set(doc.id, { ...doc.data() as any, id: doc.id }));
+      postQueryName.docs.forEach(doc => postMergedMap.set(doc.id, { ...doc.data() as any, id: doc.id }));
+
+      const postCycles = Array.from(postMergedMap.values());
       postCycles.sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
 
       const newLatestCycle = postCycles[postCycles.length - 1];
