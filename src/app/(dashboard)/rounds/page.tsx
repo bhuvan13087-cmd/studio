@@ -58,7 +58,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Calendar as CalendarPicker } from "@/components/ui/calendar"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc, addDoc, getDocs, where, setDoc, runTransaction, increment } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy, writeBatch, updateDoc, deleteDoc, addDoc, getDocs, where, setDoc, runTransaction, increment, limit } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, isSameMonth, eachDayOfInterval, isBefore, isAfter, startOfDay, endOfDay, differenceInDays, addDays, max, isValid, subDays } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
@@ -150,90 +150,130 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
         throw new Error(`Group "${group.name}" is not supported for cycle launch.`);
       }
 
-      // Read only the latest cycle of the selected group using indexed query (Rule 7)
-      const querySnapshot = await getDocs(
-        query(collection(db, 'cycles'), where('name', '==', group.name))
+      // 1. Query latest cycle using indexed query (limit 1)
+      const latestQuery = query(
+        collection(db, 'cycles'),
+        where('groupId', '==', group.id),
+        orderBy('cycleNumber', 'desc'),
+        limit(1)
       );
-      const groupCycles = querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
-      groupCycles.sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
+      const latestSnapshot = await getDocs(latestQuery);
+      const preLatestCycle = latestSnapshot.empty ? null : { ...latestSnapshot.docs[0].data() as any, id: latestSnapshot.docs[0].id };
 
-      const activeCycles = groupCycles.filter((c: any) => c.status === 'active');
-      
-      // Rule 5: Exactly ONE active cycle must exist if we have existing cycles
-      if (groupCycles.length > 0 && activeCycles.length !== 1) {
-        throw new Error("Invalid active cycle state.");
-      }
+      // 2. Query active cycles using indexed query
+      const activeQuery = query(
+        collection(db, 'cycles'),
+        where('groupId', '==', group.id),
+        where('status', '==', 'active')
+      );
+      const activeSnapshot = await getDocs(activeQuery);
+      const preActiveCycles = activeSnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
 
-      const verifiedLatestCycle = groupCycles[groupCycles.length - 1];
-      const nextNumber = verifiedLatestCycle ? (Number(verifiedLatestCycle.cycleNumber) || 0) + 1 : 1;
+      // 3. Query all cycles of the group to get pre-commit count (used for verification only)
+      const preQuery = await getDocs(
+        query(collection(db, 'cycles'), where('groupId', '==', group.id))
+      );
+      const preCommitCount = preQuery.size;
 
-      // Rule 3 & 4: Duplicate verification
-      const duplicateExists = groupCycles.some(c => Number(c.cycleNumber) === nextNumber);
-      if (duplicateExists) {
-        throw new Error("Cycle already created.");
-      }
+      const highestExistingCycleNumber = preLatestCycle ? (Number(preLatestCycle.cycleNumber) || 0) : 0;
+      const nextNumber = highestExistingCycleNumber + 1;
 
-      // Check sequence continuity (no gaps)
-      const seenNumbers = new Set(groupCycles.map(c => Number(c.cycleNumber)).filter(n => !isNaN(n)));
-      const missing = [];
-      for (let i = 1; i < nextNumber; i++) {
-        if (!seenNumbers.has(i)) {
-          missing.push(i);
-        }
-      }
-      if (missing.length > 0) {
-        throw new Error(`Sequence broken. Missing cycle numbers: ${missing.join(', ')}. Please run database recovery first.`);
-      }
+      const newCycleRef = doc(collection(db, 'cycles')); // Auto-generated new document ID
 
       await runTransaction(db, async (transaction) => {
-        // 1. Lock chitRounds document (Rule 5)
+        // Step A: Lock chitRounds/{groupId} document
         const groupRef = doc(db, 'chitRounds', group.id);
         const groupDoc = await transaction.get(groupRef);
         if (!groupDoc.exists()) {
           throw new Error("Group document does not exist.");
         }
-
         const groupData = groupDoc.data();
-        const lastLaunched = Number(groupData.lastLaunchedCycle) || 0;
-        if (lastLaunched >= nextNumber) {
-          throw new Error("A newer cycle was already launched by another administrator.");
-        }
 
-        // 2. Read latest cycle inside transaction (Rule 5)
-        if (verifiedLatestCycle) {
-          const latestCycleRef = doc(db, 'cycles', verifiedLatestCycle.id);
+        // Step B: Read latest cycle inside transaction to verify current state
+        let txnHighestCycleNumber = 0;
+        let txnLatestCycleId = null;
+        let txnLatestCycleData = null;
+
+        if (preLatestCycle) {
+          const latestCycleRef = doc(db, 'cycles', preLatestCycle.id);
           const latestCycleDoc = await transaction.get(latestCycleRef);
           if (latestCycleDoc.exists()) {
-            const latestData = latestCycleDoc.data();
-            if (Number(latestData.cycleNumber) >= nextNumber) {
-              throw new Error("A newer cycle was already launched by another administrator.");
-            }
-            if (latestData.status === 'completed' && verifiedLatestCycle.status === 'active') {
-              throw new Error("Previous cycle status has changed. Try again.");
+            txnLatestCycleData = latestCycleDoc.data();
+            txnHighestCycleNumber = Number(txnLatestCycleData.cycleNumber) || 0;
+            txnLatestCycleId = latestCycleDoc.id;
+          }
+        }
+
+        // Cross-reference with currentCycleId from group doc (in case of concurrent update)
+        if (groupData.currentCycleId && groupData.currentCycleId !== txnLatestCycleId) {
+          const currentCycleRef = doc(db, 'cycles', groupData.currentCycleId);
+          const currentCycleDoc = await transaction.get(currentCycleRef);
+          if (currentCycleDoc.exists()) {
+            const currentCycleData = currentCycleDoc.data();
+            const currentCycleNum = Number(currentCycleData.cycleNumber) || 0;
+            if (currentCycleNum > txnHighestCycleNumber) {
+              txnHighestCycleNumber = currentCycleNum;
+              txnLatestCycleData = currentCycleData;
+              txnLatestCycleId = currentCycleDoc.id;
             }
           }
         }
 
-        const newCycleRef = doc(collection(db, 'cycles')); // Rule 3: new auto-generated ID
+        const txnNextNumber = txnHighestCycleNumber + 1;
 
-        // 3. Complete previous cycle atomically (Rule 2 & 5)
-        if (verifiedLatestCycle && verifiedLatestCycle.status === 'active') {
-          transaction.update(doc(db, 'cycles', verifiedLatestCycle.id), {
-            status: 'completed',
-            completedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          });
+        // Step C: Verify exactly one active cycle exists if there is history
+        const activeDocs = [];
+        for (const preActive of preActiveCycles) {
+          const ref = doc(db, 'cycles', preActive.id);
+          const docSnap = await transaction.get(ref);
+          if (docSnap.exists()) {
+            activeDocs.push({ id: docSnap.id, ...docSnap.data() as any });
+          }
         }
 
-        // 4. Create new cycle (Rule 3)
+        // Add latestCycle to activeDocs if it is active and not already included
+        if (txnLatestCycleData && txnLatestCycleData.status === 'active' && !activeDocs.some(d => d.id === txnLatestCycleId)) {
+          activeDocs.push({ id: txnLatestCycleId, ...txnLatestCycleData });
+        }
+
+        // Add group's currentCycleId if it's active and not already included
+        if (groupData.currentCycleId && !activeDocs.some(d => d.id === groupData.currentCycleId)) {
+          const currentRef = doc(db, 'cycles', groupData.currentCycleId);
+          const currentSnap = await transaction.get(currentRef);
+          if (currentSnap.exists() && currentSnap.data().status === 'active') {
+            activeDocs.push({ id: currentSnap.id, ...currentSnap.data() as any });
+          }
+        }
+
+        // Deduplicate and filter active cycles
+        const uniqueActiveDocs = Array.from(new Map(activeDocs.map(item => [item.id, item])).values())
+          .filter(d => d.status === 'active');
+
+        const activeCount = uniqueActiveDocs.length;
+        if (txnHighestCycleNumber > 0 && activeCount !== 1) {
+          throw new Error(`Invalid active cycle state: expected exactly 1 active cycle, found ${activeCount}.`);
+        }
+        if (txnHighestCycleNumber === 0 && activeCount !== 0) {
+          throw new Error(`Invalid active cycle state: expected 0 active cycles for a new group, found ${activeCount}.`);
+        }
+
+        // Step D: Verify duplicate cycle does not already exist
+        if (txnHighestCycleNumber >= txnNextNumber) {
+          throw new Error(`Duplicate cycle verification failed: Cycle number ${txnNextNumber} is not greater than highest existing cycle number ${txnHighestCycleNumber}.`);
+        }
+        if (groupData.lastLaunchedCycle && Number(groupData.lastLaunchedCycle) >= txnNextNumber) {
+          throw new Error(`Duplicate cycle verification failed: Group metadata lastLaunchedCycle is ${groupData.lastLaunchedCycle}, which is >= next cycle number ${txnNextNumber}.`);
+        }
+
+        // Step E: Create new cycle using the auto-generated ID (immutable, never reuse or overwrite)
         transaction.set(newCycleRef, {
           id: newCycleRef.id,
           name: group.name,
           group: group.name,
           groupId: group.id,
           groupName: group.name,
-          cycleNumber: nextNumber,
-          cycle: `Cycle ${nextNumber}`,
+          cycleNumber: txnNextNumber,
+          cycle: `Cycle ${txnNextNumber}`,
           startDate,
           endDate,
           status: "active",
@@ -243,17 +283,26 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
           createdBy: user?.email || "admin"
         });
 
-        // 5. Update group document to lock concurrent transactions (Rule 5 & 8)
+        // Step F: Mark previous cycle as completed
+        uniqueActiveDocs.forEach(activeDoc => {
+          transaction.update(doc(db, 'cycles', activeDoc.id), {
+            status: 'completed',
+            completedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        });
+
+        // Step G: Update metadata in same transaction (lastLaunchedCycle, currentCycleId, updatedAt)
         transaction.update(groupRef, {
-          updatedAt: new Date().toISOString(),
-          lastLaunchedCycle: nextNumber,
-          currentCycleId: newCycleRef.id
+          lastLaunchedCycle: txnNextNumber,
+          currentCycleId: newCycleRef.id,
+          updatedAt: new Date().toISOString()
         });
       });
 
-      // Post-commit reload and verification (Rule 6 & 8)
+      // Post-commit reload and verification checks
       const postQuery = await getDocs(
-        query(collection(db, 'cycles'), where('name', '==', group.name))
+        query(collection(db, 'cycles'), where('groupId', '==', group.id))
       );
       const postCycles = postQuery.docs.map(doc => ({ ...doc.data() as any, id: doc.id }));
       postCycles.sort((a, b) => (Number(a.cycleNumber) || 0) - (Number(b.cycleNumber) || 0));
@@ -262,27 +311,40 @@ function GroupCycleControl({ group, latestCycle }: { group: any, latestCycle: an
       const prevLatestCycle = postCycles[postCycles.length - 2];
       const postActiveCycles = postCycles.filter((c: any) => c.status === 'active');
 
-      if (postCycles.length !== (groupCycles.length + 1)) {
-        throw new Error("Verification failed: Cycle count did not increase by exactly 1.");
+      if (postCycles.length !== (preCommitCount + 1)) {
+        throw new Error("Verification failed: Cycle count did not increase by exactly one.");
       }
       if (!newLatestCycle || Number(newLatestCycle.cycleNumber) !== nextNumber) {
-        throw new Error("Verification failed: New highest cycleNumber is incorrect.");
+        throw new Error("Verification failed: Highest cycle number did not increase by one.");
       }
       if (newLatestCycle.status !== 'active') {
         throw new Error("Verification failed: New cycle is not active.");
       }
       if (prevLatestCycle && prevLatestCycle.status !== 'completed') {
-        throw new Error("Verification failed: Old cycle was not completed.");
+        throw new Error("Verification failed: Previous cycle is not completed.");
       }
       if (postActiveCycles.length !== 1) {
-        throw new Error("Verification failed: Active cycle count is not exactly 1.");
+        throw new Error("Verification failed: Active cycle count is not exactly one.");
       }
 
       // Check duplicate cycleNumber
       const postNumbers = postCycles.map(c => Number(c.cycleNumber));
       const duplicates = postNumbers.filter((item, index) => postNumbers.indexOf(item) !== index);
       if (duplicates.length > 0) {
-        throw new Error("Verification failed: Duplicate cycleNumber detected.");
+        throw new Error("Verification failed: Duplicate cycle numbers detected.");
+      }
+
+      // Verify metadata matches new cycle
+      const groupDocSnap = await getDoc(doc(db, 'chitRounds', group.id));
+      const groupDocData = groupDocSnap.data();
+      if (!groupDocData) {
+        throw new Error("Verification failed: Group document not found after commit.");
+      }
+      if (Number(groupDocData.lastLaunchedCycle) !== nextNumber) {
+        throw new Error("Verification failed: Metadata lastLaunchedCycle does not match the new cycle.");
+      }
+      if (groupDocData.currentCycleId !== newCycleRef.id) {
+        throw new Error("Verification failed: Metadata currentCycleId does not match the new cycle.");
       }
 
       await createAuditLog(db, user, `Launched New Operational Period: ${group.name} - Cycle ${nextNumber}`);
@@ -685,7 +747,7 @@ export default function RoundsPage() {
   const uniqueStartsForActive = Array.from(new Set(groupCyclesForActive.map(c => c.startDate || ""))).filter(Boolean).sort((a, b) => a.localeCompare(b));
   
   const currentActiveCycle = groupCyclesForActive.find(c => c.status === 'active');
-  const activeCycleNumber = currentActiveCycle ? uniqueStartsForActive.indexOf(currentActiveCycle.startDate) + 1 : null;
+  const activeCycleNumber = currentActiveCycle ? (Number(currentActiveCycle.cycleNumber) || (uniqueStartsForActive.indexOf(currentActiveCycle.startDate) + 1)) : null;
 
   const isBoardExpired = useMemo(() => {
     if (!currentActiveCycle?.endDate) return false;
@@ -825,7 +887,7 @@ export default function RoundsPage() {
             const uniqueStarts = Array.from(new Set(groupCycles.map(c => c.startDate || ""))).filter(Boolean).sort((a, b) => a.localeCompare(b));
             
             const activeCycle = groupCycles.find(c => c.status === 'active');
-            const cycleNumber = activeCycle ? uniqueStarts.indexOf(activeCycle.startDate) + 1 : null;
+            const cycleNumber = activeCycle ? (Number(activeCycle.cycleNumber) || (uniqueStarts.indexOf(activeCycle.startDate) + 1)) : null;
             
             const groupNameLower = String(group.name || '').trim().toLowerCase();
             const currentOccupancy = groupOccupancy.get(groupNameLower) || 0;

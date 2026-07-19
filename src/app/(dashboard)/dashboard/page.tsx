@@ -88,7 +88,7 @@ export default function DashboardPage() {
     const activeCyclesByGroup = new Map<string, any>();
     (allCycles || []).forEach(c => {
       if (c.status === 'active' && c.name) {
-        activeCyclesByGroup.set(String(c.name).trim().toLowerCase(), c);
+        activeCyclesByGroup.set(String(c.name).trim().toUpperCase(), c);
       }
     });
 
@@ -108,7 +108,7 @@ export default function DashboardPage() {
       if (!isPaymentSuccess(p, false)) return acc;
       const member = membersMap.get(p.memberId);
       if (!member) return acc;
-      const activeCycle = activeCyclesByGroup.get(String(member.chitGroup || '').trim().toLowerCase());
+      const activeCycle = activeCyclesByGroup.get(String(member.chitGroup || '').trim().toUpperCase());
       if (!activeCycle) return acc;
       const pDateStr = getPaymentDateStr(p);
       if (pDateStr && pDateStr >= activeCycle.startDate && (activeCycle.endDate ? pDateStr <= activeCycle.endDate : true)) {
@@ -131,8 +131,23 @@ export default function DashboardPage() {
       return { ...m, ...stats };
     });
 
-    const dailyPendingList = membersWithCalculatedStats.filter(m => m.memberStatus === 'pending' && (m.paymentType || (rounds || []).find(r => r.name === m.chitGroup)?.collectionType) === 'Daily');
-    const monthlyOverdueList = membersWithCalculatedStats.filter(m => m.memberStatus === 'pending' && (m.paymentType || (rounds || []).find(r => r.name === m.chitGroup)?.collectionType) === 'Monthly');
+    const dailyPendingList = membersWithCalculatedStats.filter(m => {
+      const isPending = m.memberStatus === 'pending';
+      if (!isPending) return false;
+      const mGroupNorm = String(m.chitGroup || '').trim().toUpperCase();
+      const round = (rounds || []).find(r => String(r.name || '').trim().toUpperCase() === mGroupNorm);
+      const collectionType = m.paymentType || round?.collectionType || 'Daily';
+      return collectionType === 'Daily';
+    });
+
+    const monthlyOverdueList = membersWithCalculatedStats.filter(m => {
+      const isPending = m.memberStatus === 'pending';
+      if (!isPending) return false;
+      const mGroupNorm = String(m.chitGroup || '').trim().toUpperCase();
+      const round = (rounds || []).find(r => String(r.name || '').trim().toUpperCase() === mGroupNorm);
+      const collectionType = m.paymentType || round?.collectionType || 'Daily';
+      return collectionType === 'Monthly';
+    });
 
     return { 
       activeMembersCount: members?.filter(m => m.status !== 'inactive').length || 0, 
@@ -140,10 +155,11 @@ export default function DashboardPage() {
       collectedToday, 
       dailyPendingCount: dailyPendingList.length, 
       monthlyOverdueCount: monthlyOverdueList.length, 
-      schemeSummaries: ['A', 'B', 'C', 'D'].map(name => {
-        const schemeInfo = (rounds || []).find(r => r.name === name) || { name, collectionType: 'Daily', monthlyAmount: 800, dueDate: 5 };
-        const groupMembers = membersWithCalculatedStats.filter(m => m.chitGroup === name);
-        return { ...schemeInfo, totalPendingDays: groupMembers.reduce((acc, m) => acc + m.calculatedPendingDays, 0), memberCount: groupMembers.length, members: groupMembers };
+      schemeSummaries: ['A GROUP', 'B GROUP', 'C GROUP', 'D GROUP', 'H GROUP'].map(name => {
+        const normName = name.trim().toUpperCase();
+        const schemeInfo = (rounds || []).find(r => String(r.name || '').trim().toUpperCase() === normName) || { name, collectionType: 'Daily', monthlyAmount: 800, dueDate: 5 };
+        const groupMembers = membersWithCalculatedStats.filter(m => String(m.chitGroup || '').trim().toUpperCase() === normName);
+        return { ...schemeInfo, name: name.replace(' GROUP', ''), totalPendingDays: groupMembers.reduce((acc, m) => acc + m.calculatedPendingDays, 0), memberCount: groupMembers.length, members: groupMembers };
       }), 
       recentPaymentsList: (payments || []).slice(0, 5) 
     }
@@ -185,7 +201,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {schemeSummaries.map((scheme, i) => (
           <Card key={i} className="group cursor-pointer hover:border-primary hover:shadow-xl transition-all border-border/60 overflow-hidden relative shadow-sm rounded-2xl" onClick={() => { setSelectedGroup(scheme); setIsGroupDetailOpen(true); }}>
             <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity"><ArrowRight className="size-4 text-primary" /></div>

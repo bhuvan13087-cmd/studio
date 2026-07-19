@@ -70,7 +70,9 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ groupNa
   }, [cyclesData, groupName, cycleId])
 
   const cycleNumber = React.useMemo(() => {
-    if (!selectedCycle || !Array.isArray(cyclesData)) return null;
+    if (!selectedCycle) return null;
+    if (selectedCycle.cycleNumber) return Number(selectedCycle.cycleNumber);
+    if (!Array.isArray(cyclesData)) return null;
     const groupCycles = cyclesData
       .filter(c => {
         const mGroup = String(c?.name || "").trim().toLowerCase();
