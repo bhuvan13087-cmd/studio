@@ -30,8 +30,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, orderBy } from "firebase/firestore"
-import { format, startOfDay } from "date-fns"
+import { collection, query, orderBy, where } from "firebase/firestore"
+import { format, startOfDay, subDays } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
   getPaymentAmount,
@@ -53,17 +53,40 @@ export default function DashboardPage() {
   
   const db = useFirestore()
 
+  const [earliestPaymentDate, setEarliestPaymentDate] = useState(() => format(subDays(new Date(), 45), 'yyyy-MM-dd'))
+
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
   const { data: members, isLoading: membersLoading } = useCollection(membersQuery)
 
-  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db])
+  const paymentsQuery = useMemoFirebase(() => query(
+    collection(db, 'payments'),
+    where('paymentDate', '>=', earliestPaymentDate)
+  ), [db, earliestPaymentDate])
   const { data: payments, isLoading: paymentsLoading } = useCollection(paymentsQuery)
 
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db])
   const { data: rounds, isLoading: roundsLoading } = useCollection(roundsQuery)
 
-  const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db])
+  const cyclesQuery = useMemoFirebase(() => query(
+    collection(db, 'cycles'),
+    where('status', '==', 'active')
+  ), [db])
   const { data: allCycles } = useCollection(cyclesQuery)
+
+  useEffect(() => {
+    if (allCycles && allCycles.length > 0) {
+      const activeStarts = allCycles
+        .map(c => c.startDate)
+        .filter(Boolean);
+      if (activeStarts.length > 0) {
+        activeStarts.sort();
+        const minStartDate = activeStarts[0];
+        if (minStartDate < earliestPaymentDate) {
+          setEarliestPaymentDate(minStartDate);
+        }
+      }
+    }
+  }, [allCycles, earliestPaymentDate]);
 
   useEffect(() => { setMounted(true) }, [])
 
