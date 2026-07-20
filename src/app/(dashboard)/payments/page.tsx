@@ -49,9 +49,9 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc, writeBatch } from "firebase/firestore"
+import { collection, query, doc, serverTimestamp, orderBy, updateDoc, deleteDoc, writeBatch, where, limit } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO, isValid } from "date-fns"
+import { format, parseISO, isValid, subDays } from "date-fns"
 import { cn, withTimeout } from "@/lib/utils"
 import { createAuditLog } from "@/firebase/logging"
 import {
@@ -92,7 +92,15 @@ export default function PaymentsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
+  // Scoped to last 90 days with limit — prevents full-collection scan on every load
+  const ninetyDaysAgo = useMemo(() => format(subDays(new Date(), 90), 'yyyy-MM-dd'), []);
+
+  const paymentsQuery = useMemoFirebase(() => query(
+    collection(db, 'payments'),
+    orderBy('paymentDate', 'desc'),
+    where('paymentDate', '>=', ninetyDaysAgo),
+    limit(300)
+  ), [db, ninetyDaysAgo]);
   const { data: paymentsData, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const payments = paymentsData || [];
 
@@ -104,7 +112,8 @@ export default function PaymentsPage() {
   const { data: roundsData } = useCollection(roundsQuery);
   const rounds = roundsData || [];
 
-  const cyclesQuery = useMemoFirebase(() => collection(db, 'cycles'), [db]);
+  // Only fetch active cycles — no need to stream all historical cycles
+  const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), where('status', '==', 'active')), [db]);
   const { data: allCycles } = useCollection(cyclesQuery);
 
   const heartsQuery = useMemoFirebase(() => collection(db, 'monthLocks'), [db]);

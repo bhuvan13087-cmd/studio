@@ -53,7 +53,8 @@ export default function DashboardPage() {
   
   const db = useFirestore()
 
-  const [earliestPaymentDate, setEarliestPaymentDate] = useState(() => format(subDays(new Date(), 45), 'yyyy-MM-dd'))
+  // Fixed 120-day window — stable reference, eliminates double Firestore subscription on cycles load
+  const earliestPaymentDate = useMemo(() => format(subDays(new Date(), 120), 'yyyy-MM-dd'), []);
 
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
   const { data: members, isLoading: membersLoading } = useCollection(membersQuery)
@@ -73,21 +74,6 @@ export default function DashboardPage() {
   ), [db])
   const { data: allCycles } = useCollection(cyclesQuery)
 
-  useEffect(() => {
-    if (allCycles && allCycles.length > 0) {
-      const activeStarts = allCycles
-        .map(c => c.startDate)
-        .filter(Boolean);
-      if (activeStarts.length > 0) {
-        activeStarts.sort();
-        const minStartDate = activeStarts[0];
-        if (minStartDate < earliestPaymentDate) {
-          setEarliestPaymentDate(minStartDate);
-        }
-      }
-    }
-  }, [allCycles, earliestPaymentDate]);
-
   useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
@@ -98,7 +84,7 @@ export default function DashboardPage() {
   }, []);
 
   const dashboardData = useMemo(() => {
-    if (!mounted || membersLoading || paymentsLoading || roundsLoading) return null;
+    if (!mounted) return null;
 
     const now = startOfDay(new Date());
     const todayStr = format(now, 'yyyy-MM-dd')

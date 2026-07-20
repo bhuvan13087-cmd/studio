@@ -392,7 +392,8 @@ export default function RoundsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  const [earliestPaymentDate, setEarliestPaymentDate] = useState(() => format(subDays(new Date(), 45), 'yyyy-MM-dd'));
+  // Fixed 120-day window — stable, never changes, eliminates double Firestore subscription
+  const earliestPaymentDate = useMemo(() => format(subDays(new Date(), 120), 'yyyy-MM-dd'), []);
 
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
@@ -412,21 +413,6 @@ export default function RoundsPage() {
     where('status', '==', 'active')
   ), [db]);
   const { data: allCycles } = useCollection(cyclesQuery);
-
-  useEffect(() => {
-    if (allCycles && allCycles.length > 0) {
-      const activeStarts = allCycles
-        .map(c => c.startDate)
-        .filter(Boolean);
-      if (activeStarts.length > 0) {
-        activeStarts.sort();
-        const minStartDate = activeStarts[0];
-        if (minStartDate < earliestPaymentDate) {
-          setEarliestPaymentDate(minStartDate);
-        }
-      }
-    }
-  }, [allCycles, earliestPaymentDate]);
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -829,7 +815,18 @@ export default function RoundsPage() {
     } catch (e: any) { toast({ variant: "destructive", title: "Error", description: e.message || "Failed to update profile." }); } finally { setIsActionPending(false); }
   }
 
-  if (isRoleLoading || isRoundsLoading || !mounted) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
+  // Show skeleton cards while rounds load — don't block on payments/members/role
+  if (!mounted) return (<div className="flex h-[60vh] items-center justify-center"><Loader2 className="size-8 animate-spin text-primary" /></div>)
+  if (isRoundsLoading) return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1.5"><div className="h-8 w-48 bg-muted rounded-lg animate-pulse" /><div className="h-4 w-64 bg-muted rounded animate-pulse mt-1" /></div>
+      </div>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {[1,2,3,4,5].map(i => <div key={i} className="h-48 bg-muted rounded-2xl animate-pulse" />)}
+      </div>
+    </div>
+  )
 
   if (!selectedChitId) {
     return (
