@@ -74,7 +74,7 @@ export default function GroupCyclesPage({ params }: { params: Promise<{ groupNam
 
     const numbered = sortedUnique.map((c, i) => ({
       ...c,
-      cycleNumber: i + 1
+      cycleNumber: Number(c.cycleNumber) || (i + 1)
     }));
 
     return {

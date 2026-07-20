@@ -30,66 +30,7 @@ export default function CyclesPage() {
     setMounted(true)
   }, [])
 
-  // TARGETED SAFE REPAIR: GROUP B HISTORY RECOVERY
-  useEffect(() => {
-    const runGroupBRepair = async () => {
-      if (!db || !rounds || roundsLoading || !user || !isAdmin) return;
-      
-      try {
-        // Idempotency Check: Specific marker for Group B repair to prevent duplication
-        const repairRef = doc(db, 'systemMetadata', 'repair_group_b_v1');
-        const repairSnap = await getDoc(repairRef);
-        if (repairSnap.exists() && repairSnap.data().completed) return;
 
-        const targetGroup = "B";
-        
-        // Verify if B exists in schemes before attempting repair
-        const bSchemeExists = rounds.some(r => String(r?.name || "").trim().toUpperCase() === targetGroup);
-        if (!bSchemeExists) return;
-
-        // Targeted check for existing cycles for Group B only
-        const cyclesSnap = await getDocs(query(collection(db, 'cycles'), where('name', '==', targetGroup)));
-        
-        if (cyclesSnap.empty) {
-          // No history records found for Group B - Restore targeted snapshot
-          await addDoc(collection(db, 'cycles'), {
-            name: targetGroup,
-            startDate: "2026-03-15",
-            endDate: "2026-03-29",
-            status: "completed",
-            type: "recovered",
-            cycle: "Cycle 1",
-            createdAt: new Date().toISOString(),
-            completedAt: new Date().toISOString()
-          });
-
-          await setDoc(repairRef, { 
-            completed: true, 
-            completedAt: serverTimestamp(),
-            admin: user.email,
-            recordsCreated: 1,
-            target: targetGroup,
-            action: "TARGETED_HISTORY_RESTORE"
-          });
-
-          console.log(`Targeted history restore for Group ${targetGroup} completed.`);
-        } else {
-          // Records already present, just finalize the repair ticket to prevent future checks
-          await setDoc(repairRef, { 
-            completed: true, 
-            completedAt: serverTimestamp(),
-            reason: "History records already verified"
-          });
-        }
-      } catch (e) {
-        console.error("Targeted repair for Group B failed:", e);
-      }
-    };
-
-    if (mounted) {
-      runGroupBRepair();
-    }
-  }, [db, rounds, roundsLoading, user, isAdmin, mounted]);
 
   // Extract unique group names safely
   const groupNames = Array.from(new Set((rounds || []).map(r => String(r?.name || "").trim()).filter(Boolean)))

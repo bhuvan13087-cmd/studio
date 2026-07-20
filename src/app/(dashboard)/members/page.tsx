@@ -49,9 +49,9 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, doc, serverTimestamp, query, orderBy, updateDoc } from "firebase/firestore"
+import { collection, doc, serverTimestamp, query, orderBy, updateDoc, where } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
-import { format, parseISO } from "date-fns"
+import { format, parseISO, subDays } from "date-fns"
 import { createAuditLog } from "@/firebase/logging"
 import { withTimeout } from "@/lib/utils"
 import {
@@ -79,17 +79,40 @@ export default function MembersPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
+  const [earliestPaymentDate, setEarliestPaymentDate] = useState(() => format(subDays(new Date(), 45), 'yyyy-MM-dd'));
+
   const membersQuery = useMemoFirebase(() => query(collection(db, 'members'), orderBy('name', 'asc')), [db]);
   const { data: members, isLoading: isMembersLoading } = useCollection(membersQuery);
 
-  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db]);
+  const paymentsQuery = useMemoFirebase(() => query(
+    collection(db, 'payments'),
+    where('paymentDate', '>=', earliestPaymentDate)
+  ), [db, earliestPaymentDate]);
   const { data: payments } = useCollection(paymentsQuery);
 
   const chitRoundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: chitRounds } = useCollection(chitRoundsQuery);
 
-  const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db]);
+  const cyclesQuery = useMemoFirebase(() => query(
+    collection(db, 'cycles'),
+    where('status', '==', 'active')
+  ), [db]);
   const { data: allCycles } = useCollection(cyclesQuery);
+
+  useEffect(() => {
+    if (allCycles && allCycles.length > 0) {
+      const activeStarts = allCycles
+        .map(c => c.startDate)
+        .filter(Boolean);
+      if (activeStarts.length > 0) {
+        activeStarts.sort();
+        const minStartDate = activeStarts[0];
+        if (minStartDate < earliestPaymentDate) {
+          setEarliestPaymentDate(minStartDate);
+        }
+      }
+    }
+  }, [allCycles, earliestPaymentDate]);
 
   // Global UI Interaction Cleanup
   useEffect(() => {

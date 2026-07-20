@@ -110,7 +110,9 @@ export function getCreatedAtDateStr(p: any): string | null {
  *                matches legacy non-strict behavior used in dashboard/reports.
  */
 export function isPaymentSuccess(p: any, strict = true): boolean {
-  if (p.status === 'success' || p.status === 'paid') return true;
+  if (!p) return false;
+  const statusLower = p.status ? String(p.status).toLowerCase() : '';
+  if (statusLower === 'success' || statusLower === 'paid' || statusLower === 'verified') return true;
   if (!strict && !p.status) return true;
   return false;
 }
