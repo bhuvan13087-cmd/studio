@@ -49,7 +49,7 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase"
-import { collection, doc, serverTimestamp, query, orderBy, updateDoc, where, limit } from "firebase/firestore"
+import { collection, doc, serverTimestamp, query, orderBy, updateDoc, where } from "firebase/firestore"
 import { useRole } from "@/hooks/use-role"
 import { format, parseISO, subDays } from "date-fns"
 import { createAuditLog } from "@/firebase/logging"
@@ -86,8 +86,7 @@ export default function MembersPage() {
 
   const paymentsQuery = useMemoFirebase(() => query(
     collection(db, 'payments'),
-    where('paymentDate', '>=', earliestPaymentDate),
-    limit(200)
+    where('paymentDate', '>=', earliestPaymentDate)
   ), [db, earliestPaymentDate]);
   const { data: payments } = useCollection(paymentsQuery);
 

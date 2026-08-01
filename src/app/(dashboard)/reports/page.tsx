@@ -31,7 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, orderBy, where, limit } from "firebase/firestore"
+import { collection, query, orderBy } from "firebase/firestore"
 import { format, parseISO, getMonth, getYear, subDays, isValid, isSameMonth } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
@@ -63,23 +63,16 @@ export default function ReportsPage() {
   const { toast } = useToast()
   const db = useFirestore()
 
-  const ninetyDaysAgo = useMemo(() => format(subDays(new Date(), 90), 'yyyy-MM-dd'), []);
-
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
   const { data: members, isLoading: membersLoading } = useCollection(membersQuery)
 
-  const paymentsQuery = useMemoFirebase(() => query(
-    collection(db, 'payments'),
-    orderBy('paymentDate', 'desc'),
-    where('paymentDate', '>=', ninetyDaysAgo),
-    limit(300)
-  ), [db, ninetyDaysAgo])
+  const paymentsQuery = useMemoFirebase(() => query(collection(db, 'payments'), orderBy('paymentDate', 'desc')), [db])
   const { data: payments, isLoading: paymentsLoading } = useCollection(paymentsQuery)
 
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db])
   const { data: rounds, isLoading: roundsLoading } = useCollection(roundsQuery)
 
-  const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc'), limit(100)), [db])
+  const cyclesQuery = useMemoFirebase(() => query(collection(db, 'cycles'), orderBy('createdAt', 'desc')), [db])
   const { data: allCycles } = useCollection(cyclesQuery)
 
   useEffect(() => { setMounted(true) }, [])

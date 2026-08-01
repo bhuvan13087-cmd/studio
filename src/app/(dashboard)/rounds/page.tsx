@@ -392,8 +392,8 @@ export default function RoundsPage() {
   const { user } = useUser()
   const { isAdmin, isLoading: isRoleLoading } = useRole()
 
-  // Scope to 60-day window with limit(200) for instant rounds page loading
-  const earliestPaymentDate = useMemo(() => format(subDays(new Date(), 60), 'yyyy-MM-dd'), []);
+  // Fixed 120-day window — stable, never changes, eliminates double Firestore subscription
+  const earliestPaymentDate = useMemo(() => format(subDays(new Date(), 120), 'yyyy-MM-dd'), []);
 
   const roundsQuery = useMemoFirebase(() => query(collection(db, 'chitRounds'), orderBy('createdAt', 'desc')), [db]);
   const { data: roundsData, isLoading: isRoundsLoading } = useCollection(roundsQuery);
@@ -404,8 +404,7 @@ export default function RoundsPage() {
 
   const paymentsQuery = useMemoFirebase(() => query(
     collection(db, 'payments'),
-    where('paymentDate', '>=', earliestPaymentDate),
-    limit(200)
+    where('paymentDate', '>=', earliestPaymentDate)
   ), [db, earliestPaymentDate]);
   const { data: allPayments } = useCollection(paymentsQuery);
 
