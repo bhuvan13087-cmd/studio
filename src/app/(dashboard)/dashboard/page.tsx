@@ -30,7 +30,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, orderBy, where } from "firebase/firestore"
+import { collection, query, orderBy, where, limit } from "firebase/firestore"
 import { format, startOfDay, subDays } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
@@ -53,15 +53,16 @@ export default function DashboardPage() {
   
   const db = useFirestore()
 
-  // Fixed 120-day window — stable reference, eliminates double Firestore subscription on cycles load
-  const earliestPaymentDate = useMemo(() => format(subDays(new Date(), 120), 'yyyy-MM-dd'), []);
+  // Scope to 60 days with limit(200) for instant startup summary loading
+  const earliestPaymentDate = useMemo(() => format(subDays(new Date(), 60), 'yyyy-MM-dd'), []);
 
   const membersQuery = useMemoFirebase(() => collection(db, 'members'), [db])
   const { data: members, isLoading: membersLoading } = useCollection(membersQuery)
 
   const paymentsQuery = useMemoFirebase(() => query(
     collection(db, 'payments'),
-    where('paymentDate', '>=', earliestPaymentDate)
+    where('paymentDate', '>=', earliestPaymentDate),
+    limit(200)
   ), [db, earliestPaymentDate])
   const { data: payments, isLoading: paymentsLoading } = useCollection(paymentsQuery)
 

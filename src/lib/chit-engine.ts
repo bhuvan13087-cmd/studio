@@ -195,6 +195,15 @@ export function computeMemberStats(
   let memberStatus: MemberStatus = 'pending';
 
   if (resolvedType === 'Daily') {
+    // Pre-aggregate payments by payment date string once: O(P) instead of O(D * P)
+    const paymentsByDate = new Map<string, number>();
+    mPayments.forEach((p) => {
+      const dStr = getPaymentDateStr(p);
+      if (dStr) {
+        paymentsByDate.set(dStr, (paymentsByDate.get(dStr) || 0) + getPaymentAmount(p));
+      }
+    });
+
     if (member.joinDate && member.status !== 'inactive') {
       try {
         const rawJoinDate = parseISO(member.joinDate);
@@ -207,9 +216,7 @@ export function computeMemberStats(
           const interval = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd });
           interval.forEach((day) => {
             const dStr = format(day, 'yyyy-MM-dd');
-            const dayPaymentSum = mPayments
-              .filter((p) => getPaymentDateStr(p) === dStr)
-              .reduce((acc, p) => acc + getPaymentAmount(p), 0);
+            const dayPaymentSum = paymentsByDate.get(dStr) || 0;
             if (dayPaymentSum < dailyRate) pendingDaysCount++;
           });
         }
@@ -218,12 +225,8 @@ export function computeMemberStats(
       }
     }
     // Today's status: did the member meet the daily rate today?
-    memberStatus =
-      mPayments
-        .filter((p) => getPaymentDateStr(p) === todayStr)
-        .reduce((acc, p) => acc + getPaymentAmount(p), 0) >= dailyRate
-        ? 'paid'
-        : 'pending';
+    const todayPaymentSum = paymentsByDate.get(todayStr) || 0;
+    memberStatus = todayPaymentSum >= dailyRate ? 'paid' : 'pending';
   } else {
     // Monthly scheme
     const hasPaidThisCycle = mPayments.some((p) => {

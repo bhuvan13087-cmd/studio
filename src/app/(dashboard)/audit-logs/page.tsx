@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, orderBy } from "firebase/firestore"
+import { collection, query, orderBy, limit } from "firebase/firestore"
 import { format, parseISO, isValid } from "date-fns"
 
 export default function AuditLogsPage() {
@@ -22,7 +22,7 @@ export default function AuditLogsPage() {
   const [adminFilter, setAdminFilter] = useState("")
   const db = useFirestore()
 
-  const logsQuery = useMemoFirebase(() => query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc')), [db])
+  const logsQuery = useMemoFirebase(() => query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(100)), [db])
   const { data: logs, isLoading } = useCollection(logsQuery)
 
   const filteredLogs = useMemo(() => {
